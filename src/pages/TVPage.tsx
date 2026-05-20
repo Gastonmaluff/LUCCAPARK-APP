@@ -1,67 +1,62 @@
-import { MonitorPlay } from 'lucide-react'
-import { useState } from 'react'
+import { Baby } from 'lucide-react'
 import { BrandLogo } from '../components/BrandLogo'
-import { StatusPill } from '../components/StatusPill'
-import { appConfig } from '../config/app'
-import { demoEvents, demoVisits } from '../data/demoData'
+import { PaymentBadge } from '../components/reception/PaymentBadge'
+import { TimeBadge } from '../components/reception/TimeBadge'
+import { useActiveVisits } from '../hooks/useActiveVisits'
+import { formatVisitStartTime, getVisitTimeStatus } from '../utils/visitTime'
 
 export function TVPage() {
-  const [mode, setMode] = useState<'visit' | 'event'>('visit')
-  const activeEvent = demoEvents[0]
+  const { error, isLoading, storageMode, visits } = useActiveVisits()
 
   return (
     <main className="tv-page">
       <section className="tv-shell">
         <header className="tv-toolbar">
           <BrandLogo className="compact" />
-          <div className="mode-switch">
-            <button className={mode === 'visit' ? 'active' : ''} type="button" onClick={() => setMode('visit')}>
-              Visitas
-            </button>
-            <button className={mode === 'event' ? 'active' : ''} type="button" onClick={() => setMode('event')}>
-              Evento
-            </button>
-          </div>
+          <div className="tv-mode-label">Modo normal</div>
         </header>
 
-        {mode === 'visit' ? (
-          <>
-            <h1 className="tv-title">Tiempos activos</h1>
-            <p className="muted" style={{ color: '#b8c4d5', fontSize: '1.4rem', marginBottom: 22 }}>
-              Vista grande para Smart TV, Chromecast, Fire Stick o navegador.
-            </p>
-            <div className="tv-grid">
-              {demoVisits.map((visit) => (
-                <article className="tv-card" key={visit.childName}>
-                  <strong>{visit.childName}</strong>
-                  <span className={`timer ${visit.tone}`}>{visit.remaining}</span>
-                  <StatusPill tone={visit.paymentStatus === 'paid' ? 'paid' : visit.paymentStatus === 'payAtExit' ? 'warning' : 'danger'}>
-                    {visit.paymentStatus === 'paid' ? 'Pagado' : visit.paymentStatus === 'payAtExit' ? 'Paga al salir' : 'Pendiente'}
-                  </StatusPill>
-                </article>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="tv-event">
-            <img src={appConfig.heroImageUrl} alt="Banner configurable para evento" />
-            <div className="tv-event-copy">
-              <p className="eyebrow" style={{ color: 'var(--yellow)' }}>
-                <MonitorPlay size={20} /> Modo evento privado
-              </p>
-              <h1>Bienvenidos al cumpleanos de Mateo</h1>
-              <p style={{ color: '#dbe7f6', fontSize: '1.5rem' }}>
-                {activeEvent.date} · {activeEvent.time}
-              </p>
-              <div className="counter-box">
-                <span>Invitados registrados</span>
-                <strong>
-                  {activeEvent.checkedIn} / {activeEvent.capacity}
-                </strong>
-              </div>
-            </div>
+        <h1 className="tv-title">Ninos dentro ahora</h1>
+        <p className="muted" style={{ color: '#b8c4d5', fontSize: '1.4rem', marginBottom: 22 }}>
+          Vista en tiempo real para temporizadores de visitas normales.
+        </p>
+
+        {isLoading ? <div className="tv-empty">Cargando visitas activas...</div> : null}
+        {storageMode === 'local' && !isLoading ? (
+          <div className="tv-local-note">Modo local temporal: activar Firestore para sincronizar entre dispositivos reales.</div>
+        ) : null}
+        {error ? <div className="tv-empty danger">No se pudieron cargar las visitas activas.</div> : null}
+        {!isLoading && !error && visits.length === 0 ? (
+          <div className="tv-empty">
+            <BrandLogo />
+            <strong>No hay visitas activas en este momento</strong>
           </div>
-        )}
+        ) : null}
+
+        {!isLoading && !error && visits.length > 0 ? (
+          <div className="tv-grid">
+            {visits.map((visit) => {
+              const timeStatus = getVisitTimeStatus(visit)
+              return (
+                <article className={`tv-card ${timeStatus}`} key={visit.id}>
+                  <div>
+                    <strong>{visit.childName}</strong>
+                    <p>{visit.customerName}</p>
+                  </div>
+                  <TimeBadge large visit={visit} />
+                  <div className="tv-card-footer">
+                    <span>
+                      <Baby size={20} />
+                      {visit.planName}
+                    </span>
+                    <span>Ingreso {formatVisitStartTime(visit.startedAt)}</span>
+                  </div>
+                  <PaymentBadge status={visit.paymentStatus} />
+                </article>
+              )
+            })}
+          </div>
+        ) : null}
       </section>
     </main>
   )

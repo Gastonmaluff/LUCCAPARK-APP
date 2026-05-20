@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoadingScreen } from './components/LoadingScreen'
+import { ProtectedRoute } from './components/ProtectedRoute'
 import { AdminLayout } from './layouts/AdminLayout'
 import { PublicLayout } from './layouts/PublicLayout'
 import { AdminCalendarPage } from './pages/admin/AdminCalendarPage'
@@ -41,20 +42,22 @@ function App() {
           <Route path="precios" element={<PricesPage />} />
           <Route path="contacto" element={<ContactPage />} />
         </Route>
-        <Route path="admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="dashboard" element={<AdminDashboardPage />} />
-          <Route path="recepcion" element={<AdminReceptionPage />} />
-          <Route path="reservas" element={<AdminReservationsPage />} />
-          <Route path="calendario" element={<AdminCalendarPage />} />
-          <Route path="cantina" element={<AdminCanteenPage />} />
-          <Route path="finanzas" element={<AdminFinancePage />} />
-          <Route path="reportes" element={<AdminReportsPage />} />
-          <Route path="configuracion" element={<AdminSettingsPage />} />
-          <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboardPage />} />
+            <Route path="recepcion" element={<AdminReceptionPage />} />
+            <Route path="reservas" element={<AdminReservationsPage />} />
+            <Route path="calendario" element={<AdminCalendarPage />} />
+            <Route path="cantina" element={<AdminCanteenPage />} />
+            <Route path="finanzas" element={<AdminFinancePage />} />
+            <Route path="reportes" element={<AdminReportsPage />} />
+            <Route path="configuracion" element={<AdminSettingsPage />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+          </Route>
+          <Route path="recepcion" element={<ReceptionPage />} />
+          <Route path="tv" element={<TVPage />} />
         </Route>
-        <Route path="recepcion" element={<ReceptionPage />} />
-        <Route path="tv" element={<TVPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="inicio" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFoundPage />} />

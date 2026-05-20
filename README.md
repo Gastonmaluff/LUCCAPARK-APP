@@ -57,6 +57,32 @@ Mas detalle en [`docs/github-pages.md`](docs/github-pages.md).
 La configuracion vive en `src/config/firebase.ts` y puede venir desde variables `VITE_FIREBASE_*`.
 El archivo `.env.example` contiene la configuracion web recibida para este proyecto.
 
+Las rutas internas (`/admin/*`, `/recepcion` y `/tv`) estan protegidas con Firebase Auth.
+Para operar el sistema se debe crear el usuario desde Firebase Authentication y entrar por `/login`.
+
+Las reglas base de Firestore estan en `firestore.rules` y permiten leer/escribir las colecciones operativas solo a usuarios autenticados. Para publicarlas:
+
+```bash
+npx firebase-tools deploy --only firestore:rules --project luccapark-app
+```
+
+Para recepcion normal, `VITE_VISIT_STORAGE_MODE` controla el origen de datos:
+
+- `firestore`: usa Firebase/Firestore real.
+- `local`: modo temporal en este navegador, util si Firestore no esta disponible.
+
+Con Firestore creado, el modo por defecto es `firestore`. Si se necesita trabajar sin Firebase, definir `VITE_VISIT_STORAGE_MODE=local`.
+
+## Recepcion normal
+
+La Fase 3 implementa el flujo normal real:
+
+- `/recepcion` y `/admin/recepcion`: registran ingresos, cobran salida y finalizan visitas.
+- `/tv`: muestra en tiempo real las visitas activas en modo normal.
+- Los temporizadores se calculan con `startedAt`, `durationMinutes` y la hora actual, por lo que sobreviven a recargas y se ven igual en varias pantallas.
+
+La estrategia de datos usa `activeVisits` para lectura rapida en recepcion/TV y `visits` como historico. Al finalizar una visita se actualiza `visits` con `status: finished`, `endedAt` y `realDurationMinutes`, y se retira la copia activa de `activeVisits`.
+
 Colecciones previstas:
 
 - `users`

@@ -1,0 +1,187 @@
+import {
+  Timestamp,
+  deleteDoc,
+  doc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
+import { auth } from '../config/firebase'
+import { getTimePlanById } from '../config/timePlans'
+import { ensureReceptionSession } from './authSession'
+import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { chargeLocalVisit, createLocalNormalVisit, finishLocalVisit } from './localVisitStore'
+import { getVisitStorageMode } from './visitStorageMode'
+import type { ActiveVisit, ChargeVisitInput, CreateVisitInput } from '../types'
+import { getExpectedEndAt, getRealDurationMinutes } from '../utils/visitTime'
+
+const currentUserId = () => auth.currentUser?.uid ?? null
+
+const timestampOrNull = (date: Date | null) => (date ? Timestamp.fromDate(date) : null)
+
+const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ')
+
+const optionalText = (value?: string) => {
+  const normalized = normalizeText(value ?? '')
+  return normalized.length > 0 ? normalized : undefined
+}
+
+const findCustomerByPhone = async (phone?: string) => {
+  if (!phone) {
+    return null
+  }
+
+  const snapshot = await getDocs(
+    query(getCollectionRef('customers'), where('phone', '==', phone), limit(1)),
+  )
+
+  return snapshot.docs[0] ?? null
+}
+
+export const createNormalVisit = async (input: CreateVisitInput) => {
+  const storageMode = await getVisitStorageMode()
+
+  if (storageMode === 'local') {
+    return createLocalNormalVisit(input)
+  }
+
+  await ensureReceptionSession()
+
+  const childName = normalizeText(input.childName)
+  const customerName = normalizeText(input.customerName)
+  const customerPhone = optionalText(input.customerPhone)
+  const plan = getTimePlanById(input.planId)
+  const startedAt = input.startedAt
+  const expectedEndAt = getExpectedEndAt(startedAt, plan.durationMinutes, plan.isUnlimited)
+  const userId = currentUserId()
+
+  const existingCustomer = await findCustomerByPhone(customerPhone)
+  const customerRef = existingCustomer
+    ? getDocumentRef('customers', existingCustomer.id)
+    : doc(getCollectionRef('customers'))
+
+  await setDoc(
+    customerRef,
+    {
+      name: customerName,
+      phone: customerPhone ?? '',
+      relation: optionalText(input.customerRelation) ?? '',
+      updatedAt: serverTimestamp(),
+      ...(existingCustomer ? {} : { createdAt: serverTimestamp() }),
+    },
+    { merge: true },
+  )
+
+  const childRef = doc(getCollectionRef('children'))
+  await setDoc(childRef, {
+    name: childName,
+    birthDate: optionalText(input.childBirthDate) ?? '',
+    ageRange: optionalText(input.childAgeRange) ?? '',
+    gender: optionalText(input.childGender) ?? '',
+    customerId: customerRef.id,
+    customerName,
+    customerPhone: customerPhone ?? '',
+    notes: optionalText(input.childNotes) ?? '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+
+  const visitRef = doc(getCollectionRef('visits'))
+  const activeVisitRef = getDocumentRef('activeVisits', visitRef.id)
+  const amountCharged = input.amountCharged ?? null
+
+  const visitPayload = {
+    id: visitRef.id,
+    childId: childRef.id,
+    childName,
+    childBirthDate: optionalText(input.childBirthDate) ?? '',
+    childAgeRange: optionalText(input.childAgeRange) ?? '',
+    childGender: optionalText(input.childGender) ?? '',
+    customerId: customerRef.id,
+    customerName,
+    customerPhone: customerPhone ?? '',
+    customerRelation: optionalText(input.customerRelation) ?? '',
+    childrenCount: input.childrenCount,
+    planId: plan.id,
+    planName: plan.name,
+    durationMinutes: plan.durationMinutes,
+    isUnlimited: plan.isUnlimited,
+    startedAt: Timestamp.fromDate(startedAt),
+    expectedEndAt: timestampOrNull(expectedEndAt),
+    paymentStatus: input.paymentStatus,
+    paymentMethod: input.paymentMethod ?? '',
+    amountCharged,
+    notes: optionalText(input.notes) ?? '',
+    status: 'active',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: userId,
+    updatedBy: userId,
+  }
+
+  const batch = writeBatch(activeVisitRef.firestore)
+  batch.set(visitRef, visitPayload)
+  batch.set(activeVisitRef, visitPayload)
+  await batch.commit()
+
+  return visitRef.id
+}
+
+export const chargeVisit = async (visit: ActiveVisit, input: ChargeVisitInput) => {
+  const storageMode = await getVisitStorageMode()
+
+  if (storageMode === 'local') {
+    return chargeLocalVisit(visit, input)
+  }
+
+  await ensureReceptionSession()
+
+  const payload = {
+    paymentStatus: 'paid',
+    paymentMethod: input.paymentMethod,
+    amountCharged: input.amountCharged ?? visit.amountCharged ?? null,
+    updatedAt: serverTimestamp(),
+    updatedBy: currentUserId(),
+  }
+
+  await Promise.all([
+    updateDoc(getDocumentRef('activeVisits', visit.id), payload),
+    updateDoc(getDocumentRef('visits', visit.id), payload),
+  ])
+}
+
+export const finishVisit = async (visit: ActiveVisit) => {
+  const storageMode = await getVisitStorageMode()
+
+  if (storageMode === 'local') {
+    return finishLocalVisit(visit)
+  }
+
+  await ensureReceptionSession()
+
+  const endedAt = new Date()
+  const payload = {
+    status: 'finished',
+    endedAt: Timestamp.fromDate(endedAt),
+    realDurationMinutes: getRealDurationMinutes(visit.startedAt, endedAt),
+    updatedAt: serverTimestamp(),
+    updatedBy: currentUserId(),
+    paymentStatus: visit.paymentStatus,
+    paymentMethod: visit.paymentMethod ?? '',
+    amountCharged: visit.amountCharged ?? null,
+  }
+
+  const batch = writeBatch(getDocumentRef('visits', visit.id).firestore)
+  batch.update(getDocumentRef('visits', visit.id), payload)
+  batch.delete(getDocumentRef('activeVisits', visit.id))
+  await batch.commit()
+}
+
+export const removeActiveVisitCopy = async (visitId: string) => {
+  await deleteDoc(getDocumentRef('activeVisits', visitId))
+}

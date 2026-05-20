@@ -4,7 +4,7 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyBntqq9tCyjfx5_mZnXOyoSsSkUIgFZ5qY',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? 'luccapark-app.firebaseapp.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? 'luccapark-app',
@@ -18,6 +18,8 @@ export const firebaseApp = getApps().length ? getApps()[0] : initializeApp(fireb
 export const auth = getAuth(firebaseApp)
 export const db = getFirestore(firebaseApp)
 export const storage = getStorage(firebaseApp)
+export const firebaseApiKey = firebaseConfig.apiKey
+export const firebaseProjectId = firebaseConfig.projectId
 
 export const analyticsPromise =
   typeof window === 'undefined'
