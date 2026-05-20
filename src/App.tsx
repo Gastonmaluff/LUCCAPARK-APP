@@ -1,8 +1,16 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoadingScreen } from './components/LoadingScreen'
+import { AdminLayout } from './layouts/AdminLayout'
 import { PublicLayout } from './layouts/PublicLayout'
-import { AdminPage } from './pages/AdminPage'
+import { AdminCalendarPage } from './pages/admin/AdminCalendarPage'
+import { AdminCanteenPage } from './pages/admin/AdminCanteenPage'
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
+import { AdminFinancePage } from './pages/admin/AdminFinancePage'
+import { AdminReceptionPage } from './pages/admin/AdminReceptionPage'
+import { AdminReportsPage } from './pages/admin/AdminReportsPage'
+import { AdminReservationsPage } from './pages/admin/AdminReservationsPage'
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
 import { AvailabilityPage } from './pages/AvailabilityPage'
 import { ContactPage } from './pages/ContactPage'
 import { LandingPage } from './pages/LandingPage'
@@ -33,7 +41,18 @@ function App() {
           <Route path="precios" element={<PricesPage />} />
           <Route path="contacto" element={<ContactPage />} />
         </Route>
-        <Route path="admin" element={<AdminPage />} />
+        <Route path="admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboardPage />} />
+          <Route path="recepcion" element={<AdminReceptionPage />} />
+          <Route path="reservas" element={<AdminReservationsPage />} />
+          <Route path="calendario" element={<AdminCalendarPage />} />
+          <Route path="cantina" element={<AdminCanteenPage />} />
+          <Route path="finanzas" element={<AdminFinancePage />} />
+          <Route path="reportes" element={<AdminReportsPage />} />
+          <Route path="configuracion" element={<AdminSettingsPage />} />
+          <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+        </Route>
         <Route path="recepcion" element={<ReceptionPage />} />
         <Route path="tv" element={<TVPage />} />
         <Route path="login" element={<LoginPage />} />

@@ -2,6 +2,7 @@ import { CalendarDays, Menu, MessageCircle, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
+import { ScrollToHash } from '../components/ScrollToHash'
 import { whatsappLink } from '../config/app'
 
 const navItems = [
@@ -17,6 +18,7 @@ export function PublicLayout() {
 
   return (
     <div className="page-shell">
+      <ScrollToHash />
       <header className="site-header">
         <div className="container site-header-inner">
           <BrandLogo className="compact" />

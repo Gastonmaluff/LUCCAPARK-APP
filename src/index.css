@@ -654,6 +654,30 @@ img {
   grid-template-columns: 1fr 1fr;
 }
 
+.module-header {
+  align-items: flex-end;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.module-header h1 {
+  color: var(--ink);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+  margin: 0;
+}
+
+.module-actions,
+.quick-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .panel {
   padding: 20px;
 }
@@ -687,6 +711,10 @@ img {
   flex: 1;
 }
 
+.bar.turquoise {
+  background: linear-gradient(180deg, var(--turquoise), #8fe4e8);
+}
+
 .event-list,
 .visit-list {
   display: grid;
@@ -697,6 +725,51 @@ img {
 .visit-card {
   box-shadow: none;
   padding: 14px;
+}
+
+.module-list {
+  display: grid;
+  gap: 12px;
+}
+
+.module-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 14px;
+}
+
+.product-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.product-card {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.calendar-button {
+  border: 0;
+  width: 100%;
+}
+
+.calendar-button.selected {
+  box-shadow: 0 0 0 3px rgba(8, 169, 181, 0.28);
 }
 
 .event-card {
@@ -710,6 +783,30 @@ img {
   display: grid;
   gap: 18px;
   grid-template-columns: 360px 1fr;
+}
+
+.reception-status-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 18px;
+}
+
+.status-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+}
+
+.status-card strong {
+  color: var(--ink);
+  display: block;
+  font-size: 1.2rem;
 }
 
 .form-grid {
@@ -951,8 +1048,16 @@ img {
   .availability-layout,
   .dashboard-grid,
   .reception-grid,
-  .tv-event {
+  .reception-status-grid,
+  .tv-event,
+  .settings-grid,
+  .module-header {
     grid-template-columns: 1fr;
+  }
+
+  .module-header {
+    align-items: stretch;
+    display: grid;
   }
 
   .hero-media,
@@ -962,8 +1067,32 @@ img {
 
   .grid-4,
   .metric-grid,
-  .tv-grid {
+  .tv-grid,
+  .product-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-menu-button {
+    display: inline-flex;
+  }
+
+  .internal-nav {
+    display: none;
+  }
+
+  .internal-nav.open {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, 1fr);
+    padding: 8px;
+    width: 100%;
+  }
+
+  .admin-quick-link {
+    justify-self: end;
   }
 }
 
@@ -991,8 +1120,30 @@ img {
 
   .grid-4,
   .metric-grid,
-  .tv-grid {
+  .tv-grid,
+  .product-grid {
     grid-template-columns: 1fr;
+  }
+
+  .module-row {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .module-actions,
+  .quick-actions,
+  .module-actions .button,
+  .quick-actions .button {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .internal-nav.open {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-quick-link {
+    justify-self: stretch;
   }
 
   .internal-page,

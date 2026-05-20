@@ -6,11 +6,21 @@ export function CalendarPreview() {
   return (
     <article className="availability-card calendar">
       <div className="calendar-top">
-        <button className="button ghost" type="button" aria-label="Mes anterior">
+        <button
+          className="button ghost"
+          onClick={() => window.alert('Cambio de mes demo. Luego se cargaran meses desde Firestore.')}
+          type="button"
+          aria-label="Mes anterior"
+        >
           ‹
         </button>
         <strong>Mayo 2025</strong>
-        <button className="button ghost" type="button" aria-label="Mes siguiente">
+        <button
+          className="button ghost"
+          onClick={() => window.alert('Cambio de mes demo. Luego se cargaran meses desde Firestore.')}
+          type="button"
+          aria-label="Mes siguiente"
+        >
           ›
         </button>
       </div>

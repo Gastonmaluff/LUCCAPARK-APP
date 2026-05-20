@@ -35,3 +35,28 @@ export interface EventDemo {
   checkedIn: number
   status: 'confirmed' | 'pending' | 'blocked'
 }
+
+export interface ReservationDemo {
+  id: string
+  childName: string
+  client: string
+  date: string
+  time: string
+  packageName: string
+  status: 'consulta' | 'reservado' | 'confirmado' | 'cancelado'
+}
+
+export interface CanteenProductDemo {
+  name: string
+  category: string
+  price: string
+  stock: number
+  lowStock?: boolean
+}
+
+export interface OpenAccountDemo {
+  name: string
+  source: 'visita' | 'evento' | 'libre'
+  total: string
+  items: number
+}

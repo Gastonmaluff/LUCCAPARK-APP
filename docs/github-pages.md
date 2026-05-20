@@ -27,9 +27,12 @@ Tambien se incluye `public/404.html` para recuperar rutas internas de SPA si alg
 
 ```text
 /LUCCAPARK-APP/admin
+/LUCCAPARK-APP/admin/calendario
 /LUCCAPARK-APP/recepcion
 /LUCCAPARK-APP/tv
 ```
+
+La app mantiene `BrowserRouter` en vez de `HashRouter` para conservar rutas limpias y facilitar la futura migracion a dominio propio. En GitHub Pages, `404.html` guarda la ruta solicitada en `sessionStorage`, vuelve al `base` del proyecto y React restaura la URL interna.
 
 ## Cuando haya dominio propio
 

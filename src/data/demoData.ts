@@ -1,4 +1,12 @@
-import type { ActiveVisitDemo, CalendarDay, EventDemo, PackagePlan } from '../types'
+import type {
+  ActiveVisitDemo,
+  CalendarDay,
+  CanteenProductDemo,
+  EventDemo,
+  OpenAccountDemo,
+  PackagePlan,
+  ReservationDemo,
+} from '../types'
 
 export const demoPackages: PackagePlan[] = [
   {
@@ -127,6 +135,71 @@ export const demoEvents: EventDemo[] = [
     checkedIn: 35,
     status: 'pending',
   },
+]
+
+export const demoReservations: ReservationDemo[] = [
+  {
+    id: 'RES-001',
+    childName: 'Mateo Rios',
+    client: 'Ana Rios',
+    date: '11 mayo 2025',
+    time: '15:00 a 18:00',
+    packageName: 'Premium',
+    status: 'confirmado',
+  },
+  {
+    id: 'RES-002',
+    childName: 'Sofia Martinez',
+    client: 'Jorge Martinez',
+    date: '17 mayo 2025',
+    time: '16:00 a 19:00',
+    packageName: 'Estandar',
+    status: 'reservado',
+  },
+  {
+    id: 'RES-003',
+    childName: 'Thiago Fernandez',
+    client: 'Laura Fernandez',
+    date: '23 mayo 2025',
+    time: '17:30 a 19:30',
+    packageName: 'Basico',
+    status: 'consulta',
+  },
+  {
+    id: 'RES-004',
+    childName: 'Valentina Gomez',
+    client: 'Maria Gomez',
+    date: '24 mayo 2025',
+    time: '15:00 a 17:00',
+    packageName: 'Super Lucca',
+    status: 'cancelado',
+  },
+]
+
+export const demoCanteenProducts: CanteenProductDemo[] = [
+  { name: 'Agua mineral', category: 'Bebidas', price: 'G 6.000', stock: 42 },
+  { name: 'Jugo individual', category: 'Bebidas', price: 'G 8.000', stock: 18 },
+  { name: 'Papas snack', category: 'Snacks', price: 'G 7.000', stock: 9, lowStock: true },
+  { name: 'Alfajor', category: 'Dulces', price: 'G 5.000', stock: 24 },
+]
+
+export const demoOpenAccounts: OpenAccountDemo[] = [
+  { name: 'Mesa cumple Mateo', source: 'evento', total: 'G 185.000', items: 12 },
+  { name: 'Mia Farina', source: 'visita', total: 'G 24.000', items: 3 },
+  { name: 'Cuenta mostrador', source: 'libre', total: 'G 32.000', items: 4 },
+]
+
+export const demoFinanceCards = [
+  { label: 'Ingresos del dia', value: 'G 12.450.000', detail: 'Caja parcial demo' },
+  { label: 'Ingresos del mes', value: 'G 83.200.000', detail: 'Incluye eventos senados' },
+  { label: 'Cuentas pendientes', value: 'G 1.240.000', detail: 'Visitas y cantina' },
+  { label: 'Cierres realizados', value: '14', detail: 'Mayo 2025' },
+]
+
+export const demoReportCards = [
+  { label: 'Ocupacion promedio', value: '68%', detail: 'Placeholder estadistico' },
+  { label: 'Cumpleanos del mes', value: '21', detail: 'Eventos reservados demo' },
+  { label: 'Ticket promedio', value: 'G 86.000', detail: 'Visitas + cantina' },
 ]
 
 export const demoTimeSlots = [

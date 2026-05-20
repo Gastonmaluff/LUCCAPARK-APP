@@ -18,6 +18,14 @@ Base web de Fase 1 para Lucca Park, un parque infantil con landing publica, pane
 - `/contacto`: contacto y WhatsApp
 - `/login`: acceso interno preparado para Firebase Auth
 - `/admin`: dashboard propietario/admin
+- `/admin/dashboard`: dashboard propietario/admin
+- `/admin/recepcion`: vista administrativa de recepcion
+- `/admin/reservas`: gestion base de reservas
+- `/admin/calendario`: calendario administrativo
+- `/admin/cantina`: modulo base de cantina
+- `/admin/finanzas`: finanzas y cierres
+- `/admin/reportes`: reportes
+- `/admin/configuracion`: configuracion
 - `/recepcion`: portal operativo con modo visita normal y modo evento
 - `/tv`: vista optimizada para pantalla grande
 
@@ -71,3 +79,7 @@ Colecciones previstas:
 ## Datos demo
 
 Los datos visuales de Fase 1 estan separados en `src/data/demoData.ts`. No son datos reales ni se mezclan con Firestore.
+
+## Navegacion interna
+
+El admin usa rutas hijas bajo `/admin/*` y `NavLink` para marcar el modulo activo sin recargar la app. La ruta `/admin` redirige a `/admin/dashboard`.

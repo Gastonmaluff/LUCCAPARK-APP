@@ -1,7 +1,6 @@
-import { Baby, CalendarCheck, ClipboardList, CreditCard, Plus, RefreshCw, Users } from 'lucide-react'
+import { Baby, ClipboardList, CreditCard, Plus, RefreshCw, Users } from 'lucide-react'
 import { useState } from 'react'
 import { BrandLogo } from '../components/BrandLogo'
-import { MetricCard } from '../components/MetricCard'
 import { StatusPill } from '../components/StatusPill'
 import { demoEvents, demoVisits } from '../data/demoData'
 
@@ -23,17 +22,31 @@ export function ReceptionPage() {
               Evento privado
             </button>
           </div>
-          <button className="button ghost" type="button">
+          <button
+            className="button ghost"
+            onClick={() => window.alert('Datos demo actualizados visualmente. Luego se sincronizara con Firestore.')}
+            type="button"
+          >
             <RefreshCw size={17} />
             Actualizar
           </button>
         </header>
 
-        <div className="metric-grid">
-          <MetricCard label="Ninos dentro ahora" value="28" detail="/ 120 capacidad" icon={<Baby />} color="var(--green)" />
-          <MetricCard label="Pagos pendientes" value="5" detail="visitas activas" icon={<CreditCard />} color="var(--orange)" />
-          <MetricCard label="Salidas proximas" value="3" detail="en 10 minutos" icon={<CalendarCheck />} color="var(--yellow)" />
-          <MetricCard label="Evento activo" value={mode === 'event' ? '38/40' : 'No'} detail="control de cupo" icon={<Users />} color="var(--turquoise)" />
+        <div className="reception-status-grid">
+          <article className="status-card">
+            <Baby color="var(--green)" />
+            <div>
+              <strong>{mode === 'visit' ? '28 ninos dentro' : activeEvent.name}</strong>
+              <p className="muted">{mode === 'visit' ? 'Visitas activas con temporizador demo' : 'Evento privado sin temporizadores individuales'}</p>
+            </div>
+          </article>
+          <article className="status-card">
+            {mode === 'visit' ? <CreditCard color="var(--orange)" /> : <Users color="var(--turquoise)" />}
+            <div>
+              <strong>{mode === 'visit' ? '5 pagos pendientes' : `${activeEvent.checkedIn} / ${activeEvent.capacity} invitados`}</strong>
+              <p className="muted">{mode === 'visit' ? 'Cobros a revisar al salir' : 'Control de cupo contratado'}</p>
+            </div>
+          </article>
         </div>
 
         <div className="reception-grid">
@@ -98,7 +111,11 @@ export function ReceptionPage() {
                 <span>Observaciones</span>
                 <textarea placeholder="Agregar alguna observacion..." rows={3} />
               </label>
-              <button className="button primary" type="button">
+              <button
+                className="button primary"
+                onClick={() => window.alert('Registro demo. En Fase 2 se creara la visita o invitado en Firestore.')}
+                type="button"
+              >
                 <Plus size={18} />
                 {mode === 'visit' ? 'Registrar ingreso' : 'Registrar invitado'}
               </button>

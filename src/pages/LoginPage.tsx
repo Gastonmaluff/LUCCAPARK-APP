@@ -24,7 +24,11 @@ export function LoginPage() {
             </span>
             <input placeholder="••••••••" type="password" />
           </label>
-          <button className="button primary" type="button">
+          <button
+            className="button primary"
+            onClick={() => window.alert('Login demo. Firebase Auth se activara en la siguiente fase.')}
+            type="button"
+          >
             Entrar
           </button>
         </form>

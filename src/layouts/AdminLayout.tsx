@@ -1,0 +1,65 @@
+import {
+  BarChart3,
+  CalendarDays,
+  CalendarRange,
+  ChefHat,
+  ClipboardList,
+  LayoutDashboard,
+  Menu,
+  Settings,
+  WalletCards,
+  X,
+} from 'lucide-react'
+import { useState } from 'react'
+import { Link, NavLink, Outlet } from 'react-router-dom'
+import { BrandLogo } from '../components/BrandLogo'
+
+const adminNavItems = [
+  { label: 'Dashboard', to: '/admin/dashboard', icon: LayoutDashboard },
+  { label: 'Recepcion', to: '/admin/recepcion', icon: ClipboardList },
+  { label: 'Reservas', to: '/admin/reservas', icon: CalendarDays },
+  { label: 'Calendario', to: '/admin/calendario', icon: CalendarRange },
+  { label: 'Cantina', to: '/admin/cantina', icon: ChefHat },
+  { label: 'Finanzas', to: '/admin/finanzas', icon: WalletCards },
+  { label: 'Reportes', to: '/admin/reportes', icon: BarChart3 },
+  { label: 'Configuracion', to: '/admin/configuracion', icon: Settings },
+]
+
+export function AdminLayout() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  return (
+    <main className="internal-page">
+      <section className="internal-shell">
+        <header className="admin-topbar">
+          <BrandLogo className="compact" />
+          <button
+            className="menu-button admin-menu-button"
+            type="button"
+            aria-label="Abrir menu admin"
+            onClick={() => setIsMenuOpen((current) => !current)}
+          >
+            {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+          <nav className={`internal-nav ${isMenuOpen ? 'open' : ''}`} aria-label="Admin">
+            {adminNavItems.map((item) => (
+              <NavLink
+                className={({ isActive }) => `nav-chip ${isActive ? 'active' : ''}`}
+                key={item.label}
+                onClick={() => setIsMenuOpen(false)}
+                to={item.to}
+              >
+                <item.icon size={17} />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          <Link className="button ghost admin-quick-link" to="/recepcion">
+            Abrir recepcion
+          </Link>
+        </header>
+        <Outlet />
+      </section>
+    </main>
+  )
+}
