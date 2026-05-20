@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lucca Park</title>
+  </head>
+  <body>
+    <script>
+      ;(() => {
+        const segments = window.location.pathname.split('/').filter(Boolean)
+        const isGithubPages = window.location.hostname.endsWith('github.io')
+        const basePath = isGithubPages && segments.length > 0 ? `/${segments[0]}/` : '/'
+        const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+        window.sessionStorage.setItem('lucca:redirect', redirect)
+        window.location.replace(`${window.location.origin}${basePath}`)
+      })()
+    </script>
+  </body>
+</html>
