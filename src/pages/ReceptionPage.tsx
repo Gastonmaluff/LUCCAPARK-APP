@@ -1,5 +1,7 @@
 import { Baby, ClipboardList, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { BrandLogo } from '../components/BrandLogo'
+import { EventReceptionPanel } from '../components/events/EventReceptionPanel'
 import { ActiveVisitsList } from '../components/reception/ActiveVisitsList'
 import { ReceptionSummaryCards } from '../components/reception/ReceptionSummaryCards'
 import { StorageModeNotice } from '../components/reception/StorageModeNotice'
@@ -11,6 +13,7 @@ import { useCurrentTime } from '../hooks/useCurrentTime'
 export function ReceptionPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
   const now = useCurrentTime(1000)
+  const [mode, setMode] = useState<'normal' | 'event'>('normal')
 
   return (
     <main className="internal-page">
@@ -22,10 +25,10 @@ export function ReceptionPage() {
             <h1 className="reception-title">Recepcion</h1>
           </div>
           <div className="mode-switch" role="tablist" aria-label="Modo de recepcion">
-            <button className="active" type="button">
+            <button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">
               Visita normal
             </button>
-            <button disabled title="Se implementa en el proximo prompt" type="button">
+            <button className={mode === 'event' ? 'active' : ''} onClick={() => setMode('event')} type="button">
               Evento privado
             </button>
           </div>
@@ -35,31 +38,39 @@ export function ReceptionPage() {
           </button>
         </header>
 
-        <ReceptionSummaryCards now={now} visits={visits} />
-        <StorageModeNotice mode={storageMode} />
+        {mode === 'normal' ? (
+          <>
+            <ReceptionSummaryCards now={now} visits={visits} />
+            <StorageModeNotice mode={storageMode} />
+          </>
+        ) : null}
 
-        <div className="reception-grid">
-          <article className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">
-                <ClipboardList color="var(--orange)" />
-                Registrar ingreso
-              </h2>
-            </div>
-            <VisitForm />
-          </article>
+        {mode === 'normal' ? (
+          <div className="reception-grid">
+            <article className="panel">
+              <div className="panel-header">
+                <h2 className="panel-title">
+                  <ClipboardList color="var(--orange)" />
+                  Registrar ingreso
+                </h2>
+              </div>
+              <VisitForm />
+            </article>
 
-          <article className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">
-                <Baby color="var(--orange)" />
-                Visitas activas
-              </h2>
-              <StatusPill tone="info">Tiempo real</StatusPill>
-            </div>
-            <ActiveVisitsList error={error} isLoading={isLoading} visits={visits} />
-          </article>
-        </div>
+            <article className="panel">
+              <div className="panel-header">
+                <h2 className="panel-title">
+                  <Baby color="var(--orange)" />
+                  Visitas activas
+                </h2>
+                <StatusPill tone="info">Tiempo real</StatusPill>
+              </div>
+              <ActiveVisitsList error={error} isLoading={isLoading} visits={visits} />
+            </article>
+          </div>
+        ) : (
+          <EventReceptionPanel />
+        )}
       </section>
     </main>
   )

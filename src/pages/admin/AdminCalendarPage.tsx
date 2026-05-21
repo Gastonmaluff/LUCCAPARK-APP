@@ -1,8 +1,12 @@
 import { CalendarPlus, Info } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
+import { EventStatusBadge } from '../../components/events/EventStatusBadge'
 import { StatusPill } from '../../components/StatusPill'
 import { demoCalendarDays, demoEvents } from '../../data/demoData'
+import { useEvents } from '../../hooks/useEvents'
+import { formatEventTimeRange } from '../../utils/eventCapacity'
 import type { CalendarDay } from '../../types'
 
 const labels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
@@ -16,7 +20,10 @@ const statusLabel = {
 
 export function AdminCalendarPage() {
   const [selectedDay, setSelectedDay] = useState<CalendarDay>(demoCalendarDays.find((day) => day.status) ?? demoCalendarDays[0])
+  const { events } = useEvents()
   const selectedStatus = selectedDay.status ? statusLabel[selectedDay.status] : 'Sin eventos'
+  const selectedDate = `2025-05-${String(selectedDay.day).padStart(2, '0')}`
+  const eventsForSelectedDay = events.filter((event) => event.date === selectedDate)
 
   return (
     <>
@@ -25,14 +32,10 @@ export function AdminCalendarPage() {
         title="Calendario administrativo"
         description="Calendario visual preparado para reservas, bloqueos y eventos privados."
         action={
-          <button
-            className="button primary"
-            onClick={() => window.alert('Crear evento demo. Luego abrira el formulario real de reserva.')}
-            type="button"
-          >
+          <Link className="button primary" to="/admin/reservas">
             <CalendarPlus size={18} />
             Crear evento
-          </button>
+          </Link>
         }
       />
       <div className="availability-layout">
@@ -97,16 +100,40 @@ export function AdminCalendarPage() {
             <p className="eyebrow">
               <Info size={16} /> Evento relacionado
             </p>
-            <h3>{demoEvents[0].name}</h3>
-            <p className="muted">
-              {demoEvents[0].client} - {demoEvents[0].time}
-            </p>
-            <div className="progress">
-              <span style={{ width: '95%' }} />
-            </div>
-            <p className="muted">
-              {demoEvents[0].checkedIn} / {demoEvents[0].capacity} invitados registrados
-            </p>
+            {eventsForSelectedDay.length > 0 ? (
+              <div className="module-list">
+                {eventsForSelectedDay.map((event) => (
+                  <div className="event-card" key={event.id}>
+                    <div>
+                      <h3>{event.title}</h3>
+                      <p className="muted">
+                        {event.customerName} - {formatEventTimeRange(event)}
+                      </p>
+                      <div className="progress">
+                        <span style={{ width: `${Math.min(100, (event.registeredGuestsCount / event.contractedChildrenCount) * 100)}%` }} />
+                      </div>
+                      <p className="muted">
+                        {event.registeredGuestsCount} / {event.contractedChildrenCount} invitados registrados
+                      </p>
+                    </div>
+                    <EventStatusBadge status={event.status} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <h3>{demoEvents[0].name}</h3>
+                <p className="muted">
+                  {demoEvents[0].client} - {demoEvents[0].time}
+                </p>
+                <div className="progress">
+                  <span style={{ width: '95%' }} />
+                </div>
+                <p className="muted">
+                  Demo: {demoEvents[0].checkedIn} / {demoEvents[0].capacity} invitados registrados
+                </p>
+              </>
+            )}
           </article>
         </aside>
       </div>

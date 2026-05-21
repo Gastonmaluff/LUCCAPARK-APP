@@ -1,12 +1,19 @@
 import { Baby } from 'lucide-react'
 import { BrandLogo } from '../components/BrandLogo'
+import { TvEventView } from '../components/events/TvEventView'
 import { PaymentBadge } from '../components/reception/PaymentBadge'
 import { TimeBadge } from '../components/reception/TimeBadge'
 import { useActiveVisits } from '../hooks/useActiveVisits'
+import { useActiveEvent } from '../hooks/useEvents'
 import { formatVisitStartTime, getVisitTimeStatus } from '../utils/visitTime'
 
 export function TVPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
+  const { activeEvent, isLoading: isLoadingEvent } = useActiveEvent()
+
+  if (activeEvent) {
+    return <TvEventView event={activeEvent} />
+  }
 
   return (
     <main className="tv-page">
@@ -21,19 +28,19 @@ export function TVPage() {
           Vista en tiempo real para temporizadores de visitas normales.
         </p>
 
-        {isLoading ? <div className="tv-empty">Cargando visitas activas...</div> : null}
+        {isLoading || isLoadingEvent ? <div className="tv-empty">Cargando pantalla TV...</div> : null}
         {storageMode === 'local' && !isLoading ? (
           <div className="tv-local-note">Modo local temporal: activar Firestore para sincronizar entre dispositivos reales.</div>
         ) : null}
         {error ? <div className="tv-empty danger">No se pudieron cargar las visitas activas.</div> : null}
-        {!isLoading && !error && visits.length === 0 ? (
+        {!isLoading && !isLoadingEvent && !error && visits.length === 0 ? (
           <div className="tv-empty">
             <BrandLogo />
             <strong>No hay visitas activas en este momento</strong>
           </div>
         ) : null}
 
-        {!isLoading && !error && visits.length > 0 ? (
+        {!isLoading && !isLoadingEvent && !error && visits.length > 0 ? (
           <div className="tv-grid">
             {visits.map((visit) => {
               const timeStatus = getVisitTimeStatus(visit)

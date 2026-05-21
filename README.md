@@ -83,6 +83,18 @@ La Fase 3 implementa el flujo normal real:
 
 La estrategia de datos usa `activeVisits` para lectura rapida en recepcion/TV y `visits` como historico. Al finalizar una visita se actualiza `visits` con `status: finished`, `endedAt` y `realDurationMinutes`, y se retira la copia activa de `activeVisits`.
 
+## Eventos privados
+
+La Fase 4 implementa el flujo real de cumpleaños/evento privado:
+
+- `/admin/reservas`: crea eventos reales, activa/finaliza eventos, revisa invitados y configura la TV del evento.
+- `/recepcion` y `/admin/recepcion`: permiten cambiar a modo evento privado y registrar invitados sin temporizador.
+- `/tv`: prioriza el modo evento cuando existe un evento `active` con `tvModeEnabled`.
+
+Los invitados se guardan en `eventGuests` y el evento mantiene `registeredGuestsCount`. El registro de invitado usa una transaccion para incrementar el contador y marcar si el niño queda dentro del cupo o como adicional.
+
+Decision de TV: si hay un evento activo, la pantalla `/tv` muestra el evento y no los temporizadores normales. Al finalizar el evento, `/tv` vuelve al modo normal.
+
 Colecciones previstas:
 
 - `users`

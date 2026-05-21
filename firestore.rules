@@ -22,6 +22,14 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    match /events/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /eventGuests/{document=**} {
+      allow read, write: if signedIn();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
