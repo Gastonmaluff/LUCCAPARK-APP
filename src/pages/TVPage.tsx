@@ -1,32 +1,102 @@
-import { Baby } from 'lucide-react'
+import { Check, CircleAlert, Clock3, CreditCard, Infinity as InfinityIcon, RefreshCw } from 'lucide-react'
 import { BrandLogo } from '../components/BrandLogo'
 import { TvEventView } from '../components/events/TvEventView'
-import { PaymentBadge } from '../components/reception/PaymentBadge'
-import { TimeBadge } from '../components/reception/TimeBadge'
 import { useActiveVisits } from '../hooks/useActiveVisits'
+import { useCurrentTime } from '../hooks/useCurrentTime'
 import { useActiveEvent } from '../hooks/useEvents'
-import { formatVisitStartTime, getVisitTimeStatus } from '../utils/visitTime'
+import type { ActiveVisit, PaymentStatus, VisitTimeStatus } from '../types'
+import { calculateRemainingMs, getVisitTimeStatus } from '../utils/visitTime'
+
+const priorityOrder: Record<VisitTimeStatus, number> = {
+  expired: 0,
+  warning: 1,
+  ok: 2,
+  unlimited: 3,
+}
+
+const paymentIcon: Record<PaymentStatus, typeof Check> = {
+  paid: Check,
+  payAtExit: CreditCard,
+  pending: CircleAlert,
+}
+
+const pad = (value: number) => String(value).padStart(2, '0')
+
+const formatTvTime = (visit: ActiveVisit, now: Date) => {
+  const remainingMs = calculateRemainingMs(visit, now)
+
+  if (remainingMs === null) {
+    return '--'
+  }
+
+  if (remainingMs <= 0) {
+    return '00:00'
+  }
+
+  const totalSeconds = Math.floor(remainingMs / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`
+  }
+
+  return `${pad(minutes)}:${pad(seconds)}`
+}
+
+const sortVisitsForTv = (visits: ActiveVisit[], now: Date) =>
+  [...visits].sort((a, b) => {
+    const statusA = getVisitTimeStatus(a, now)
+    const statusB = getVisitTimeStatus(b, now)
+    const statusDiff = priorityOrder[statusA] - priorityOrder[statusB]
+
+    if (statusDiff !== 0) {
+      return statusDiff
+    }
+
+    const remainingA = calculateRemainingMs(a, now)
+    const remainingB = calculateRemainingMs(b, now)
+
+    if (remainingA !== null && remainingB !== null && remainingA !== remainingB) {
+      return remainingA - remainingB
+    }
+
+    return a.startedAt.getTime() - b.startedAt.getTime()
+  })
 
 export function TVPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
   const { activeEvent, isLoading: isLoadingEvent } = useActiveEvent()
+  const now = useCurrentTime(1000)
 
   if (activeEvent) {
     return <TvEventView event={activeEvent} />
   }
 
-  return (
-    <main className="tv-page">
-      <section className="tv-shell">
-        <header className="tv-toolbar">
-          <BrandLogo className="compact" />
-          <div className="tv-mode-label">Modo normal</div>
-        </header>
+  const visibleVisits = sortVisitsForTv(visits, now).slice(0, 12)
+  const lastUpdated = new Intl.DateTimeFormat('es-PY', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(now)
 
-        <h1 className="tv-title">Ninos dentro ahora</h1>
-        <p className="muted" style={{ color: '#b8c4d5', fontSize: '1.4rem', marginBottom: 22 }}>
-          Vista en tiempo real para temporizadores de visitas normales.
-        </p>
+  return (
+    <main className="tv-page tv-normal-page">
+      <section className="tv-shell tv-normal-shell">
+        <header className="tv-normal-toolbar">
+          <div className="tv-live-brand">
+            <BrandLogo className="compact" />
+            <span className="tv-brand-separator" />
+            <span className="tv-live-dot" />
+            <span>Vista en tiempo real</span>
+          </div>
+          <div aria-hidden="true" className="tv-confetti">
+            <span className="shape star">*</span>
+            <span className="shape squiggle">~</span>
+            <span className="shape dot" />
+            <span className="shape star small">*</span>
+          </div>
+        </header>
 
         {isLoading || isLoadingEvent ? <div className="tv-empty">Cargando pantalla TV...</div> : null}
         {storageMode === 'local' && !isLoading ? (
@@ -41,28 +111,44 @@ export function TVPage() {
         ) : null}
 
         {!isLoading && !isLoadingEvent && !error && visits.length > 0 ? (
-          <div className="tv-grid">
-            {visits.map((visit) => {
-              const timeStatus = getVisitTimeStatus(visit)
-              return (
-                <article className={`tv-card ${timeStatus}`} key={visit.id}>
-                  <div>
-                    <strong>{visit.childName}</strong>
-                    <p>{visit.customerName}</p>
-                  </div>
-                  <TimeBadge large visit={visit} />
-                  <div className="tv-card-footer">
-                    <span>
-                      <Baby size={20} />
-                      {visit.planName}
+          <>
+            <div className="tv-visit-list">
+              {visibleVisits.map((visit, index) => {
+                const timeStatus = getVisitTimeStatus(visit, now)
+                const PaymentIcon = paymentIcon[visit.paymentStatus]
+                const TimeIcon = timeStatus === 'unlimited' ? InfinityIcon : Clock3
+
+                return (
+                  <article className={`tv-list-row ${timeStatus}`} key={visit.id}>
+                    <span className="tv-priority-number">{index + 1}</span>
+                    <strong className="tv-child-name">{visit.childName}</strong>
+                    <span className="tv-responsible-name">{visit.customerName || 'Responsable'}</span>
+                    <TimeIcon className="tv-time-icon" size={34} strokeWidth={3} />
+                    <strong className="tv-row-time">{formatTvTime(visit, now)}</strong>
+                    <span
+                      aria-label={`Estado de pago ${visit.paymentStatus}`}
+                      className={`tv-payment-icon ${visit.paymentStatus}`}
+                    >
+                      <PaymentIcon size={34} strokeWidth={3.2} />
                     </span>
-                    <span>Ingreso {formatVisitStartTime(visit.startedAt)}</span>
-                  </div>
-                  <PaymentBadge status={visit.paymentStatus} />
-                </article>
-              )
-            })}
-          </div>
+                  </article>
+                )
+              })}
+            </div>
+            <footer className="tv-normal-footer">
+              <div className="tv-legend">
+                <span><i className="legend-dot ok" />Tiempo normal</span>
+                <span><i className="legend-dot warning" />Por vencer</span>
+                <span><i className="legend-dot expired" />Vencido</span>
+                <span><i className="legend-dot unlimited" />Libre</span>
+              </div>
+              <div className="tv-auto-refresh">
+                <RefreshCw size={34} />
+                <span>Actualizacion automatica</span>
+                <strong>{lastUpdated}</strong>
+              </div>
+            </footer>
+          </>
         ) : null}
       </section>
     </main>
