@@ -1,6 +1,6 @@
 # Lucca Park App
 
-Base web de Fase 1 para Lucca Park, un parque infantil con landing publica, panel administrativo, recepcion y vista TV.
+Base web para Lucca Park, un parque infantil con landing publica, panel administrativo, recepcion, vista TV, eventos privados y cantina operativa.
 
 ## Stack
 
@@ -20,10 +20,10 @@ Base web de Fase 1 para Lucca Park, un parque infantil con landing publica, pane
 - `/admin`: dashboard propietario/admin
 - `/admin/dashboard`: dashboard propietario/admin
 - `/admin/recepcion`: vista administrativa de recepcion
-- `/admin/reservas`: gestion base de reservas
+- `/admin/reservas`: gestion de reservas/eventos
 - `/admin/calendario`: calendario administrativo
-- `/admin/cantina`: modulo base de cantina
-- `/admin/finanzas`: finanzas y cierres
+- `/admin/cantina`: productos, cuentas abiertas y ventas de cantina
+- `/admin/finanzas`: cierre diario basico
 - `/admin/reportes`: reportes
 - `/admin/configuracion`: configuracion
 - `/recepcion`: portal operativo con modo visita normal y modo evento
@@ -85,17 +85,33 @@ La estrategia de datos usa `activeVisits` para lectura rapida en recepcion/TV y 
 
 ## Eventos privados
 
-La Fase 4 implementa el flujo real de cumpleaños/evento privado:
+La Fase 4 implementa el flujo real de cumpleanos/evento privado:
 
 - `/admin/reservas`: crea eventos reales, activa/finaliza eventos, revisa invitados y configura la TV del evento.
 - `/recepcion` y `/admin/recepcion`: permiten cambiar a modo evento privado y registrar invitados sin temporizador.
 - `/tv`: prioriza el modo evento cuando existe un evento `active` con `tvModeEnabled`.
 
-Los invitados se guardan en `eventGuests` y el evento mantiene `registeredGuestsCount`. El registro de invitado usa una transaccion para incrementar el contador y marcar si el niño queda dentro del cupo o como adicional.
+Los invitados se guardan en `eventGuests` y el evento mantiene `registeredGuestsCount`. El registro de invitado usa una transaccion para incrementar el contador y marcar si el nino queda dentro del cupo o como adicional.
 
 Decision de TV: si hay un evento activo, la pantalla `/tv` muestra el evento y no los temporizadores normales. Al finalizar el evento, `/tv` vuelve al modo normal.
 
-Colecciones previstas:
+## Cantina y cierre diario
+
+La Fase 5 implementa una primera version real y operativa de cantina:
+
+- `/admin/cantina`: administra productos, busca/filtra por categoria, activa/desactiva productos y controla stock simple.
+- Cuentas de cantina: pueden ser `visit`, `event` o `free`.
+- Cuentas abiertas: permiten agregar productos, cobrar o cancelar sin borrar registros.
+- Ventas pagadas del dia: muestran hora, tipo de cuenta, asociado, productos resumidos, total y metodo de pago.
+- Recepcion: cada visita activa muestra un acceso discreto a cantina si tiene consumo abierto.
+- Eventos: el detalle del evento muestra total consumido en cantina y cuentas pendientes asociadas.
+- `/admin/finanzas`: calcula cierre diario con visitas, cantina, pendientes, operacion del dia y metodos de pago.
+
+La estrategia de stock es simple: si un producto tiene `stock` definido, se descuenta al crear/agregar consumo y se restaura si la cuenta se cancela. El inventario avanzado queda para una fase posterior.
+
+Al guardar el cierre diario se escribe en `dailyClosings` usando la fecha como id de documento. Si ya existe un cierre para esa fecha, la interfaz avisa que hay un cierre guardado y permite actualizarlo/recalcularlo.
+
+## Colecciones previstas
 
 - `users`
 - `customers`

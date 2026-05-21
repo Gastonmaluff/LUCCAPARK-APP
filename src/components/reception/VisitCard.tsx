@@ -1,7 +1,9 @@
-import { Baby, CheckCircle2, CreditCard, Eye, LogOut } from 'lucide-react'
+import { Baby, CheckCircle2, CreditCard, Eye, LogOut, ShoppingCart } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { chargeVisit, finishVisit } from '../../services/visitService'
-import type { ActiveVisit, PaymentMethod } from '../../types'
+import type { ActiveVisit, CanteenOrder, PaymentMethod } from '../../types'
+import { formatGuarani } from '../../utils/money'
 import { formatVisitStartTime } from '../../utils/visitTime'
 import { PaymentBadge } from './PaymentBadge'
 import { TimeBadge } from './TimeBadge'
@@ -17,9 +19,10 @@ const paymentMethodLabel: Record<string, string> = {
 
 interface VisitCardProps {
   visit: ActiveVisit
+  canteenOrders?: CanteenOrder[]
 }
 
-export function VisitCard({ visit }: VisitCardProps) {
+export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isCharging, setIsCharging] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''>>(
@@ -28,6 +31,7 @@ export function VisitCard({ visit }: VisitCardProps) {
   const [amountCharged, setAmountCharged] = useState(visit.amountCharged ? String(visit.amountCharged) : '')
   const [isSavingAction, setIsSavingAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const canteenTotal = canteenOrders.reduce((sum, order) => sum + order.total, 0)
 
   const handleCharge = async () => {
     setActionError(null)
@@ -93,6 +97,17 @@ export function VisitCard({ visit }: VisitCardProps) {
       </div>
 
       <div className="visit-actions">
+        {canteenOrders.length > 0 ? (
+          <Link className="button ghost canteen-chip" to="/admin/cantina">
+            <ShoppingCart size={17} />
+            Cantina {formatGuarani(canteenTotal)}
+          </Link>
+        ) : (
+          <Link className="button ghost" to="/admin/cantina">
+            <ShoppingCart size={17} />
+            Cantina
+          </Link>
+        )}
         {visit.paymentStatus !== 'paid' ? (
           <button className="button secondary" onClick={() => setIsCharging((current) => !current)} type="button">
             <CreditCard size={17} />

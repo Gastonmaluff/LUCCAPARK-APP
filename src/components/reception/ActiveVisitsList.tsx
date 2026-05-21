@@ -1,14 +1,15 @@
 import { Baby } from 'lucide-react'
-import type { ActiveVisit } from '../../types'
+import type { ActiveVisit, CanteenOrder } from '../../types'
 import { VisitCard } from './VisitCard'
 
 interface ActiveVisitsListProps {
   visits: ActiveVisit[]
   isLoading: boolean
   error: string | null
+  canteenOrders?: CanteenOrder[]
 }
 
-export function ActiveVisitsList({ error, isLoading, visits }: ActiveVisitsListProps) {
+export function ActiveVisitsList({ canteenOrders = [], error, isLoading, visits }: ActiveVisitsListProps) {
   if (isLoading) {
     return <div className="empty-state">Cargando visitas activas...</div>
   }
@@ -30,7 +31,11 @@ export function ActiveVisitsList({ error, isLoading, visits }: ActiveVisitsListP
   return (
     <div className="visit-list">
       {visits.map((visit) => (
-        <VisitCard key={visit.id} visit={visit} />
+        <VisitCard
+          canteenOrders={canteenOrders.filter((order) => order.visitId === visit.id && order.status === 'open')}
+          key={visit.id}
+          visit={visit}
+        />
       ))}
     </div>
   )

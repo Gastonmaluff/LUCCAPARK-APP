@@ -5,8 +5,10 @@ import { EventGuestList } from './EventGuestList'
 import { EventStatusBadge } from './EventStatusBadge'
 import { StatusPill } from '../StatusPill'
 import { updateEventStatus, updateEventTvSettings } from '../../services/eventService'
+import { useCanteenOrders } from '../../hooks/useCanteen'
 import { useEventGuests } from '../../hooks/useEvents'
 import { formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
+import { formatGuarani } from '../../utils/money'
 import type { LuccaEvent, UpdateEventTvInput } from '../../types'
 
 interface EventDetailPanelProps {
@@ -15,6 +17,7 @@ interface EventDetailPanelProps {
 
 export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const { error, guests, isLoading } = useEventGuests(event?.id)
+  const { orders: canteenOrders } = useCanteenOrders()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isSavingTv, setIsSavingTv] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -29,6 +32,9 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
   }
 
   const stats = getEventCapacityStats(event, guests.length || event.registeredGuestsCount)
+  const eventCanteenOrders = canteenOrders.filter((order) => order.eventId === event.id && order.status !== 'cancelled')
+  const openEventCanteenOrders = eventCanteenOrders.filter((order) => order.status === 'open')
+  const eventCanteenTotal = eventCanteenOrders.reduce((sum, order) => sum + order.total, 0)
   const eventTvSettings: UpdateEventTvInput = {
     tvModeEnabled: event.tvModeEnabled,
     tvTitle: event.tvTitle,
@@ -107,6 +113,13 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         </strong>
         <StatusPill tone={stats.extraGuestsCount > 0 ? 'danger' : stats.includedRemaining <= 5 ? 'warning' : 'available'}>
           Adicionales: {stats.extraGuestsCount}
+        </StatusPill>
+      </div>
+
+      <div className="event-owner-summary">
+        <strong>Cantina del evento: {formatGuarani(eventCanteenTotal)}</strong>
+        <StatusPill tone={openEventCanteenOrders.length > 0 ? 'warning' : 'available'}>
+          {openEventCanteenOrders.length} cuentas pendientes
         </StatusPill>
       </div>
 

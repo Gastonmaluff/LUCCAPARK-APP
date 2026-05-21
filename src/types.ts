@@ -6,6 +6,9 @@ export type VisitTimeStatus = 'ok' | 'warning' | 'expired' | 'unlimited'
 export type EventStatus = 'inquiry' | 'reserved' | 'confirmed' | 'active' | 'finished' | 'cancelled'
 export type EventType = 'birthday' | 'private_event' | 'other'
 export type EventCapacityStatus = 'ok' | 'near-limit' | 'over-limit'
+export type CanteenCategory = 'Bebidas' | 'Snacks' | 'Comidas' | 'Combos' | 'Otros'
+export type CanteenAccountType = 'visit' | 'event' | 'free'
+export type CanteenOrderStatus = 'open' | 'paid' | 'cancelled'
 
 export interface PackagePlan {
   name: string
@@ -207,4 +210,103 @@ export interface UpdateEventTvInput {
   showGuestCounterOnTv: boolean
   showEventNameOnTv: boolean
   hideSensitiveInfoOnTv: boolean
+}
+
+export interface CanteenProduct {
+  id: string
+  name: string
+  category: CanteenCategory
+  price: number
+  stock: number | null
+  minStock: number | null
+  isActive: boolean
+  createdAt?: Date | null
+  updatedAt?: Date | null
+}
+
+export interface CanteenOrderItem {
+  productId: string
+  productName: string
+  category: CanteenCategory
+  unitPrice: number
+  quantity: number
+  subtotal: number
+}
+
+export interface CanteenOrder {
+  id: string
+  type: CanteenAccountType
+  visitId?: string
+  eventId?: string
+  accountName: string
+  customerName?: string
+  customerPhone?: string
+  items: CanteenOrderItem[]
+  total: number
+  status: CanteenOrderStatus
+  paymentStatus: 'pending' | 'paid'
+  paymentMethod?: PaymentMethod
+  notes?: string
+  createdAt?: Date | null
+  updatedAt?: Date | null
+  paidAt?: Date | null
+  createdBy?: string | null
+  updatedBy?: string | null
+}
+
+export interface UpsertCanteenProductInput {
+  id?: string
+  name: string
+  category: CanteenCategory
+  price: number
+  stock?: number | null
+  minStock?: number | null
+  isActive: boolean
+}
+
+export interface CreateCanteenOrderInput {
+  type: CanteenAccountType
+  visitId?: string
+  eventId?: string
+  accountName: string
+  customerName?: string
+  customerPhone?: string
+  items: CanteenOrderItem[]
+  notes?: string
+  chargeNow: boolean
+  paymentMethod?: Exclude<PaymentMethod, ''>
+}
+
+export interface DailyClosing {
+  id: string
+  date: string
+  totals: {
+    totalCollected: number
+    visitsCollected: number
+    canteenCollected: number
+    eventsCollected: number
+  }
+  paymentMethodsSummary: Record<Exclude<PaymentMethod, ''>, number>
+  visitsSummary: {
+    registered: number
+    finished: number
+    active: number
+    pendingPayment: number
+  }
+  canteenSummary: {
+    paidOrders: number
+    openOrders: number
+    cancelledOrders: number
+    paidTotal: number
+  }
+  eventsSummary: {
+    activeEvents: number
+    eventsToday: number
+    guestsRegistered: number
+  }
+  openAccountsCount: number
+  pendingAmount: number
+  notes?: string
+  createdAt?: Date | null
+  createdBy?: string | null
 }

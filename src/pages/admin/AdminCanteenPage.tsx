@@ -1,77 +1,53 @@
-import { PackagePlus, Receipt, ShoppingBasket } from 'lucide-react'
+import { Receipt } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
-import { StatusPill } from '../../components/StatusPill'
-import { demoCanteenProducts, demoOpenAccounts } from '../../data/demoData'
+import { OrderBuilder } from '../../components/canteen/OrderBuilder'
+import { OpenOrdersList, PaidOrdersTodayList } from '../../components/canteen/OrderLists'
+import { ProductManager } from '../../components/canteen/ProductManager'
+import { useActiveVisits } from '../../hooks/useActiveVisits'
+import { useCanteenOrders, useCanteenProducts, usePaidCanteenOrdersForDate } from '../../hooks/useCanteen'
+import { useEvents } from '../../hooks/useEvents'
+import { getLocalDateKey } from '../../utils/date'
 
 export function AdminCanteenPage() {
+  const productsResult = useCanteenProducts()
+  const ordersResult = useCanteenOrders()
+  const paidTodayResult = usePaidCanteenOrdersForDate(getLocalDateKey())
+  const { visits } = useActiveVisits()
+  const { events } = useEvents()
+  const activeEvents = events.filter((event) => event.status === 'active')
+
   return (
     <>
       <AdminModuleHeader
         eyebrow="Ventas"
         title="Cantina"
-        description="Base visual para productos, ventas, cuentas abiertas e inventario."
+        description="Productos reales, cuentas abiertas, ventas cobradas y consumo asociado a visitas o eventos."
         action={
-          <button
-            className="button primary"
-            onClick={() => window.alert('Nueva venta demo. En Fase 4 se conectara a cuentas y stock.')}
-            type="button"
-          >
+          <a className="button primary" href="#nueva-cuenta">
             <Receipt size={18} />
-            Nueva venta
-          </button>
+            Nueva cuenta
+          </a>
         }
       />
-      <div className="dashboard-grid">
-        <article className="panel">
-          <div className="panel-header">
-            <h2 className="panel-title">
-              <ShoppingBasket color="var(--orange)" />
-              Productos demo
-            </h2>
-            <button
-              className="button ghost"
-              onClick={() => window.alert('Producto demo. El ABM de inventario llega en Fase 4.')}
-              type="button"
-            >
-              <PackagePlus size={17} />
-              Nuevo producto
-            </button>
+
+      <div className="canteen-layout">
+        <ProductManager {...productsResult} />
+        <div className="side-stack">
+          <div id="nueva-cuenta">
+            <OrderBuilder activeEvents={activeEvents} activeVisits={visits} products={productsResult.products} />
           </div>
-          <div className="product-grid">
-            {demoCanteenProducts.map((product) => (
-              <article className="product-card" key={product.name}>
-                <strong>{product.name}</strong>
-                <p className="muted">{product.category}</p>
-                <div className="metric-row">
-                  <span>{product.price}</span>
-                  <StatusPill tone={product.lowStock ? 'warning' : 'available'}>{product.stock} stock</StatusPill>
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-        <article className="panel">
-          <div className="panel-header">
-            <h2 className="panel-title">
-              <Receipt color="var(--turquoise)" />
-              Cuentas abiertas
-            </h2>
-            <StatusPill tone="info">Demo</StatusPill>
-          </div>
-          <div className="module-list">
-            {demoOpenAccounts.map((account) => (
-              <div className="module-row" key={account.name}>
-                <div>
-                  <strong>{account.name}</strong>
-                  <p className="muted">
-                    {account.source} - {account.items} items
-                  </p>
-                </div>
-                <strong>{account.total}</strong>
-              </div>
-            ))}
-          </div>
-        </article>
+          <OpenOrdersList
+            error={ordersResult.error}
+            isLoading={ordersResult.isLoading}
+            orders={ordersResult.orders}
+            products={productsResult.products}
+          />
+          <PaidOrdersTodayList
+            error={paidTodayResult.error}
+            isLoading={paidTodayResult.isLoading}
+            orders={paidTodayResult.orders}
+          />
+        </div>
       </div>
     </>
   )

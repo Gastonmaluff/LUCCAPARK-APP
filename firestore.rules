@@ -30,6 +30,22 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    match /canteenProducts/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /canteenOrders/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /dailyClosings/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /payments/{document=**} {
+      allow read, write: if signedIn();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

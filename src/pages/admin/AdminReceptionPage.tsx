@@ -9,10 +9,12 @@ import { StorageModeNotice } from '../../components/reception/StorageModeNotice'
 import { VisitForm } from '../../components/reception/VisitForm'
 import { StatusPill } from '../../components/StatusPill'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
+import { useOpenCanteenOrders } from '../../hooks/useCanteen'
 import { useCurrentTime } from '../../hooks/useCurrentTime'
 
 export function AdminReceptionPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
+  const { orders: openCanteenOrders } = useOpenCanteenOrders()
   const now = useCurrentTime(1000)
   const [mode, setMode] = useState<'normal' | 'event'>('normal')
 
@@ -64,7 +66,7 @@ export function AdminReceptionPage() {
                 </h2>
                 <StatusPill tone="available">Firestore</StatusPill>
               </div>
-              <ActiveVisitsList error={error} isLoading={isLoading} visits={visits} />
+              <ActiveVisitsList canteenOrders={openCanteenOrders} error={error} isLoading={isLoading} visits={visits} />
             </article>
           </div>
         </>
