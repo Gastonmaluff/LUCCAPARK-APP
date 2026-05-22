@@ -15,7 +15,6 @@ const priorityOrder: Record<VisitTimeStatus, number> = {
 }
 
 const maxVisibleRows = 12
-const minimumVisualRows = 7
 const rotationIntervalMs = 15000
 
 const paymentIcon: Record<PaymentStatus, typeof Check> = {
@@ -112,7 +111,6 @@ export function TVPage() {
   }
 
   const visibleVisits = getVisibleVisitsForTv(visits, now)
-  const placeholderRows = Math.max(0, minimumVisualRows - visibleVisits.length)
   const lastUpdated = new Intl.DateTimeFormat('es-PY', {
     hour: '2-digit',
     minute: '2-digit',
@@ -126,7 +124,11 @@ export function TVPage() {
             <BrandLogo className="compact" />
             <span className="tv-brand-separator" />
             <span className="tv-live-dot" />
-            <span>Vista en tiempo real</span>
+            <span className="tv-live-label">Vista en tiempo real</span>
+            <span className="tv-header-refresh" aria-label={`Actualizado ${lastUpdated}`}>
+              <RefreshCw size={26} />
+              <strong>{lastUpdated}</strong>
+            </span>
           </div>
           <div aria-hidden="true" className="tv-confetti">
             <span className="shape star">*</span>
@@ -150,7 +152,7 @@ export function TVPage() {
 
         {!isLoading && !isLoadingEvent && !error && visits.length > 0 ? (
           <>
-            <div className={`tv-visit-list ${visibleVisits.length <= 4 ? 'is-sparse' : ''}`}>
+            <div className="tv-visit-list">
               {visibleVisits.map((visit, index) => {
                 const timeStatus = getVisitTimeStatus(visit, now)
                 const PaymentIcon = paymentIcon[visit.paymentStatus]
@@ -172,22 +174,13 @@ export function TVPage() {
                   </article>
                 )
               })}
-              {Array.from({ length: placeholderRows }, (_, index) => (
-                <div aria-hidden="true" className="tv-list-row tv-placeholder-row" key={`placeholder-${index}`}>
-                  <span className="tv-priority-number" />
-                  <span className="tv-placeholder-name" />
-                  <span className="tv-placeholder-responsible" />
-                  <span className="tv-placeholder-icon" />
-                  <span className="tv-placeholder-time" />
-                  <span className="tv-placeholder-payment" />
-                </div>
-              ))}
             </div>
             <footer className="tv-normal-footer">
-              <div className="tv-auto-refresh">
-                <RefreshCw size={34} />
-                <span>Actualizacion automatica</span>
-                <strong>{lastUpdated}</strong>
+              <div className="tv-legend">
+                <span><i className="legend-dot ok" />Tiempo normal</span>
+                <span><i className="legend-dot warning" />Por vencer</span>
+                <span><i className="legend-dot expired" />Vencido</span>
+                <span><i className="legend-dot unlimited" />Libre</span>
               </div>
             </footer>
           </>
