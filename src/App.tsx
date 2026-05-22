@@ -6,6 +6,7 @@ import { AdminLayout } from './layouts/AdminLayout'
 import { PublicLayout } from './layouts/PublicLayout'
 import { AdminCalendarPage } from './pages/admin/AdminCalendarPage'
 import { AdminCanteenPage } from './pages/admin/AdminCanteenPage'
+import { AdminClientsPage } from './pages/admin/AdminClientsPage'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
 import { AdminFinancePage } from './pages/admin/AdminFinancePage'
 import { AdminReceptionPage } from './pages/admin/AdminReceptionPage'
@@ -52,6 +53,7 @@ function App() {
             <Route path="cantina" element={<AdminCanteenPage />} />
             <Route path="finanzas" element={<AdminFinancePage />} />
             <Route path="reportes" element={<AdminReportsPage />} />
+            <Route path="clientes" element={<AdminClientsPage />} />
             <Route path="configuracion" element={<AdminSettingsPage />} />
             <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
           </Route>

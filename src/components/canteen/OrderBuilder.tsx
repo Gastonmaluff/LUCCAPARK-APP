@@ -1,14 +1,25 @@
 import { useMemo, useState } from 'react'
 import { Plus, Receipt, Trash2 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { StatusPill } from '../StatusPill'
-import { createCanteenOrder } from '../../services/canteenService'
+import { addItemsToCanteenOrder, chargeCanteenOrder, createCanteenOrder } from '../../services/canteenService'
 import { formatGuarani, toNumber } from '../../utils/money'
-import type { ActiveVisit, CanteenAccountType, CanteenOrderItem, CanteenProduct, LuccaEvent, PaymentMethod } from '../../types'
+import { formatVisitStartTime } from '../../utils/visitTime'
+import type {
+  ActiveVisit,
+  CanteenAccountType,
+  CanteenOrder,
+  CanteenOrderItem,
+  CanteenProduct,
+  LuccaEvent,
+  PaymentMethod,
+} from '../../types'
 
 interface OrderBuilderProps {
   products: CanteenProduct[]
   activeVisits: ActiveVisit[]
   activeEvents: LuccaEvent[]
+  canteenOrders?: CanteenOrder[]
 }
 
 const paymentMethods: Array<Exclude<PaymentMethod, ''>> = ['cash', 'transfer', 'card', 'qr', 'other']
@@ -21,10 +32,15 @@ const paymentLabel: Record<Exclude<PaymentMethod, ''>, string> = {
   other: 'Otro',
 }
 
-export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuilderProps) {
+const hasOpenVisitOrder = (orders: CanteenOrder[], visitId: string) =>
+  orders.some((order) => order.type === 'visit' && order.visitId === visitId && order.status === 'open')
+
+export function OrderBuilder({ activeEvents, activeVisits, canteenOrders = [], products }: OrderBuilderProps) {
+  const [searchParams] = useSearchParams()
+  const preselectedVisitId = searchParams.get('visitId') ?? ''
   const activeProducts = useMemo(() => products.filter((product) => product.isActive), [products])
-  const [type, setType] = useState<CanteenAccountType>('free')
-  const [visitId, setVisitId] = useState('')
+  const [type, setType] = useState<CanteenAccountType>(preselectedVisitId ? 'visit' : 'free')
+  const [visitId, setVisitId] = useState(preselectedVisitId)
   const [eventId, setEventId] = useState('')
   const [freeName, setFreeName] = useState('Cliente mostrador')
   const [notes, setNotes] = useState('')
@@ -37,13 +53,18 @@ export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuil
 
   const selectedVisit = activeVisits.find((visit) => visit.id === visitId)
   const selectedEvent = activeEvents.find((event) => event.id === eventId)
+  const existingOpenVisitOrder =
+    type === 'visit' && visitId
+      ? canteenOrders.find((order) => order.type === 'visit' && order.visitId === visitId && order.status === 'open')
+      : undefined
   const total = items.reduce((sum, item) => sum + item.subtotal, 0)
+  const visibleTotal = total + (existingOpenVisitOrder?.total ?? 0)
 
   const addProduct = () => {
     const product = activeProducts.find((item) => item.id === productId)
 
     if (!product || quantity <= 0) {
-      setMessage('Elegí producto y cantidad.')
+      setMessage('Elegi producto y cantidad.')
       return
     }
 
@@ -105,21 +126,39 @@ export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuil
     const account = resolveAccount()
 
     if (!account.accountName.trim()) {
-      setMessage('Seleccioná o cargá una cuenta.')
+      setMessage('Selecciona o carga una cuenta.')
       return
     }
 
     if (items.length === 0) {
-      setMessage('Agregá al menos un producto.')
+      setMessage(
+        existingOpenVisitOrder
+          ? 'Esta visita ya tiene una cuenta abierta. Agrega productos para actualizarla.'
+          : 'Agrega al menos un producto.',
+      )
       return
     }
 
     setIsSaving(true)
     try {
+      if (existingOpenVisitOrder) {
+        await addItemsToCanteenOrder(existingOpenVisitOrder, items)
+        if (chargeNow) {
+          await chargeCanteenOrder(existingOpenVisitOrder, paymentMethod)
+        }
+        setItems([])
+        setNotes('')
+        setMessage(chargeNow ? 'Cuenta existente actualizada y cobrada.' : 'Consumo agregado a la cuenta existente.')
+        return
+      }
+
       await createCanteenOrder({
         type,
         visitId: type === 'visit' ? visitId : '',
         eventId: type === 'event' ? eventId : '',
+        childId: type === 'visit' ? selectedVisit?.childId ?? '' : '',
+        childName: type === 'visit' ? selectedVisit?.childName ?? '' : '',
+        customerId: type === 'visit' ? selectedVisit?.customerId ?? '' : '',
         ...account,
         items,
         notes,
@@ -143,7 +182,7 @@ export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuil
           <Receipt color="var(--orange)" />
           Nueva cuenta
         </h2>
-        <StatusPill tone="info">{formatGuarani(total)}</StatusPill>
+        <StatusPill tone={existingOpenVisitOrder ? 'warning' : 'info'}>{formatGuarani(visibleTotal)}</StatusPill>
       </div>
 
       <div className="order-type-switch">
@@ -154,7 +193,17 @@ export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuil
         ))}
       </div>
 
-      {message ? <div className={message.includes('No se') || message.includes('Elegí') || message.includes('Seleccioná') || message.includes('Agregá') ? 'form-alert error' : 'form-alert success'}>{message}</div> : null}
+      {message ? (
+        <div
+          className={
+            message.includes('No se') || message.includes('Elegi') || message.includes('Selecciona') || message.includes('Agrega')
+              ? 'form-alert error'
+              : 'form-alert success'
+          }
+        >
+          {message}
+        </div>
+      ) : null}
 
       <div className="form-grid">
         {type === 'visit' ? (
@@ -164,11 +213,18 @@ export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuil
               <option value="">Seleccionar visita</option>
               {activeVisits.map((visit) => (
                 <option key={visit.id} value={visit.id}>
-                  {visit.childName} - {visit.customerName}
+                  {visit.childName} - {visit.customerName} - ingreso {formatVisitStartTime(visit.startedAt)}
+                  {hasOpenVisitOrder(canteenOrders, visit.id) ? ' - cuenta abierta' : ''}
                 </option>
               ))}
             </select>
           </label>
+        ) : null}
+
+        {existingOpenVisitOrder ? (
+          <div className="form-alert warning">
+            Esta visita ya tiene una cuenta abierta por {formatGuarani(existingOpenVisitOrder.total)}. Los productos nuevos se agregan a esa cuenta.
+          </div>
         ) : null}
 
         {type === 'event' ? (
@@ -216,7 +272,7 @@ export function OrderBuilder({ activeEvents, activeVisits, products }: OrderBuil
         </button>
 
         <div className="cart-list">
-          {items.length === 0 ? <div className="empty-state">El carrito está vacío.</div> : null}
+          {items.length === 0 ? <div className="empty-state">El carrito esta vacio.</div> : null}
           {items.map((item) => (
             <div className="cart-row" key={item.productId}>
               <span>

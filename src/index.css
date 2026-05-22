@@ -2092,6 +2092,172 @@ img {
   color: #9a6700;
 }
 
+.clients-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+}
+
+.clients-list-panel,
+.client-profile-panel,
+.upcoming-panel {
+  align-self: start;
+}
+
+.clients-side-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.clients-toolbar {
+  align-items: center;
+}
+
+.search-field {
+  margin-bottom: 14px;
+}
+
+.search-field span {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.client-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.client-filter-row button {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #475569;
+  font-weight: 800;
+  padding: 8px 11px;
+}
+
+.client-filter-row button.active {
+  background: rgba(255, 88, 12, 0.1);
+  border-color: rgba(255, 88, 12, 0.34);
+  color: var(--orange);
+}
+
+.client-table {
+  display: grid;
+  gap: 10px;
+}
+
+.client-row {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(120px, 0.8fr) 0.6fr 0.5fr auto;
+  padding: 13px;
+  text-align: left;
+}
+
+.client-row.active {
+  background: linear-gradient(90deg, rgba(8, 169, 181, 0.09), #fff);
+  border-color: rgba(8, 169, 181, 0.35);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.client-row strong,
+.client-row small {
+  display: block;
+}
+
+.client-row small {
+  color: var(--muted);
+  font-weight: 700;
+  margin-top: 3px;
+}
+
+.birthday-card {
+  align-items: center;
+  border: 1px solid rgba(255, 197, 26, 0.4);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 13px;
+}
+
+.birthday-card p {
+  margin: 4px 0 0;
+}
+
+.client-profile-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.client-profile-header h2 {
+  color: var(--ink);
+  font-size: 2rem;
+  line-height: 1;
+  margin: 4px 0 8px;
+}
+
+.client-profile-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 16px;
+}
+
+.client-profile-grid span {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  display: grid;
+  font-size: 0.86rem;
+  font-weight: 800;
+  gap: 5px;
+  padding: 12px;
+}
+
+.client-profile-grid strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.client-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.client-history-section {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.client-history-section + .client-history-section {
+  margin-top: 16px;
+}
+
+.client-history-section h3 {
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+
+.client-privacy-note {
+  margin: 16px 0 0;
+}
+
 .finance-date-row {
   align-items: end;
   display: flex;
@@ -2134,6 +2300,7 @@ img {
   .event-mode-grid,
   .reservations-grid,
   .canteen-layout,
+  .clients-layout,
   .reception-status-grid,
   .tv-event,
   .settings-grid,
@@ -2273,6 +2440,7 @@ img {
   .admin-active-visits-panel .visit-main-row,
   .inline-action-panel,
   .visit-detail-grid,
+  .client-row,
   .product-form,
   .canteen-filters,
   .cart-row,
@@ -2311,6 +2479,19 @@ img {
 
   .internal-nav.open {
     grid-template-columns: 1fr;
+  }
+
+  .client-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .birthday-card {
+    grid-template-columns: 1fr;
+  }
+
+  .client-profile-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .admin-quick-link {

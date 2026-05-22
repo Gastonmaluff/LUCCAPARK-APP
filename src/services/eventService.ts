@@ -2,6 +2,7 @@ import {
   Timestamp,
   doc,
   getDocs,
+  increment,
   limit,
   query,
   runTransaction,
@@ -29,6 +30,8 @@ const optionalText = (value?: string) => {
   return normalized.length > 0 ? normalized : ''
 }
 
+const lowerKey = (value: string) => normalizeText(value).toLocaleLowerCase('es-PY')
+
 const findCustomerByPhone = async (phone?: string) => {
   const normalizedPhone = optionalText(phone)
 
@@ -41,6 +44,24 @@ const findCustomerByPhone = async (phone?: string) => {
   )
 
   return snapshot.docs[0] ?? null
+}
+
+const findChildByNameAndPhone = async (childName: string, phone?: string) => {
+  const normalizedPhone = optionalText(phone)
+
+  if (!normalizedPhone) {
+    return null
+  }
+
+  const snapshot = await getDocs(
+    query(getCollectionRef('children'), where('customerPhone', '==', normalizedPhone), limit(25)),
+  )
+  const normalizedChildName = lowerKey(childName)
+
+  return snapshot.docs.find((docSnapshot) => {
+    const data = docSnapshot.data()
+    return lowerKey(String(data.name ?? '')) === normalizedChildName
+  }) ?? null
 }
 
 export const createEvent = async (input: CreateEventInput) => {
@@ -127,29 +148,43 @@ export const createEventGuest = async (input: CreateEventGuestInput) => {
       name: responsibleName,
       phone: responsiblePhone,
       updatedAt: serverTimestamp(),
-      ...(existingCustomer ? {} : { createdAt: serverTimestamp() }),
+      ...(existingCustomer ? {} : { marketingConsent: false, createdAt: serverTimestamp() }),
     },
     { merge: true },
   )
 
-  const childRef = doc(getCollectionRef('children'))
+  const existingChild = await findChildByNameAndPhone(childName, responsiblePhone)
+  const childRef = existingChild ? getDocumentRef('children', existingChild.id) : doc(getCollectionRef('children'))
+  const childBirthDate = optionalText(input.childBirthDate)
+  const childAgeRange = optionalText(input.childAgeRange)
+  const childGender = optionalText(input.childGender)
+  const childNotes = optionalText(input.notes)
+
   await setDoc(childRef, {
+    id: childRef.id,
     name: childName,
-    birthDate: optionalText(input.childBirthDate),
-    ageRange: optionalText(input.childAgeRange),
-    gender: optionalText(input.childGender),
+    searchName: lowerKey(childName),
     customerId: customerRef.id,
     customerName: responsibleName,
     customerPhone: responsiblePhone,
+    mainCustomerId: customerRef.id,
+    mainCustomerName: responsibleName,
+    mainCustomerPhone: responsiblePhone,
     source: 'event',
+    lastSource: 'event',
     eventId: input.event.id,
     eventName: input.event.title,
     eventDate: input.event.date,
     birthdayChildName: input.event.birthdayChildName,
-    notes: optionalText(input.notes),
-    createdAt: serverTimestamp(),
+    eventGuestCount: increment(1),
+    lastVisitAt: serverTimestamp(),
+    ...(childBirthDate ? { birthDate: childBirthDate } : {}),
+    ...(childAgeRange ? { ageRange: childAgeRange } : {}),
+    ...(childGender ? { gender: childGender } : {}),
+    ...(childNotes ? { notes: childNotes } : {}),
+    ...(existingChild ? {} : { visitCount: 0, marketingConsent: false, createdAt: serverTimestamp() }),
     updatedAt: serverTimestamp(),
-  })
+  }, { merge: true })
 
   const eventRef = getDocumentRef('events', input.event.id)
   const guestRef = doc(getCollectionRef('eventGuests'))

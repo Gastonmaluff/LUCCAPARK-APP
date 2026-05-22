@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  increment,
   limit,
   query,
   serverTimestamp,
@@ -31,6 +32,8 @@ const optionalText = (value?: string) => {
   return normalized.length > 0 ? normalized : undefined
 }
 
+const lowerKey = (value: string) => normalizeText(value).toLocaleLowerCase('es-PY')
+
 const findCustomerByPhone = async (phone?: string) => {
   if (!phone) {
     return null
@@ -41,6 +44,22 @@ const findCustomerByPhone = async (phone?: string) => {
   )
 
   return snapshot.docs[0] ?? null
+}
+
+const findChildByNameAndPhone = async (childName: string, phone?: string) => {
+  if (!phone) {
+    return null
+  }
+
+  const snapshot = await getDocs(
+    query(getCollectionRef('children'), where('customerPhone', '==', phone), limit(25)),
+  )
+  const normalizedChildName = lowerKey(childName)
+
+  return snapshot.docs.find((docSnapshot) => {
+    const data = docSnapshot.data()
+    return lowerKey(String(data.name ?? '')) === normalizedChildName
+  }) ?? null
 }
 
 export const createNormalVisit = async (input: CreateVisitInput) => {
@@ -72,24 +91,39 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
       phone: customerPhone ?? '',
       relation: optionalText(input.customerRelation) ?? '',
       updatedAt: serverTimestamp(),
-      ...(existingCustomer ? {} : { createdAt: serverTimestamp() }),
+      ...(existingCustomer ? {} : { marketingConsent: false, createdAt: serverTimestamp() }),
     },
     { merge: true },
   )
 
-  const childRef = doc(getCollectionRef('children'))
+  const existingChild = await findChildByNameAndPhone(childName, customerPhone)
+  const childRef = existingChild ? getDocumentRef('children', existingChild.id) : doc(getCollectionRef('children'))
+  const childBirthDate = optionalText(input.childBirthDate)
+  const childAgeRange = optionalText(input.childAgeRange)
+  const childGender = optionalText(input.childGender)
+  const childNotes = optionalText(input.childNotes)
+
   await setDoc(childRef, {
+    id: childRef.id,
     name: childName,
-    birthDate: optionalText(input.childBirthDate) ?? '',
-    ageRange: optionalText(input.childAgeRange) ?? '',
-    gender: optionalText(input.childGender) ?? '',
+    searchName: lowerKey(childName),
     customerId: customerRef.id,
     customerName,
     customerPhone: customerPhone ?? '',
-    notes: optionalText(input.childNotes) ?? '',
-    createdAt: serverTimestamp(),
+    mainCustomerId: customerRef.id,
+    mainCustomerName: customerName,
+    mainCustomerPhone: customerPhone ?? '',
+    source: 'visit',
+    lastSource: 'visit',
+    lastVisitAt: Timestamp.fromDate(startedAt),
+    visitCount: increment(1),
+    ...(childBirthDate ? { birthDate: childBirthDate } : {}),
+    ...(childAgeRange ? { ageRange: childAgeRange } : {}),
+    ...(childGender ? { gender: childGender } : {}),
+    ...(childNotes ? { notes: childNotes } : {}),
+    ...(existingChild ? {} : { eventGuestCount: 0, marketingConsent: false, createdAt: serverTimestamp() }),
     updatedAt: serverTimestamp(),
-  })
+  }, { merge: true })
 
   const visitRef = doc(getCollectionRef('visits'))
   const activeVisitRef = getDocumentRef('activeVisits', visitRef.id)

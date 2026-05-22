@@ -123,6 +123,41 @@ export interface ActiveVisit {
   updatedBy?: string | null
 }
 
+export interface CustomerProfile {
+  id: string
+  name: string
+  phone?: string
+  email?: string
+  notes?: string
+  marketingConsent: boolean
+  marketingConsentAt?: Date | null
+  createdAt?: Date | null
+  updatedAt?: Date | null
+}
+
+export interface ChildProfile {
+  id: string
+  name: string
+  birthDate?: string
+  gender?: string
+  ageRange?: string
+  mainCustomerId?: string
+  mainCustomerName?: string
+  mainCustomerPhone?: string
+  customerId?: string
+  customerName?: string
+  customerPhone?: string
+  notes?: string
+  visitCount: number
+  eventGuestCount: number
+  lastVisitAt?: Date | null
+  lastSource?: 'visit' | 'event' | ''
+  marketingConsent: boolean
+  marketingConsentAt?: Date | null
+  createdAt?: Date | null
+  updatedAt?: Date | null
+}
+
 export interface ChargeVisitInput {
   paymentMethod: Exclude<PaymentMethod, ''>
   amountCharged?: number | null
@@ -172,6 +207,8 @@ export interface CreateEventInput {
 export interface EventGuest {
   id: string
   eventId: string
+  childId?: string
+  customerId?: string
   childName: string
   childBirthDate?: string
   childAgeRange?: string
@@ -238,6 +275,9 @@ export interface CanteenOrder {
   type: CanteenAccountType
   visitId?: string
   eventId?: string
+  childId?: string
+  childName?: string
+  customerId?: string
   accountName: string
   customerName?: string
   customerPhone?: string
@@ -268,6 +308,9 @@ export interface CreateCanteenOrderInput {
   type: CanteenAccountType
   visitId?: string
   eventId?: string
+  childId?: string
+  childName?: string
+  customerId?: string
   accountName: string
   customerName?: string
   customerPhone?: string

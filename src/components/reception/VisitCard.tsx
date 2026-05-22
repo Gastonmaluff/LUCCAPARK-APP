@@ -32,8 +32,23 @@ export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
   const [isSavingAction, setIsSavingAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const canteenTotal = canteenOrders.reduce((sum, order) => sum + order.total, 0)
+  const hasPendingCanteen = canteenTotal > 0
+
+  const confirmPendingCanteen = (action: string) => {
+    if (!hasPendingCanteen) {
+      return true
+    }
+
+    return window.confirm(
+      `Esta visita tiene un consumo pendiente de cantina por ${formatGuarani(canteenTotal)}. ${action} sin cobrar ese consumo? La cuenta seguira pendiente en Cantina.`,
+    )
+  }
 
   const handleCharge = async () => {
+    if (!confirmPendingCanteen('Continuar con el cobro del juego')) {
+      return
+    }
+
     setActionError(null)
     setIsSavingAction(true)
 
@@ -51,6 +66,10 @@ export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
   }
 
   const handleFinish = async () => {
+    if (!confirmPendingCanteen('Finalizar la visita')) {
+      return
+    }
+
     const shouldFinish = window.confirm(`Finalizar la visita de ${visit.childName}?`)
 
     if (!shouldFinish) {
@@ -98,14 +117,14 @@ export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
 
       <div className="visit-actions">
         {canteenOrders.length > 0 ? (
-          <Link className="button ghost canteen-chip" to="/admin/cantina">
+          <Link className="button ghost canteen-chip" to={`/admin/cantina?visitId=${visit.id}`}>
             <ShoppingCart size={17} />
-            Cantina {formatGuarani(canteenTotal)}
+            Ver consumo · {formatGuarani(canteenTotal)} pendiente
           </Link>
         ) : (
-          <Link className="button ghost" to="/admin/cantina">
+          <Link className="button ghost" to={`/admin/cantina?visitId=${visit.id}`}>
             <ShoppingCart size={17} />
-            Cantina
+            Abrir consumo
           </Link>
         )}
         {visit.paymentStatus !== 'paid' ? (

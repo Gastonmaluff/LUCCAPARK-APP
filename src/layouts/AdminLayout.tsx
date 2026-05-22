@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Menu,
   Settings,
+  UserRound,
   WalletCards,
   X,
 } from 'lucide-react'
@@ -17,11 +18,12 @@ import { BrandLogo } from '../components/BrandLogo'
 const adminNavItems = [
   { label: 'Control', to: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Recepcion', to: '/admin/recepcion', icon: ClipboardList },
+  { label: 'Cantina', to: '/admin/cantina', icon: ChefHat },
   { label: 'Reservas', to: '/admin/reservas', icon: CalendarDays },
   { label: 'Calendario', to: '/admin/calendario', icon: CalendarRange },
-  { label: 'Cantina', to: '/admin/cantina', icon: ChefHat },
   { label: 'Finanzas', to: '/admin/finanzas', icon: WalletCards },
   { label: 'Reportes', to: '/admin/reportes', icon: BarChart3 },
+  { label: 'Clientes', to: '/admin/clientes', icon: UserRound },
   { label: 'Configuracion', to: '/admin/configuracion', icon: Settings },
 ]
 

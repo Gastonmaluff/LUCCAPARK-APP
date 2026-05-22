@@ -47,6 +47,8 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
 const mapGuest = (id: string, data: Record<string, unknown>): EventGuest => ({
   id,
   eventId: String(data.eventId ?? ''),
+  childId: String(data.childId ?? ''),
+  customerId: String(data.customerId ?? ''),
   childName: String(data.childName ?? ''),
   childBirthDate: String(data.childBirthDate ?? ''),
   childAgeRange: String(data.childAgeRange ?? ''),

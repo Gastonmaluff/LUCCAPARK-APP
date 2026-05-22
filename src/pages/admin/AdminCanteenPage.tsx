@@ -34,7 +34,12 @@ export function AdminCanteenPage() {
         <ProductManager {...productsResult} />
         <div className="side-stack">
           <div id="nueva-cuenta">
-            <OrderBuilder activeEvents={activeEvents} activeVisits={visits} products={productsResult.products} />
+            <OrderBuilder
+              activeEvents={activeEvents}
+              activeVisits={visits}
+              canteenOrders={ordersResult.orders}
+              products={productsResult.products}
+            />
           </div>
           <OpenOrdersList
             error={ordersResult.error}
