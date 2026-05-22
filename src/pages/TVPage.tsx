@@ -114,6 +114,7 @@ export function TVPage() {
   const lastUpdated = new Intl.DateTimeFormat('es-PY', {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   }).format(now)
 
   return (
@@ -160,7 +161,9 @@ export function TVPage() {
 
                 return (
                   <article className={`tv-list-row ${timeStatus}`} key={visit.id}>
-                    <span className="tv-priority-number">{index + 1}</span>
+                    <span className="tv-priority-number">
+                      <span>{index + 1}</span>
+                    </span>
                     <strong className="tv-child-name">{visit.childName}</strong>
                     <span className="tv-responsible-name">{visit.customerName || 'Responsable'}</span>
                     <TimeIcon className="tv-time-icon" size={34} strokeWidth={3} />
@@ -175,14 +178,6 @@ export function TVPage() {
                 )
               })}
             </div>
-            <footer className="tv-normal-footer">
-              <div className="tv-legend">
-                <span><i className="legend-dot ok" />Tiempo normal</span>
-                <span><i className="legend-dot warning" />Por vencer</span>
-                <span><i className="legend-dot expired" />Vencido</span>
-                <span><i className="legend-dot unlimited" />Libre</span>
-              </div>
-            </footer>
           </>
         ) : null}
       </section>
