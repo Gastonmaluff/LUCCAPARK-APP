@@ -11,11 +11,11 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 
 const adminNavItems = [
-  { label: 'Dashboard', to: '/admin/dashboard', icon: LayoutDashboard },
+  { label: 'Control', to: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Recepcion', to: '/admin/recepcion', icon: ClipboardList },
   { label: 'Reservas', to: '/admin/reservas', icon: CalendarDays },
   { label: 'Calendario', to: '/admin/calendario', icon: CalendarRange },
@@ -54,9 +54,6 @@ export function AdminLayout() {
               </NavLink>
             ))}
           </nav>
-          <Link className="button ghost admin-quick-link" to="/recepcion">
-            Abrir recepcion
-          </Link>
         </header>
         <Outlet />
       </section>

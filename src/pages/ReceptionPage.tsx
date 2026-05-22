@@ -1,4 +1,4 @@
-import { Baby, ClipboardList, RefreshCw } from 'lucide-react'
+import { Baby, CalendarHeart, ClipboardList, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { BrandLogo } from '../components/BrandLogo'
 import { EventReceptionPanel } from '../components/events/EventReceptionPanel'
@@ -20,24 +20,28 @@ export function ReceptionPage() {
   return (
     <main className="internal-page">
       <section className="internal-shell">
-        <header className="admin-topbar">
+        <header className="admin-topbar reception-topbar">
           <BrandLogo className="compact" />
-          <div>
+          <div className="reception-heading">
             <p className="eyebrow">Operacion diaria</p>
             <h1 className="reception-title">Recepcion</h1>
+            <p className="muted">Ingresos normales y control de invitados en dias de evento.</p>
           </div>
-          <div className="mode-switch" role="tablist" aria-label="Modo de recepcion">
-            <button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">
-              Visita normal
+          <div className="reception-header-actions">
+            <button
+              aria-pressed={mode === 'event'}
+              className={`button secondary ${mode === 'event' ? 'active' : ''}`}
+              onClick={() => setMode((current) => (current === 'event' ? 'normal' : 'event'))}
+              type="button"
+            >
+              <CalendarHeart size={17} />
+              Día de evento
             </button>
-            <button className={mode === 'event' ? 'active' : ''} onClick={() => setMode('event')} type="button">
-              Evento privado
+            <button className="button ghost" onClick={() => window.location.reload()} type="button">
+              <RefreshCw size={17} />
+              Actualizar
             </button>
           </div>
-          <button className="button ghost" onClick={() => window.location.reload()} type="button">
-            <RefreshCw size={17} />
-            Actualizar
-          </button>
         </header>
 
         {mode === 'normal' ? (

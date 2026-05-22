@@ -49,7 +49,7 @@ export const formatRemainingTime = (visit: Pick<ActiveVisit, 'expectedEndAt' | '
 
   if (remainingMs <= 0) {
     const overdueMinutes = Math.max(1, Math.floor(Math.abs(remainingMs) / 60000))
-    return `Vencido hace ${overdueMinutes} min`
+    return `Vencido · ${overdueMinutes} min`
   }
 
   const totalSeconds = Math.floor(remainingMs / 1000)

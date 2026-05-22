@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, CalendarRange, ChefHat, Coins, ClipboardList, TrendingUp, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, CalendarRange, Coins, TrendingUp, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { CalendarPreview } from '../../components/CalendarPreview'
@@ -11,24 +11,8 @@ export function AdminDashboardPage() {
     <>
       <AdminModuleHeader
         eyebrow="Panel administrativo"
-        title="Dashboard"
-        description="Vista general demo para controlar ocupacion, eventos, ingresos y accesos rapidos."
-        action={
-          <div className="quick-actions">
-            <Link className="button primary" to="/admin/recepcion">
-              <ClipboardList size={18} />
-              Recepcion
-            </Link>
-            <Link className="button secondary" to="/admin/calendario">
-              <CalendarRange size={18} />
-              Calendario
-            </Link>
-            <Link className="button ghost" to="/admin/cantina">
-              <ChefHat size={18} />
-              Cantina
-            </Link>
-          </div>
-        }
+        title="Control"
+        description="Vista general demo para controlar ocupacion, eventos e ingresos."
       />
 
       <div className="metric-grid">

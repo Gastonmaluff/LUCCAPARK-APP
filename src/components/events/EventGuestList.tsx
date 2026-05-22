@@ -31,14 +31,16 @@ export function EventGuestList({ error, guests, isLoading }: EventGuestListProps
     <div className="event-guest-list">
       {guests.map((guest) => (
         <article className={`event-guest-row ${guest.isExtra ? 'extra' : ''}`} key={guest.id}>
-          <div>
+          <div className="event-guest-person">
             <strong>{guest.childName}</strong>
-            <p className="muted">
-              <UserRound size={15} /> {guest.responsibleName}
+            <p className="muted event-guest-responsible">
+              <UserRound size={15} />
+              <span>{guest.responsibleName}</span>
             </p>
           </div>
-          <span className="muted">
-            <Clock size={15} /> {formatTime(guest.checkedInAt)}
+          <span className="muted event-guest-meta">
+            <Clock size={15} />
+            {formatTime(guest.checkedInAt)}
           </span>
           <StatusPill tone={guest.isExtra ? 'danger' : 'available'}>{guest.isExtra ? 'Adicional' : `Incluido #${guest.guestNumber}`}</StatusPill>
           {guest.notes ? <p className="muted event-guest-note">{guest.notes}</p> : null}

@@ -1,8 +1,6 @@
-import { Baby, ClipboardList, ExternalLink } from 'lucide-react'
+import { Baby, ClipboardList, X } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
-import { EventReceptionPanel } from '../../components/events/EventReceptionPanel'
 import { ActiveVisitsList } from '../../components/reception/ActiveVisitsList'
 import { ReceptionSummaryCards } from '../../components/reception/ReceptionSummaryCards'
 import { StorageModeNotice } from '../../components/reception/StorageModeNotice'
@@ -16,63 +14,58 @@ export function AdminReceptionPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
   const { orders: openCanteenOrders } = useOpenCanteenOrders()
   const now = useCurrentTime(1000)
-  const [mode, setMode] = useState<'normal' | 'event'>('normal')
+  const [isVisitFormOpen, setIsVisitFormOpen] = useState(false)
 
   return (
     <>
       <AdminModuleHeader
         eyebrow="Operacion"
         title="Recepcion administrativa"
-        description="Registro normal real con Firestore, temporizadores y acciones de cobro/finalizacion."
-        action={
-          <Link className="button primary" to="/recepcion">
-            <ExternalLink size={18} />
-            Abrir portal rapido
-          </Link>
-        }
+        description="Monitoreo de visitas activas, temporizadores y acciones de cobro/finalizacion."
       />
 
-      <div className="mode-switch admin-mode-switch" role="tablist" aria-label="Modo de recepcion">
-        <button className={mode === 'normal' ? 'active' : ''} onClick={() => setMode('normal')} type="button">
-          Visita normal
-        </button>
-        <button className={mode === 'event' ? 'active' : ''} onClick={() => setMode('event')} type="button">
-          Evento privado
-        </button>
-      </div>
+      <ReceptionSummaryCards now={now} visits={visits} />
+      <StorageModeNotice mode={storageMode} />
 
-      {mode === 'normal' ? (
-        <>
-          <ReceptionSummaryCards now={now} visits={visits} />
-          <StorageModeNotice mode={storageMode} />
+      <article className="panel admin-active-visits-panel">
+        <div className="panel-header active-visits-header">
+          <div>
+            <h2 className="panel-title">
+              <Baby color="var(--green)" />
+              Visitas activas
+            </h2>
+            <p className="muted">Ninos dentro del parque, pagos, tiempos y accesos rapidos.</p>
+          </div>
+          <div className="module-actions">
+            <StatusPill tone="available">Firestore</StatusPill>
+            <button className="button primary" onClick={() => setIsVisitFormOpen(true)} type="button">
+              <ClipboardList size={18} />
+              Registrar ingreso
+            </button>
+          </div>
+        </div>
+        <ActiveVisitsList canteenOrders={openCanteenOrders} error={error} isLoading={isLoading} visits={visits} />
+      </article>
 
-          <div className="reception-grid">
-            <article className="panel">
-              <div className="panel-header">
+      {isVisitFormOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <aside aria-label="Registrar ingreso" className="visit-form-modal" role="dialog">
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Visita normal</p>
                 <h2 className="panel-title">
                   <ClipboardList color="var(--orange)" />
                   Registrar ingreso
                 </h2>
-                <StatusPill tone="info">Visita normal</StatusPill>
               </div>
-              <VisitForm compact />
-            </article>
-
-            <article className="panel">
-              <div className="panel-header">
-                <h2 className="panel-title">
-                  <Baby color="var(--green)" />
-                  Visitas activas
-                </h2>
-                <StatusPill tone="available">Firestore</StatusPill>
-              </div>
-              <ActiveVisitsList canteenOrders={openCanteenOrders} error={error} isLoading={isLoading} visits={visits} />
-            </article>
-          </div>
-        </>
-      ) : (
-        <EventReceptionPanel showAdminLink />
-      )}
+              <button className="icon-button modal-close" onClick={() => setIsVisitFormOpen(false)} type="button" aria-label="Cerrar formulario">
+                <X size={20} />
+              </button>
+            </div>
+            <VisitForm onCreated={() => setIsVisitFormOpen(false)} />
+          </aside>
+        </div>
+      ) : null}
     </>
   )
 }

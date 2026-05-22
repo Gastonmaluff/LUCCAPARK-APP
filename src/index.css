@@ -597,14 +597,17 @@ img {
 }
 
 .admin-topbar {
-  gap: 24px;
+  gap: 14px;
   justify-content: space-between;
   margin-bottom: 26px;
 }
 
 .internal-nav {
-  flex-wrap: wrap;
-  gap: 10px;
+  flex: 1;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  min-width: 0;
 }
 
 .nav-chip {
@@ -612,9 +615,11 @@ img {
   border-bottom: 2px solid transparent;
   color: #3d4859;
   display: inline-flex;
+  font-size: clamp(0.78rem, 0.85vw, 0.94rem);
   font-weight: 800;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 9px 8px;
+  white-space: nowrap;
 }
 
 .nav-chip.active {
@@ -790,6 +795,34 @@ img {
   grid-template-columns: 360px 1fr;
 }
 
+.reception-topbar {
+  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.reception-heading {
+  min-width: 0;
+}
+
+.reception-heading .muted {
+  margin: 6px 0 0;
+}
+
+.reception-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.reception-header-actions .button.active {
+  border-color: rgba(255, 88, 12, 0.45);
+  box-shadow: 0 8px 18px rgba(255, 88, 12, 0.14);
+  color: var(--orange);
+}
+
 .reception-title {
   color: var(--ink);
   font-size: 2rem;
@@ -912,11 +945,33 @@ img {
   gap: 14px;
 }
 
+.admin-active-visits-panel {
+  margin-top: 18px;
+}
+
+.admin-active-visits-panel .active-visit-card {
+  gap: 16px;
+  padding: 18px;
+}
+
+.active-visits-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.active-visits-header .muted {
+  margin: 6px 0 0;
+}
+
 .visit-main-row {
   align-items: center;
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(180px, 1.3fr) 0.6fr 0.7fr 0.8fr auto;
+}
+
+.admin-active-visits-panel .visit-main-row {
+  grid-template-columns: minmax(240px, 1.45fr) 0.52fr 0.58fr minmax(150px, 0.72fr) auto;
 }
 
 .visit-name {
@@ -956,10 +1011,11 @@ img {
 .time-badge {
   border-radius: 999px;
   display: inline-flex;
-  font-size: 1.35rem;
+  font-size: 1.05rem;
   font-weight: 900;
-  line-height: 1;
-  padding: 9px 12px;
+  line-height: 1.05;
+  padding: 8px 11px;
+  white-space: nowrap;
 }
 
 .time-badge.ok {
@@ -986,6 +1042,40 @@ img {
   background: transparent;
   font-size: clamp(3rem, 7vw, 5.6rem);
   padding: 0;
+}
+
+.modal-backdrop {
+  align-items: stretch;
+  background: rgba(15, 23, 42, 0.34);
+  display: flex;
+  inset: 0;
+  justify-content: flex-end;
+  padding: 24px;
+  position: fixed;
+  z-index: 40;
+}
+
+.visit-form-modal {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  max-width: 560px;
+  overflow: auto;
+  padding: 22px;
+  width: min(560px, 100%);
+}
+
+.modal-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.modal-close {
+  flex: 0 0 auto;
 }
 
 .visit-actions {
@@ -1719,13 +1809,13 @@ img {
 }
 
 .event-guest-row {
-  align-items: center;
+  align-items: start;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   display: grid;
-  gap: 12px;
+  gap: 14px 16px;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 13px;
+  padding: 16px;
 }
 
 .event-guest-row.extra {
@@ -1736,6 +1826,28 @@ img {
 .event-guest-note {
   grid-column: 1 / -1;
   margin: 0;
+}
+
+.event-guest-person {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.event-guest-person strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.event-guest-responsible,
+.event-guest-meta {
+  margin: 0;
+}
+
+.event-guest-responsible svg,
+.event-guest-meta svg {
+  flex: 0 0 auto;
 }
 
 .reservations-grid {
@@ -2018,6 +2130,7 @@ img {
   .availability-layout,
   .dashboard-grid,
   .reception-grid,
+  .reception-topbar,
   .event-mode-grid,
   .reservations-grid,
   .canteen-layout,
@@ -2031,6 +2144,10 @@ img {
   .module-header {
     align-items: stretch;
     display: grid;
+  }
+
+  .reception-header-actions {
+    justify-content: flex-start;
   }
 
   .hero-media,
@@ -2153,6 +2270,7 @@ img {
   }
 
   .visit-main-row,
+  .admin-active-visits-panel .visit-main-row,
   .inline-action-panel,
   .visit-detail-grid,
   .product-form,
@@ -2202,6 +2320,14 @@ img {
   .internal-page,
   .tv-page {
     padding: 12px;
+  }
+
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .visit-form-modal {
+    max-width: none;
   }
 
   .internal-shell {
