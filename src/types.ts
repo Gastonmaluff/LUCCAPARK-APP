@@ -6,7 +6,7 @@ export type VisitTimeStatus = 'ok' | 'warning' | 'expired' | 'unlimited'
 export type EventStatus = 'inquiry' | 'reserved' | 'confirmed' | 'active' | 'finished' | 'cancelled'
 export type EventType = 'birthday' | 'private_event' | 'other'
 export type EventCapacityStatus = 'ok' | 'near-limit' | 'over-limit'
-export type CanteenCategory = 'Bebidas' | 'Snacks' | 'Comidas' | 'Combos' | 'Otros'
+export type CanteenCategory = 'Bebidas' | 'Snacks' | 'Comidas' | 'Combos' | 'Helados' | 'Otros'
 export type CanteenAccountType = 'visit' | 'event' | 'free'
 export type CanteenOrderStatus = 'open' | 'paid' | 'cancelled'
 
@@ -74,12 +74,15 @@ export interface TimePlan {
   name: string
   durationMinutes: number | null
   isUnlimited: boolean
+  defaultPrice?: number | null
 }
 
 export interface CreateVisitInput {
   childName: string
   childBirthDate?: string
   childAgeRange?: string
+  childExactAge?: number | null
+  childAgeCalculated?: number | null
   childGender?: string
   childNotes?: string
   customerName: string
@@ -90,7 +93,10 @@ export interface CreateVisitInput {
   startedAt: Date
   paymentStatus: PaymentStatus
   paymentMethod?: PaymentMethod
+  cardType?: 'debit' | 'credit' | ''
   amountCharged?: number | null
+  defaultAmount?: number | null
+  customAmount?: boolean
   notes?: string
 }
 
@@ -100,6 +106,8 @@ export interface ActiveVisit {
   childName: string
   childBirthDate?: string
   childAgeRange?: string
+  childExactAge?: number | null
+  childAgeCalculated?: number | null
   childGender?: string
   customerId: string
   customerName: string
@@ -114,7 +122,10 @@ export interface ActiveVisit {
   expectedEndAt: Date | null
   paymentStatus: PaymentStatus
   paymentMethod?: PaymentMethod
+  cardType?: 'debit' | 'credit' | ''
   amountCharged?: number | null
+  defaultAmount?: number | null
+  customAmount?: boolean
   notes?: string
   status: 'active'
   createdAt?: Date | null
@@ -254,8 +265,11 @@ export interface CanteenProduct {
   name: string
   category: CanteenCategory
   price: number
+  salePrice?: number
+  unitCost?: number | null
   stock: number | null
   minStock: number | null
+  imageUrl?: string
   isActive: boolean
   createdAt?: Date | null
   updatedAt?: Date | null
@@ -266,8 +280,10 @@ export interface CanteenOrderItem {
   productName: string
   category: CanteenCategory
   unitPrice: number
+  unitCost?: number | null
   quantity: number
   subtotal: number
+  costSubtotal?: number
 }
 
 export interface CanteenOrder {
@@ -283,6 +299,8 @@ export interface CanteenOrder {
   customerPhone?: string
   items: CanteenOrderItem[]
   total: number
+  costTotal?: number
+  estimatedProfit?: number
   status: CanteenOrderStatus
   paymentStatus: 'pending' | 'paid'
   paymentMethod?: PaymentMethod
@@ -299,8 +317,10 @@ export interface UpsertCanteenProductInput {
   name: string
   category: CanteenCategory
   price: number
+  unitCost?: number | null
   stock?: number | null
   minStock?: number | null
+  imageUrl?: string
   isActive: boolean
 }
 

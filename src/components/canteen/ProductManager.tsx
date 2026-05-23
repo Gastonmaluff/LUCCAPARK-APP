@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { PackagePlus, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, PackagePlus, Search } from 'lucide-react'
 import { canteenCategories } from '../../config/canteen'
-import { setCanteenProductActive, upsertCanteenProduct } from '../../services/canteenService'
+import { setCanteenProductActive, upsertCanteenProduct, uploadCanteenProductImage } from '../../services/canteenService'
 import { formatGuarani, toNumber } from '../../utils/money'
 import { StatusPill } from '../StatusPill'
 import type { CanteenCategory, CanteenProduct, UpsertCanteenProductInput } from '../../types'
@@ -10,24 +10,35 @@ interface ProductManagerProps {
   products: CanteenProduct[]
   isLoading: boolean
   error: string | null
+  defaultOpen?: boolean
 }
 
 const emptyProduct: UpsertCanteenProductInput = {
   name: '',
   category: 'Bebidas',
   price: 0,
+  unitCost: null,
   stock: null,
   minStock: null,
+  imageUrl: '',
   isActive: true,
 }
 
-export function ProductManager({ error, isLoading, products }: ProductManagerProps) {
+export function ProductManager({ defaultOpen = false, error, isLoading, products }: ProductManagerProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const [form, setForm] = useState<UpsertCanteenProductInput>(emptyProduct)
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<CanteenCategory | 'Todas'>('Todas')
   const [showInactive, setShowInactive] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  const activeProductsCount = products.filter((product) => product.isActive).length
+  const lowStockCount = products.filter(
+    (product) => product.stock !== null && product.minStock !== null && product.stock <= product.minStock,
+  ).length
 
   const filteredProducts = useMemo(
     () =>
@@ -45,12 +56,23 @@ export function ProductManager({ error, isLoading, products }: ProductManagerPro
       id: product.id,
       name: product.name,
       category: product.category,
-      price: product.price,
+      price: product.salePrice ?? product.price,
+      unitCost: product.unitCost ?? null,
       stock: product.stock,
       minStock: product.minStock,
+      imageUrl: product.imageUrl ?? '',
       isActive: product.isActive,
     })
+    setImageFile(null)
+    setIsFormOpen(true)
+    setIsOpen(true)
     setMessage(null)
+  }
+
+  const resetForm = () => {
+    setForm(emptyProduct)
+    setImageFile(null)
+    setIsFormOpen(false)
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -58,14 +80,15 @@ export function ProductManager({ error, isLoading, products }: ProductManagerPro
     setMessage(null)
 
     if (!form.name.trim() || Number(form.price) <= 0) {
-      setMessage('Completá nombre y precio mayor a cero.')
+      setMessage('Completa nombre y precio mayor a cero.')
       return
     }
 
     setIsSaving(true)
     try {
-      await upsertCanteenProduct(form)
-      setForm(emptyProduct)
+      const imageUrl = imageFile ? await uploadCanteenProductImage(imageFile) : form.imageUrl
+      await upsertCanteenProduct({ ...form, imageUrl })
+      resetForm()
       setMessage('Producto guardado.')
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : 'No se pudo guardar el producto.')
@@ -75,130 +98,206 @@ export function ProductManager({ error, isLoading, products }: ProductManagerPro
   }
 
   return (
-    <article className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">
+    <article className="panel inventory-panel">
+      <button className="collapsible-title inventory-title" onClick={() => setIsOpen((current) => !current)} type="button">
+        <span>
+          {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
           <PackagePlus color="var(--orange)" />
-          Productos
-        </h2>
-        <StatusPill tone="info">Firestore</StatusPill>
-      </div>
+          <strong>Inventario</strong>
+        </span>
+        <span className="inventory-summary">
+          <StatusPill tone="info">{activeProductsCount} activos</StatusPill>
+          <StatusPill tone={lowStockCount > 0 ? 'warning' : 'available'}>{lowStockCount} bajo stock</StatusPill>
+        </span>
+      </button>
 
-      <form className="product-form" onSubmit={handleSubmit}>
-        {message ? <div className={message.includes('No se') || message.includes('Completá') ? 'form-alert error' : 'form-alert success'}>{message}</div> : null}
-        <label className="field">
-          <span>Nombre</span>
-          <input onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} value={form.name} />
-        </label>
-        <label className="field">
-          <span>Categoría</span>
-          <select onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as CanteenCategory }))} value={form.category}>
-            {canteenCategories.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Precio</span>
-          <input
-            min={0}
-            onChange={(event) => setForm((current) => ({ ...current, price: toNumber(event.target.value) }))}
-            type="number"
-            value={form.price}
-          />
-        </label>
-        <label className="field">
-          <span>Stock</span>
-          <input
-            min={0}
-            onChange={(event) => setForm((current) => ({ ...current, stock: event.target.value === '' ? null : toNumber(event.target.value) }))}
-            placeholder="Opcional"
-            type="number"
-            value={form.stock ?? ''}
-          />
-        </label>
-        <label className="field">
-          <span>Stock mínimo</span>
-          <input
-            min={0}
-            onChange={(event) => setForm((current) => ({ ...current, minStock: event.target.value === '' ? null : toNumber(event.target.value) }))}
-            placeholder="Opcional"
-            type="number"
-            value={form.minStock ?? ''}
-          />
-        </label>
-        <label className="field inline-check">
-          <input
-            checked={form.isActive}
-            onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))}
-            type="checkbox"
-          />
-          Activo
-        </label>
-        <button className="button primary" disabled={isSaving} type="submit">
-          {form.id ? 'Actualizar' : 'Crear'}
-        </button>
-      </form>
+      {!isOpen ? (
+        <div className="inventory-closed">
+          <p className="muted">Productos, precios, costos, stock e imagenes de cantina.</p>
+          <button className="button ghost" onClick={() => setIsOpen(true)} type="button">
+            Ingresar al inventario
+          </button>
+        </div>
+      ) : null}
 
-      <div className="canteen-filters">
-        <label className="field">
-          <span>
-            <Search size={15} /> Buscar
-          </span>
-          <input onChange={(event) => setQuery(event.target.value)} placeholder="Producto..." value={query} />
-        </label>
-        <label className="field">
-          <span>Categoría</span>
-          <select onChange={(event) => setCategory(event.target.value as CanteenCategory | 'Todas')} value={category}>
-            <option value="Todas">Todas</option>
-            {canteenCategories.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field inline-check">
-          <input checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} type="checkbox" />
-          Ver inactivos
-        </label>
-      </div>
+      {isOpen ? (
+        <>
+          <div className="module-actions inventory-actions">
+            <button
+              className="button primary"
+              onClick={() => {
+                setForm(emptyProduct)
+                setImageFile(null)
+                setIsFormOpen(true)
+              }}
+              type="button"
+            >
+              Agregar producto
+            </button>
+          </div>
 
-      {isLoading ? <div className="empty-state">Cargando productos...</div> : null}
-      {error ? <div className="form-alert error">No se pudieron cargar productos: {error}</div> : null}
-      {!isLoading && !error && filteredProducts.length === 0 ? <div className="empty-state">No hay productos para mostrar.</div> : null}
+          {message ? (
+            <div className={message.includes('No se') || message.includes('Completa') ? 'form-alert error' : 'form-alert success'}>
+              {message}
+            </div>
+          ) : null}
 
-      <div className="product-grid real-products">
-        {filteredProducts.map((product) => {
-          const lowStock = product.stock !== null && product.minStock !== null && product.stock <= product.minStock
-          const outOfStock = product.stock !== null && product.stock <= 0
-          return (
-            <article className={`product-card ${!product.isActive ? 'inactive' : ''}`} key={product.id}>
-              <div>
-                <strong>{product.name}</strong>
-                <p className="muted">{product.category}</p>
-              </div>
-              <strong>{formatGuarani(product.price)}</strong>
-              <div className="metric-row">
-                <StatusPill tone={outOfStock ? 'danger' : lowStock ? 'warning' : 'available'}>
-                  {product.stock === null ? 'Sin stock' : `${product.stock} stock`}
-                </StatusPill>
-                <StatusPill tone={product.isActive ? 'available' : 'blocked'}>{product.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
-              </div>
+          {isFormOpen ? (
+            <form className="product-form inventory-form" onSubmit={handleSubmit}>
+              <label className="field">
+                <span>Nombre</span>
+                <input onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} value={form.name} />
+              </label>
+              <label className="field">
+                <span>Categoria</span>
+                <select
+                  onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as CanteenCategory }))}
+                  value={form.category}
+                >
+                  {canteenCategories.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Precio de venta</span>
+                <input
+                  min={0}
+                  onChange={(event) => setForm((current) => ({ ...current, price: toNumber(event.target.value) }))}
+                  type="number"
+                  value={form.price}
+                />
+              </label>
+              <label className="field">
+                <span>Costo unitario</span>
+                <input
+                  min={0}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, unitCost: event.target.value === '' ? null : toNumber(event.target.value) }))
+                  }
+                  placeholder="Opcional"
+                  type="number"
+                  value={form.unitCost ?? ''}
+                />
+              </label>
+              <label className="field">
+                <span>Stock actual</span>
+                <input
+                  min={0}
+                  onChange={(event) => setForm((current) => ({ ...current, stock: event.target.value === '' ? null : toNumber(event.target.value) }))}
+                  placeholder="Opcional"
+                  type="number"
+                  value={form.stock ?? ''}
+                />
+              </label>
+              <label className="field">
+                <span>Stock minimo</span>
+                <input
+                  min={0}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, minStock: event.target.value === '' ? null : toNumber(event.target.value) }))
+                  }
+                  placeholder="Opcional"
+                  type="number"
+                  value={form.minStock ?? ''}
+                />
+              </label>
+              <label className="field">
+                <span>Foto PNG sin fondo</span>
+                <input accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} type="file" />
+              </label>
+              {form.imageUrl ? (
+                <label className="field">
+                  <span>URL de imagen actual</span>
+                  <input onChange={(event) => setForm((current) => ({ ...current, imageUrl: event.target.value }))} value={form.imageUrl} />
+                </label>
+              ) : null}
+              <label className="field inline-check">
+                <input
+                  checked={form.isActive}
+                  onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))}
+                  type="checkbox"
+                />
+                Activo
+              </label>
               <div className="module-actions">
-                <button className="button ghost" onClick={() => editProduct(product)} type="button">
-                  Editar
+                <button className="button ghost" onClick={resetForm} type="button">
+                  Cancelar
                 </button>
-                <button className="button ghost" onClick={() => setCanteenProductActive(product.id, !product.isActive)} type="button">
-                  {product.isActive ? 'Desactivar' : 'Activar'}
+                <button className="button primary" disabled={isSaving} type="submit">
+                  {form.id ? 'Actualizar' : 'Crear'}
                 </button>
               </div>
-            </article>
-          )
-        })}
-      </div>
+            </form>
+          ) : null}
+
+          <div className="canteen-filters">
+            <label className="field">
+              <span>
+                <Search size={15} /> Buscar
+              </span>
+              <input onChange={(event) => setQuery(event.target.value)} placeholder="Producto..." value={query} />
+            </label>
+            <label className="field">
+              <span>Categoria</span>
+              <select onChange={(event) => setCategory(event.target.value as CanteenCategory | 'Todas')} value={category}>
+                <option value="Todas">Todas</option>
+                {canteenCategories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field inline-check">
+              <input checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} type="checkbox" />
+              Ver inactivos
+            </label>
+          </div>
+
+          {isLoading ? <div className="empty-state">Cargando productos...</div> : null}
+          {error ? <div className="form-alert error">No se pudieron cargar productos: {error}</div> : null}
+          {!isLoading && !error && filteredProducts.length === 0 ? <div className="empty-state">No hay productos para mostrar.</div> : null}
+
+          <div className="product-grid real-products">
+            {filteredProducts.map((product) => {
+              const lowStock = product.stock !== null && product.minStock !== null && product.stock <= product.minStock
+              const outOfStock = product.stock !== null && product.stock <= 0
+              return (
+                <article className={`product-card ${!product.isActive ? 'inactive' : ''}`} key={product.id}>
+                  {product.imageUrl ? (
+                    <div className="product-card-image">
+                      <img alt={product.name} src={product.imageUrl} />
+                    </div>
+                  ) : null}
+                  <div>
+                    <strong>{product.name}</strong>
+                    <p className="muted">{product.category}</p>
+                  </div>
+                  <strong>{formatGuarani(product.salePrice ?? product.price)}</strong>
+                  {product.unitCost ? <small className="muted">Costo {formatGuarani(product.unitCost)}</small> : null}
+                  <div className="metric-row">
+                    <StatusPill tone={outOfStock ? 'danger' : lowStock ? 'warning' : 'available'}>
+                      {product.stock === null ? 'Sin stock' : `${product.stock} stock`}
+                    </StatusPill>
+                    <StatusPill tone={product.isActive ? 'available' : 'blocked'}>{product.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
+                  </div>
+                  <div className="module-actions">
+                    <button className="button ghost" onClick={() => editProduct(product)} type="button">
+                      Editar
+                    </button>
+                    <button className="button ghost" onClick={() => setCanteenProductActive(product.id, !product.isActive)} type="button">
+                      {product.isActive ? 'Desactivar' : 'Activar'}
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </>
+      ) : null}
     </article>
   )
 }

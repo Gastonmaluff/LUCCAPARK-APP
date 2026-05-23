@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { timePlans } from '../../config/timePlans'
 import { createNormalVisit } from '../../services/visitService'
+import { formatGuarani } from '../../utils/money'
 import type { CreateVisitInput, PaymentMethod, PaymentStatus, TimePlan } from '../../types'
 
 const formatTimeValue = (date: Date) =>
@@ -14,30 +15,84 @@ const parseTodayTime = (time: string) => {
   return date
 }
 
-const initialForm = () => ({
-  childName: '',
-  childBirthDate: '',
-  childAgeRange: '',
-  childGender: '',
-  childNotes: '',
-  customerName: '',
-  customerPhone: '',
-  customerRelation: '',
-  childrenCount: '1',
-  planId: 'one-hour' as TimePlan['id'],
-  startedAtTime: formatTimeValue(new Date()),
-  paymentStatus: 'paid' as PaymentStatus,
-  paymentMethod: 'cash' as PaymentMethod,
-  amountCharged: '',
-  notes: '',
-})
+const toTitleName = (value: string) => {
+  const lowercaseWords = new Set(['de', 'del', 'la', 'las', 'los', 'y'])
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((word, index) => {
+      const lower = word.toLocaleLowerCase('es-PY')
+      if (index > 0 && lowercaseWords.has(lower)) {
+        return lower
+      }
+      return lower.charAt(0).toLocaleUpperCase('es-PY') + lower.slice(1)
+    })
+    .join(' ')
+}
+
+const phoneDigits = (value: string) => value.replace(/\D/g, '').slice(0, 10)
+
+const formatPyPhone = (value: string) => {
+  const digits = phoneDigits(value)
+  const first = digits.slice(0, 4)
+  const second = digits.slice(4, 7)
+  const third = digits.slice(7, 10)
+  return [first, second, third].filter(Boolean).join(' ')
+}
+
+const calculateAge = (birthDate: string) => {
+  if (!birthDate) {
+    return null
+  }
+
+  const birth = new Date(`${birthDate}T00:00:00`)
+  if (Number.isNaN(birth.getTime())) {
+    return null
+  }
+
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const hasNotHadBirthday =
+    today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
+  if (hasNotHadBirthday) {
+    age -= 1
+  }
+  return Math.max(0, age)
+}
+
+const getPlanPrice = (planId: TimePlan['id']) => timePlans.find((plan) => plan.id === planId)?.defaultPrice ?? null
+
+const initialForm = () => {
+  const defaultPlan = 'one-hour' as TimePlan['id']
+  return {
+    childName: '',
+    childBirthDate: '',
+    childExactAge: '',
+    childGender: '',
+    childNotes: '',
+    customerName: '',
+    customerPhone: '',
+    customerRelation: '',
+    childrenCount: '1',
+    planId: defaultPlan,
+    startedAtTime: formatTimeValue(new Date()),
+    paymentStatus: 'paid' as PaymentStatus,
+    paymentMethod: 'cash' as PaymentMethod,
+    cardType: '' as 'debit' | 'credit' | '',
+    amountCharged: String(getPlanPrice(defaultPlan) ?? ''),
+    customAmount: false,
+    notes: '',
+  }
+}
 
 interface VisitFormProps {
   compact?: boolean
+  onCancel?: () => void
   onCreated?: (visitId: string) => void
 }
 
-export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
+export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormProps) {
   const [form, setForm] = useState(initialForm)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,9 +102,24 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
     () => timePlans.find((plan) => plan.id === form.planId) ?? timePlans[0],
     [form.planId],
   )
+  const calculatedAge = useMemo(() => calculateAge(form.childBirthDate), [form.childBirthDate])
+  const defaultAmount = selectedPlan.defaultPrice ?? null
 
-  const setField = (field: keyof ReturnType<typeof initialForm>, value: string) => {
+  const setField = (field: keyof ReturnType<typeof initialForm>, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const handlePlanChange = (planId: TimePlan['id']) => {
+    const nextPrice = getPlanPrice(planId)
+    setForm((current) => ({
+      ...current,
+      planId,
+      amountCharged: current.customAmount ? current.amountCharged : String(nextPrice ?? ''),
+    }))
+  }
+
+  const normalizeNameField = (field: 'childName' | 'customerName') => {
+    setForm((current) => ({ ...current, [field]: toTitleName(current[field]) }))
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -57,8 +127,17 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
     setError(null)
     setSuccess(null)
 
-    if (!form.childName.trim() || !form.customerName.trim() || !form.planId || !form.paymentStatus) {
-      setError('Completá nombre del niño, responsable, plan y estado de pago.')
+    const childName = toTitleName(form.childName)
+    const customerName = toTitleName(form.customerName)
+    const normalizedPhone = phoneDigits(form.customerPhone)
+
+    if (!childName || !customerName || !form.planId || !form.paymentStatus) {
+      setError('Completa nombre del nino, responsable, plan y estado de pago.')
+      return
+    }
+
+    if (form.paymentMethod === 'card' && !form.cardType) {
+      setError('Selecciona si la tarjeta es debito o credito.')
       return
     }
 
@@ -66,20 +145,24 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
 
     try {
       const payload: CreateVisitInput = {
-        childName: form.childName,
+        childName,
         childBirthDate: form.childBirthDate,
-        childAgeRange: form.childAgeRange,
+        childExactAge: form.childBirthDate ? null : form.childExactAge ? Number(form.childExactAge) : null,
+        childAgeCalculated: calculatedAge,
         childGender: form.childGender,
         childNotes: form.childNotes,
-        customerName: form.customerName,
-        customerPhone: form.customerPhone,
+        customerName,
+        customerPhone: normalizedPhone,
         customerRelation: form.customerRelation,
         childrenCount: Number(form.childrenCount) || 1,
         planId: selectedPlan.id,
         startedAt: parseTodayTime(form.startedAtTime),
         paymentStatus: form.paymentStatus,
         paymentMethod: form.paymentMethod,
+        cardType: form.paymentMethod === 'card' ? form.cardType : '',
         amountCharged: form.amountCharged ? Number(form.amountCharged) : null,
+        defaultAmount,
+        customAmount: Boolean(form.customAmount),
         notes: form.notes,
       }
 
@@ -102,6 +185,7 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
       <label className="field">
         <span>Nombre del nino *</span>
         <input
+          onBlur={() => normalizeNameField('childName')}
           onChange={(event) => setField('childName', event.target.value)}
           placeholder="Ej. Mateo Rios"
           value={form.childName}
@@ -111,38 +195,44 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
       {!compact ? (
         <div className="form-inline">
           <label className="field">
-            <span>Fecha nacimiento</span>
+            <span>Fecha de nacimiento</span>
             <input
               onChange={(event) => setField('childBirthDate', event.target.value)}
               type="date"
               value={form.childBirthDate}
             />
+            {calculatedAge !== null ? <small className="field-hint">Edad calculada: {calculatedAge} años</small> : null}
           </label>
           <label className="field">
-            <span>Sexo</span>
-            <select onChange={(event) => setField('childGender', event.target.value)} value={form.childGender}>
-              <option value="">Sin especificar</option>
-              <option value="female">Femenino</option>
-              <option value="male">Masculino</option>
-              <option value="other">Otro</option>
-            </select>
+            <span>Edad exacta</span>
+            <input
+              disabled={Boolean(form.childBirthDate)}
+              min={0}
+              onChange={(event) => setField('childExactAge', event.target.value)}
+              placeholder={form.childBirthDate ? 'Calculada por fecha' : 'Ej. 7'}
+              type="number"
+              value={form.childExactAge}
+            />
           </label>
         </div>
       ) : null}
 
-      <label className="field">
-        <span>Edad o rango</span>
-        <select onChange={(event) => setField('childAgeRange', event.target.value)} value={form.childAgeRange}>
-          <option value="">Seleccionar edad</option>
-          <option value="2 a 4 anos">2 a 4 anos</option>
-          <option value="5 a 8 anos">5 a 8 anos</option>
-          <option value="9 anos o mas">9 anos o mas</option>
-        </select>
-      </label>
+      {!compact ? (
+        <label className="field">
+          <span>Sexo</span>
+          <select onChange={(event) => setField('childGender', event.target.value)} value={form.childGender}>
+            <option value="">Sin especificar</option>
+            <option value="female">Femenino</option>
+            <option value="male">Masculino</option>
+            <option value="other">Otro</option>
+          </select>
+        </label>
+      ) : null}
 
       <label className="field">
         <span>Responsable *</span>
         <input
+          onBlur={() => normalizeNameField('customerName')}
           onChange={(event) => setField('customerName', event.target.value)}
           placeholder="Nombre del responsable"
           value={form.customerName}
@@ -153,8 +243,9 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
         <label className="field">
           <span>Telefono</span>
           <input
-            onChange={(event) => setField('customerPhone', event.target.value)}
-            placeholder="Ej. 0981 000 000"
+            inputMode="numeric"
+            onChange={(event) => setField('customerPhone', formatPyPhone(event.target.value))}
+            placeholder="Ej. 0983 626 000"
             value={form.customerPhone}
           />
         </label>
@@ -190,7 +281,7 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
 
       <label className="field">
         <span>Plan contratado *</span>
-        <select onChange={(event) => setField('planId', event.target.value)} value={form.planId}>
+        <select onChange={(event) => handlePlanChange(event.target.value as TimePlan['id'])} value={form.planId}>
           {timePlans.map((plan) => (
             <option key={plan.id} value={plan.id}>
               {plan.name}
@@ -227,23 +318,45 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
         </label>
       </div>
 
-      <label className="field">
-        <span>Monto cobrado</span>
-        <input
-          min={0}
-          onChange={(event) => setField('amountCharged', event.target.value)}
-          placeholder="Opcional"
-          type="number"
-          value={form.amountCharged}
-        />
-      </label>
+      {form.paymentMethod === 'card' ? (
+        <label className="field">
+          <span>Tipo de tarjeta *</span>
+          <select onChange={(event) => setField('cardType', event.target.value)} value={form.cardType}>
+            <option value="">Seleccionar</option>
+            <option value="debit">Debito</option>
+            <option value="credit">Credito</option>
+          </select>
+        </label>
+      ) : null}
+
+      <div className="form-inline amount-inline">
+        <label className="field">
+          <span>Monto cobrado</span>
+          <input
+            disabled={!form.customAmount}
+            min={0}
+            onChange={(event) => setField('amountCharged', event.target.value)}
+            type="number"
+            value={form.amountCharged}
+          />
+          <small className="field-hint">Monto sugerido: {defaultAmount ? formatGuarani(defaultAmount) : 'Manual'}</small>
+        </label>
+        <label className="field inline-check amount-check">
+          <input
+            checked={form.customAmount}
+            onChange={(event) => setField('customAmount', event.target.checked)}
+            type="checkbox"
+          />
+          Usar monto diferente
+        </label>
+      </div>
 
       {!compact ? (
         <label className="field">
           <span>Observaciones del nino</span>
           <textarea
             onChange={(event) => setField('childNotes', event.target.value)}
-            placeholder="Alergias, cuidados, cumpleaños..."
+            placeholder="Alergias, cuidados, cumpleanos..."
             rows={2}
             value={form.childNotes}
           />
@@ -260,10 +373,17 @@ export function VisitForm({ compact = false, onCreated }: VisitFormProps) {
         />
       </label>
 
-      <button className="button primary action-button" disabled={isSaving} type="submit">
-        <Plus size={18} />
-        {isSaving ? 'Registrando...' : 'Registrar ingreso'}
-      </button>
+      <div className="module-actions">
+        {onCancel ? (
+          <button className="button ghost" onClick={onCancel} type="button">
+            Cancelar
+          </button>
+        ) : null}
+        <button className="button primary action-button" disabled={isSaving} type="submit">
+          <Plus size={18} />
+          {isSaving ? 'Registrando...' : 'Registrar ingreso'}
+        </button>
+      </div>
     </form>
   )
 }

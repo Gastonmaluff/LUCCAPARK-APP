@@ -1,6 +1,5 @@
 import { Baby, CheckCircle2, CreditCard, Eye, LogOut, ShoppingCart } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { chargeVisit, finishVisit } from '../../services/visitService'
 import type { ActiveVisit, CanteenOrder, PaymentMethod } from '../../types'
 import { formatGuarani } from '../../utils/money'
@@ -20,9 +19,10 @@ const paymentMethodLabel: Record<string, string> = {
 interface VisitCardProps {
   visit: ActiveVisit
   canteenOrders?: CanteenOrder[]
+  onOpenConsumption?: () => void
 }
 
-export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
+export function VisitCard({ canteenOrders = [], onOpenConsumption, visit }: VisitCardProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isCharging, setIsCharging] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''>>(
@@ -31,7 +31,7 @@ export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
   const [amountCharged, setAmountCharged] = useState(visit.amountCharged ? String(visit.amountCharged) : '')
   const [isSavingAction, setIsSavingAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const canteenTotal = canteenOrders.reduce((sum, order) => sum + order.total, 0)
+  const canteenTotal = canteenOrders.filter((order) => order.status === 'open').reduce((sum, order) => sum + order.total, 0)
   const hasPendingCanteen = canteenTotal > 0
 
   const confirmPendingCanteen = (action: string) => {
@@ -116,17 +116,14 @@ export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
       </div>
 
       <div className="visit-actions">
-        {canteenOrders.length > 0 ? (
-          <Link className="button ghost canteen-chip" to={`/admin/cantina?visitId=${visit.id}`}>
-            <ShoppingCart size={17} />
-            Ver consumo · {formatGuarani(canteenTotal)} pendiente
-          </Link>
-        ) : (
-          <Link className="button ghost" to={`/admin/cantina?visitId=${visit.id}`}>
-            <ShoppingCart size={17} />
-            Abrir consumo
-          </Link>
-        )}
+        <button
+          className={`button ghost ${hasPendingCanteen ? 'canteen-chip' : ''}`}
+          onClick={onOpenConsumption}
+          type="button"
+        >
+          <ShoppingCart size={17} />
+          {hasPendingCanteen ? `Ver consumo · ${formatGuarani(canteenTotal)} pendiente` : 'Abrir consumo'}
+        </button>
         {visit.paymentStatus !== 'paid' ? (
           <button className="button secondary" onClick={() => setIsCharging((current) => !current)} type="button">
             <CreditCard size={17} />
@@ -179,7 +176,7 @@ export function VisitCard({ canteenOrders = [], visit }: VisitCardProps) {
         <div className="visit-detail-grid">
           <span>Telefono: {visit.customerPhone || 'Sin telefono'}</span>
           <span>Relacion: {visit.customerRelation || 'Sin especificar'}</span>
-          <span>Edad/rango: {visit.childAgeRange || 'Sin especificar'}</span>
+          <span>Edad: {visit.childAgeCalculated ?? visit.childExactAge ?? visit.childAgeRange ?? 'Sin especificar'}</span>
           <span>Forma pago: {paymentMethodLabel[visit.paymentMethod ?? '']}</span>
           <span>Cantidad: {visit.childrenCount}</span>
           <span>Nota: {visit.notes || 'Sin notas'}</span>

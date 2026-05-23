@@ -126,7 +126,7 @@ img {
 }
 
 .brand-logo.compact img {
-  height: 46px;
+  height: 58px;
 }
 
 .brand-logo.small img {
@@ -1064,6 +1064,21 @@ img {
   overflow: auto;
   padding: 22px;
   width: min(560px, 100%);
+}
+
+.modal-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+}
+
+.account-picker-modal {
+  align-self: center;
+  margin: auto;
 }
 
 .modal-header {
@@ -2092,6 +2107,449 @@ img {
   color: #9a6700;
 }
 
+.control-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.control-full-panel {
+  grid-column: 1 / -1;
+}
+
+.pending-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.pending-card {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.pending-card strong {
+  color: var(--ink);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.visit-card-group,
+.today-visits-list,
+.closed-orders-list {
+  display: grid;
+  gap: 10px;
+}
+
+.visit-consumption-panel {
+  background: #f8fafc;
+  border: 1px solid rgba(8, 169, 181, 0.22);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  margin-top: -4px;
+  padding: 16px;
+}
+
+.consumption-row,
+.today-visit-row,
+.closed-order-row,
+.account-item-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 12px;
+}
+
+.today-visit-row {
+  grid-template-columns: minmax(0, 1fr) repeat(5, auto);
+}
+
+.consumption-row small,
+.today-visit-row small,
+.closed-order-row small {
+  color: var(--muted);
+  display: block;
+  font-weight: 700;
+}
+
+.canteen-operations {
+  display: grid;
+  gap: 18px;
+}
+
+.canteen-hero {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 90, 19, 0.08), rgba(8, 169, 181, 0.08)),
+    #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: 18px;
+}
+
+.canteen-hero h1 {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.canteen-hero p {
+  color: var(--muted);
+  margin: 5px 0 0;
+}
+
+.canteen-open-button {
+  min-height: 54px;
+}
+
+.canteen-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(105px, auto));
+}
+
+.canteen-metrics span {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+.canteen-metrics small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.canteen-metrics strong {
+  color: var(--ink);
+}
+
+.canteen-account-grid,
+.picker-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.canteen-account-card,
+.picker-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  text-align: left;
+}
+
+.account-card-main {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.account-avatar {
+  align-items: center;
+  background: rgba(255, 90, 19, 0.12);
+  border-radius: 999px;
+  color: var(--orange);
+  display: inline-flex;
+  flex: 0 0 46px;
+  font-size: 1.2rem;
+  font-weight: 950;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.account-card-main strong,
+.picker-card strong {
+  color: var(--ink);
+  display: block;
+  font-size: 1.12rem;
+}
+
+.account-card-main p,
+.account-card-main small,
+.picker-card small,
+.picker-card span {
+  color: var(--muted);
+  display: block;
+  font-weight: 750;
+  margin: 2px 0 0;
+}
+
+.account-card-side {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.account-card-side strong {
+  color: var(--ink);
+  font-size: 1.5rem;
+}
+
+.canteen-detail-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.account-detail-header {
+  align-items: end;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.account-detail-header h2 {
+  color: var(--ink);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.account-detail-header p {
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+.account-detail-header > strong {
+  color: var(--orange);
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  line-height: 1;
+}
+
+.quick-product-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.quick-product-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  min-height: 168px;
+  padding: 14px;
+  text-align: center;
+}
+
+.quick-product-card:hover {
+  border-color: rgba(255, 90, 19, 0.38);
+  box-shadow: 0 12px 28px rgba(255, 90, 19, 0.09);
+}
+
+.quick-product-image,
+.product-card-image {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  justify-content: center;
+}
+
+.quick-product-image {
+  height: 72px;
+  width: 88px;
+}
+
+.quick-product-image img,
+.product-card-image img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.quick-product-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.quick-product-card b {
+  color: var(--orange);
+}
+
+.account-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.account-summary h3 {
+  margin: 0;
+}
+
+.account-item-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.quantity-stepper {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.quantity-stepper button {
+  background: transparent;
+  border: 0;
+  color: var(--orange);
+  font-weight: 950;
+  height: 34px;
+  width: 34px;
+}
+
+.quantity-stepper span {
+  font-weight: 900;
+  min-width: 28px;
+  text-align: center;
+}
+
+.account-paybar {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px;
+}
+
+.account-paybar > strong {
+  color: var(--ink);
+  font-size: 1.45rem;
+  margin-right: auto;
+}
+
+.account-paybar select {
+  min-height: 44px;
+  width: 190px;
+}
+
+.button.danger {
+  background: rgba(239, 51, 38, 0.1);
+  border-color: rgba(239, 51, 38, 0.28);
+  color: var(--red);
+}
+
+.collapsible-title {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+  width: 100%;
+}
+
+.collapsible-title > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 9px;
+}
+
+.compact-panel {
+  padding: 16px 20px;
+}
+
+.closed-order-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  margin-top: 10px;
+}
+
+.account-picker-modal {
+  max-width: 940px;
+  width: min(940px, calc(100vw - 32px));
+}
+
+.order-type-switch.large button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.picker-card {
+  cursor: pointer;
+}
+
+.picker-card:hover {
+  border-color: rgba(8, 169, 181, 0.34);
+  box-shadow: 0 10px 26px rgba(8, 169, 181, 0.08);
+}
+
+.manual-account-box {
+  display: grid;
+  gap: 14px;
+}
+
+.inventory-panel {
+  align-self: start;
+}
+
+.inventory-title {
+  margin-bottom: 0;
+}
+
+.inventory-summary {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.inventory-closed {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.inventory-actions {
+  justify-content: flex-start;
+  margin: 16px 0;
+}
+
+.product-form.inventory-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.product-form.inventory-form .module-actions,
+.product-form.inventory-form .form-alert {
+  grid-column: 1 / -1;
+}
+
+.product-card-image {
+  height: 96px;
+  padding: 8px;
+}
+
 .clients-layout {
   display: grid;
   gap: 18px;
@@ -2297,6 +2755,10 @@ img {
   .dashboard-grid,
   .reception-grid,
   .reception-topbar,
+  .pending-grid,
+  .canteen-hero,
+  .canteen-account-grid,
+  .picker-grid,
   .event-mode-grid,
   .reservations-grid,
   .canteen-layout,
@@ -2343,6 +2805,7 @@ img {
   .grid-4,
   .metric-grid,
   .reception-summary-grid,
+  .canteen-metrics,
   .event-mode-grid .event-guest-panel,
   .tv-grid,
   .product-grid {
@@ -2438,6 +2901,12 @@ img {
 
   .visit-main-row,
   .admin-active-visits-panel .visit-main-row,
+  .today-visit-row,
+  .canteen-hero,
+  .canteen-account-grid,
+  .picker-grid,
+  .product-form.inventory-form,
+  .account-item-row,
   .inline-action-panel,
   .visit-detail-grid,
   .client-row,

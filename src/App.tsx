@@ -16,6 +16,7 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
 import { AvailabilityPage } from './pages/AvailabilityPage'
 import { ContactPage } from './pages/ContactPage'
 import { LandingPage } from './pages/LandingPage'
+import { CanteenPage } from './pages/CanteenPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PricesPage } from './pages/PricesPage'
@@ -57,6 +58,7 @@ function App() {
             <Route path="configuracion" element={<AdminSettingsPage />} />
             <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
           </Route>
+          <Route path="cantina" element={<CanteenPage />} />
           <Route path="recepcion" element={<ReceptionPage />} />
           <Route path="tv" element={<TVPage />} />
         </Route>

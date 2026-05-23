@@ -85,8 +85,10 @@ export function OrderBuilder({ activeEvents, activeVisits, canteenOrders = [], p
           productName: product.name,
           category: product.category,
           unitPrice: product.price,
+          unitCost: product.unitCost ?? null,
           quantity,
           subtotal: product.price * quantity,
+          costSubtotal: (product.unitCost ?? 0) * quantity,
         },
       ]
     })

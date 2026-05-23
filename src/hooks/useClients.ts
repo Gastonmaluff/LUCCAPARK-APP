@@ -17,6 +17,9 @@ export interface ClientVisitHistoryItem {
   paymentStatus?: PaymentStatus
   planName?: string
   realDurationMinutes?: number | null
+  childrenCount?: number
+  amountCharged?: number | null
+  defaultAmount?: number | null
 }
 
 const dateFromTimestamp = (value: unknown): Date | null => {
@@ -78,6 +81,9 @@ const mapVisit = (id: string, data: Record<string, unknown>): ClientVisitHistory
   status: String(data.status ?? ''),
   paymentStatus: (data.paymentStatus as PaymentStatus) ?? 'pending',
   planName: String(data.planName ?? ''),
+  childrenCount: Number(data.childrenCount ?? 1),
+  amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : Number(data.amountCharged),
+  defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
   realDurationMinutes:
     data.realDurationMinutes === null || data.realDurationMinutes === undefined ? null : Number(data.realDurationMinutes),
 })
@@ -119,6 +125,9 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   customerPhone: String(data.customerPhone ?? ''),
   items: Array.isArray(data.items) ? (data.items as CanteenOrder['items']) : [],
   total: Number(data.total ?? 0),
+  costTotal: data.costTotal === null || data.costTotal === undefined ? undefined : Number(data.costTotal),
+  estimatedProfit:
+    data.estimatedProfit === null || data.estimatedProfit === undefined ? undefined : Number(data.estimatedProfit),
   status: (data.status as CanteenOrder['status']) ?? 'open',
   paymentStatus: (data.paymentStatus as CanteenOrder['paymentStatus']) ?? 'pending',
   paymentMethod: (data.paymentMethod as CanteenOrder['paymentMethod']) ?? '',

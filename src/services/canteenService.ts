@@ -9,6 +9,8 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { auth } from '../config/firebase'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import type {
@@ -26,11 +28,15 @@ const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ')
 const totalFromItems = (items: CanteenOrderItem[]) =>
   items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
 
+const costFromItems = (items: CanteenOrderItem[]) =>
+  items.reduce((sum, item) => sum + (item.unitCost ?? 0) * item.quantity, 0)
+
 const normalizeItems = (items: CanteenOrderItem[]) =>
   items.map((item) => ({
     ...item,
     quantity: Number(item.quantity),
     subtotal: Number(item.unitPrice) * Number(item.quantity),
+    costSubtotal: Number(item.unitCost ?? 0) * Number(item.quantity),
   }))
 
 const applyStockDelta = (batch: ReturnType<typeof writeBatch>, items: CanteenOrderItem[], direction: -1 | 1) => {
@@ -54,12 +60,15 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
       name: normalizeText(input.name),
       category: input.category,
       price: Number(input.price),
+      salePrice: Number(input.price),
+      unitCost: input.unitCost === undefined || input.unitCost === null || Number.isNaN(Number(input.unitCost)) ? null : Number(input.unitCost),
       stock: input.stock === undefined || input.stock === null || Number.isNaN(Number(input.stock)) ? null : Number(input.stock),
       minStock:
         input.minStock === undefined || input.minStock === null || Number.isNaN(Number(input.minStock))
           ? null
           : Number(input.minStock),
       isActive: input.isActive,
+      imageUrl: normalizeText(input.imageUrl ?? ''),
       updatedAt: serverTimestamp(),
       ...(input.id ? {} : { createdAt: serverTimestamp() }),
     },
@@ -67,6 +76,14 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
   )
 
   return productRef.id
+}
+
+export const uploadCanteenProductImage = async (file: File) => {
+  await ensureReceptionSession()
+  const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '-')
+  const storageRef = ref(storage, `canteen-products/${Date.now()}-${safeName}`)
+  await uploadBytes(storageRef, file)
+  return getDownloadURL(storageRef)
 }
 
 export const setCanteenProductActive = async (productId: string, isActive: boolean) => {
@@ -87,6 +104,7 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
   const paymentStatus = input.chargeNow ? 'paid' : 'pending'
   const status = input.chargeNow ? 'paid' : 'open'
   const total = totalFromItems(items)
+  const costTotal = costFromItems(items)
 
   const batch = writeBatch(orderRef.firestore)
   batch.set(orderRef, {
@@ -102,6 +120,8 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
     customerPhone: normalizeText(input.customerPhone ?? ''),
     items,
     total,
+    costTotal,
+    estimatedProfit: total - costTotal,
     status,
     paymentStatus,
     paymentMethod: input.chargeNow ? input.paymentMethod ?? 'cash' : '',
@@ -140,10 +160,43 @@ export const addItemsToCanteenOrder = async (order: CanteenOrder, newItems: Cant
   batch.update(getDocumentRef('canteenOrders', order.id), {
     items: mergedItems,
     total: totalFromItems(mergedItems),
+    costTotal: costFromItems(mergedItems),
+    estimatedProfit: totalFromItems(mergedItems) - costFromItems(mergedItems),
     updatedAt: serverTimestamp(),
     updatedBy: currentUserId(),
   })
   applyStockDelta(batch, normalizedNewItems, -1)
+  await batch.commit()
+}
+
+export const updateCanteenOrderItems = async (order: CanteenOrder, items: CanteenOrderItem[]) => {
+  await ensureReceptionSession()
+
+  const normalizedItems = normalizeItems(items)
+  const productIds = new Set([...order.items.map((item) => item.productId), ...normalizedItems.map((item) => item.productId)])
+  const batch = writeBatch(getDocumentRef('canteenOrders', order.id).firestore)
+
+  batch.update(getDocumentRef('canteenOrders', order.id), {
+    items: normalizedItems,
+    total: totalFromItems(normalizedItems),
+    costTotal: costFromItems(normalizedItems),
+    estimatedProfit: totalFromItems(normalizedItems) - costFromItems(normalizedItems),
+    updatedAt: serverTimestamp(),
+    updatedBy: currentUserId(),
+  })
+
+  productIds.forEach((productId) => {
+    const previousQuantity = order.items.find((item) => item.productId === productId)?.quantity ?? 0
+    const nextQuantity = normalizedItems.find((item) => item.productId === productId)?.quantity ?? 0
+    const stockDelta = previousQuantity - nextQuantity
+    if (stockDelta !== 0) {
+      batch.update(getDocumentRef('canteenProducts', productId), {
+        stock: increment(stockDelta),
+        updatedAt: serverTimestamp(),
+      })
+    }
+  })
+
   await batch.commit()
 }
 
