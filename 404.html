@@ -1,21 +1,18 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/LUCCAPARK-APP/assets/lucca-logo-cropped.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Lucca Park: landing publica, admin, recepcion y vista TV para parque infantil."
+    />
     <title>Lucca Park</title>
+    <script type="module" crossorigin src="/LUCCAPARK-APP/assets/index-B49b93du.js"></script>
+    <link rel="stylesheet" crossorigin href="/LUCCAPARK-APP/assets/index-BWdzoAcM.css">
   </head>
   <body>
-    <script>
-      ;(() => {
-        const segments = window.location.pathname.split('/').filter(Boolean)
-        const isGithubPages = window.location.hostname.endsWith('github.io')
-        const basePath = isGithubPages && segments.length > 0 ? `/${segments[0]}/` : '/'
-        const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
-
-        window.sessionStorage.setItem('lucca:redirect', redirect)
-        window.location.replace(`${window.location.origin}${basePath}`)
-      })()
-    </script>
+    <div id="root"></div>
   </body>
 </html>
