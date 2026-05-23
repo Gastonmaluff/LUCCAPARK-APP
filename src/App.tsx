@@ -4,7 +4,6 @@ import { LoadingScreen } from './components/LoadingScreen'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AdminLayout } from './layouts/AdminLayout'
 import { PublicLayout } from './layouts/PublicLayout'
-import { AdminCalendarPage } from './pages/admin/AdminCalendarPage'
 import { AdminCanteenPage } from './pages/admin/AdminCanteenPage'
 import { AdminClientsPage } from './pages/admin/AdminClientsPage'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
@@ -50,7 +49,7 @@ function App() {
             <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="recepcion" element={<AdminReceptionPage />} />
             <Route path="reservas" element={<AdminReservationsPage />} />
-            <Route path="calendario" element={<AdminCalendarPage />} />
+            <Route path="calendario" element={<Navigate to="/admin/reservas" replace />} />
             <Route path="cantina" element={<AdminCanteenPage />} />
             <Route path="finanzas" element={<AdminFinancePage />} />
             <Route path="reportes" element={<AdminReportsPage />} />

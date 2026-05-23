@@ -107,6 +107,21 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         <EventCapacityBadge event={event} guestCount={guests.length || event.registeredGuestsCount} />
       </div>
 
+      <div className="event-finance-summary">
+        <span>
+          <small>Monto total</small>
+          <strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong>
+        </span>
+        <span>
+          <small>Seña</small>
+          <strong>{formatGuarani(event.depositAmount ?? 0)}</strong>
+        </span>
+        <span>
+          <small>Saldo pendiente</small>
+          <strong>{formatGuarani(event.pendingAmount ?? 0)}</strong>
+        </span>
+      </div>
+
       <div className="event-owner-summary">
         <strong>
           Entraron {stats.registeredGuestsCount} ninos de {stats.contractedChildrenCount} contratados

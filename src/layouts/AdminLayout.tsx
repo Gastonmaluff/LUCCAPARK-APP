@@ -1,7 +1,6 @@
 import {
   BarChart3,
   CalendarDays,
-  CalendarRange,
   ChefHat,
   ClipboardList,
   LayoutDashboard,
@@ -20,7 +19,6 @@ const adminNavItems = [
   { label: 'Recepcion', to: '/admin/recepcion', icon: ClipboardList },
   { label: 'Cantina', to: '/admin/cantina', icon: ChefHat },
   { label: 'Reservas', to: '/admin/reservas', icon: CalendarDays },
-  { label: 'Calendario', to: '/admin/calendario', icon: CalendarRange },
   { label: 'Finanzas', to: '/admin/finanzas', icon: WalletCards },
   { label: 'Reportes', to: '/admin/reportes', icon: BarChart3 },
   { label: 'Clientes', to: '/admin/clientes', icon: UserRound },

@@ -87,6 +87,18 @@ export const createEvent = async (input: CreateEventInput) => {
     registeredGuestsCount: 0,
     status: input.status,
     eventType: input.eventType,
+    totalAmount:
+      input.totalAmount === undefined || input.totalAmount === null || Number.isNaN(Number(input.totalAmount))
+        ? null
+        : Number(input.totalAmount),
+    depositAmount:
+      input.depositAmount === undefined || input.depositAmount === null || Number.isNaN(Number(input.depositAmount))
+        ? null
+        : Number(input.depositAmount),
+    pendingAmount:
+      input.pendingAmount === undefined || input.pendingAmount === null || Number.isNaN(Number(input.pendingAmount))
+        ? null
+        : Number(input.pendingAmount),
     notes: optionalText(input.notes),
     tvModeEnabled: true,
     tvTitle: `Bienvenidos al cumpleanos de ${birthdayChildName || title}`,

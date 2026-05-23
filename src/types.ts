@@ -187,6 +187,9 @@ export interface LuccaEvent {
   registeredGuestsCount: number
   status: EventStatus
   eventType: EventType
+  totalAmount?: number | null
+  depositAmount?: number | null
+  pendingAmount?: number | null
   notes?: string
   tvModeEnabled: boolean
   tvTitle?: string
@@ -212,6 +215,9 @@ export interface CreateEventInput {
   contractedChildrenCount: number
   status: EventStatus
   eventType: EventType
+  totalAmount?: number | null
+  depositAmount?: number | null
+  pendingAmount?: number | null
   notes?: string
 }
 
