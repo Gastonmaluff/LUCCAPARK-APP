@@ -4,10 +4,18 @@ import { StatusPill } from '../StatusPill'
 import { useTodayVisits } from '../../hooks/useTodayVisits'
 import { formatShortTime } from '../../utils/date'
 import { formatGuarani } from '../../utils/money'
+import type { CanteenOrder } from '../../types'
 
-export function TodayVisitsSection() {
+export function TodayVisitsSection({ canteenOrders = [] }: { canteenOrders?: CanteenOrder[] }) {
   const [isOpen, setIsOpen] = useState(false)
   const { error, isLoading, visits } = useTodayVisits()
+  const collectedToday = visits.reduce((sum, visit) => {
+    const parkPaid = visit.paymentStatus === 'paid' ? visit.amountCharged ?? visit.defaultAmount ?? 0 : 0
+    const canteenPaid = canteenOrders
+      .filter((order) => order.visitId === visit.id && order.status === 'paid')
+      .reduce((orderSum, order) => orderSum + order.total, 0)
+    return sum + parkPaid + canteenPaid
+  }, 0)
 
   return (
     <article className="panel today-visits-panel">
@@ -16,7 +24,10 @@ export function TodayVisitsSection() {
           {isOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
           <strong>Visitas de hoy</strong>
         </span>
-        <StatusPill tone="info">{visits.length} registros</StatusPill>
+        <span className="today-visits-summary">
+          <StatusPill tone="info">{visits.length} registros</StatusPill>
+          <StatusPill tone="available">{formatGuarani(collectedToday)} cobrados</StatusPill>
+        </span>
       </button>
 
       {isOpen ? (
@@ -38,7 +49,7 @@ export function TodayVisitsSection() {
                   Salida <strong>{formatShortTime(visit.endedAt)}</strong>
                 </span>
                 <span>{visit.planName}</span>
-                <strong>{visit.amountCharged ? formatGuarani(visit.amountCharged) : 'Sin monto'}</strong>
+                <strong>{visit.amountCharged ?? visit.defaultAmount ? formatGuarani(visit.amountCharged ?? visit.defaultAmount ?? 0) : 'Sin monto'}</strong>
                 <StatusPill tone={visit.paymentStatus === 'paid' ? 'available' : 'warning'}>
                   {visit.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'}
                 </StatusPill>

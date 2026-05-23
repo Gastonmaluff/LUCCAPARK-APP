@@ -17,6 +17,7 @@ export interface TodayVisitRecord {
   paymentStatus: PaymentStatus
   paymentMethod?: PaymentMethod
   amountCharged?: number | null
+  defaultAmount?: number | null
   status: 'active' | 'finished' | string
 }
 
@@ -44,6 +45,7 @@ const mapVisit = (id: string, data: Record<string, unknown>): TodayVisitRecord =
   paymentStatus: (data.paymentStatus as PaymentStatus) ?? 'pending',
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
   amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : Number(data.amountCharged),
+  defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
   status: String(data.status ?? 'active'),
 })
 

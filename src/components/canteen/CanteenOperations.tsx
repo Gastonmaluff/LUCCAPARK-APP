@@ -16,6 +16,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { BrandLogo } from '../BrandLogo'
 import { ProductManager } from './ProductManager'
+import { ConsolidatedCheckoutModal } from '../reception/ConsolidatedCheckoutModal'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
 import { useCanteenOrders, useCanteenProducts, usePaidCanteenOrdersForDate } from '../../hooks/useCanteen'
 import { useEvents } from '../../hooks/useEvents'
@@ -129,6 +130,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [isClosedTodayOpen, setIsClosedTodayOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''>>('cash')
+  const [checkoutVisit, setCheckoutVisit] = useState<ActiveVisit | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const handledPreselectedVisit = useRef('')
@@ -136,6 +138,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const openOrders = ordersResult.orders.filter((order) => order.status === 'open')
   const paidToday = paidTodayResult.orders
   const selectedOrder = selectedOrderId ? ordersResult.orders.find((order) => order.id === selectedOrderId) ?? null : null
+  const selectedOrderVisit = selectedOrder?.type === 'visit' && selectedOrder.visitId ? visits.find((visit) => visit.id === selectedOrder.visitId) ?? null : null
   const activeProducts = productsResult.products.filter((product) => product.isActive)
   const productCount = activeProducts.length
 
@@ -145,6 +148,14 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const estimatedProfit = soldToday - costToday
 
   const chargeOrder = async (order: CanteenOrder) => {
+    if (order.type === 'visit' && order.visitId) {
+      const visit = visits.find((item) => item.id === order.visitId)
+      if (visit) {
+        setCheckoutVisit(visit)
+        return
+      }
+    }
+
     setMessage(null)
     setIsSaving(true)
     try {
@@ -411,7 +422,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
             <button className="button ghost" onClick={() => setSelectedOrderId(null)} type="button">
               Guardar abierta
             </button>
-            <button className="button primary" disabled={isSaving || selectedOrder.total <= 0} onClick={() => chargeOrder(selectedOrder)} type="button">
+            <button className="button primary" disabled={isSaving || (selectedOrder.total <= 0 && !selectedOrderVisit)} onClick={() => chargeOrder(selectedOrder)} type="button">
               <CreditCard size={18} />
               Cobrar ahora
             </button>
@@ -542,6 +553,16 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
             ) : null}
           </section>
         </div>
+      ) : null}
+
+      {checkoutVisit ? (
+        <ConsolidatedCheckoutModal
+          allowFinishChoice
+          onClose={() => setCheckoutVisit(null)}
+          orders={ordersResult.orders.filter((order) => order.visitId === checkoutVisit.id)}
+          source="canteen"
+          visit={checkoutVisit}
+        />
       ) : null}
     </div>
   )

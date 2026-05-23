@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { StatusPill } from '../StatusPill'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
+import { getVisitBillingSummary } from '../../utils/visitBilling'
 
 interface VisitConsumptionPanelProps {
   visit: ActiveVisit
@@ -16,6 +17,7 @@ export function VisitConsumptionPanel({ canteenPath, orders, visit }: VisitConsu
   const pendingTotal = openOrders.reduce((sum, order) => sum + order.total, 0)
   const total = orders.reduce((sum, order) => sum + order.total, 0)
   const items = orders.flatMap((order) => order.items.map((item) => ({ ...item, orderStatus: order.status })))
+  const billing = getVisitBillingSummary(visit, orders)
 
   return (
     <div className="visit-consumption-panel">
@@ -56,6 +58,21 @@ export function VisitConsumptionPanel({ canteenPath, orders, visit }: VisitConsu
           </div>
         </>
       )}
+
+      <div className="consumption-consolidated">
+        <div>
+          <span>Parque pendiente</span>
+          <strong>{formatGuarani(billing.pendingParkAmount)}</strong>
+        </div>
+        <div>
+          <span>Cantina pendiente</span>
+          <strong>{formatGuarani(billing.pendingCanteenAmount)}</strong>
+        </div>
+        <div>
+          <span>Total consolidado</span>
+          <strong>{formatGuarani(billing.totalPendingAmount)}</strong>
+        </div>
+      </div>
 
       <Link className="button primary" to={`${canteenPath}?visitId=${visit.id}`}>
         <ExternalLink size={17} />+ Agregar producto

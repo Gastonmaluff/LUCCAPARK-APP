@@ -95,6 +95,10 @@ export interface CreateVisitInput {
   paymentMethod?: PaymentMethod
   cardType?: 'debit' | 'credit' | ''
   amountCharged?: number | null
+  parkChargeAmount?: number | null
+  parkPaymentStatus?: 'pending' | 'paid'
+  parkPaidAt?: Date | null
+  parkPaymentMethod?: PaymentMethod
   defaultAmount?: number | null
   customAmount?: boolean
   notes?: string
@@ -124,6 +128,10 @@ export interface ActiveVisit {
   paymentMethod?: PaymentMethod
   cardType?: 'debit' | 'credit' | ''
   amountCharged?: number | null
+  parkChargeAmount?: number | null
+  parkPaymentStatus?: 'pending' | 'paid'
+  parkPaidAt?: Date | null
+  parkPaymentMethod?: PaymentMethod
   defaultAmount?: number | null
   customAmount?: boolean
   notes?: string

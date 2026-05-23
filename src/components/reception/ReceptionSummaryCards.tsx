@@ -1,42 +1,45 @@
 import { AlertTriangle, Baby, Clock, CreditCard } from 'lucide-react'
-import type { ActiveVisit } from '../../types'
+import type { ActiveVisit, CanteenOrder } from '../../types'
+import { formatGuarani } from '../../utils/money'
+import { getVisitBillingSummary } from '../../utils/visitBilling'
 import { getVisitTimeStatus } from '../../utils/visitTime'
 
 interface ReceptionSummaryCardsProps {
   visits: ActiveVisit[]
+  canteenOrders?: CanteenOrder[]
   now: Date
 }
 
-export function ReceptionSummaryCards({ now, visits }: ReceptionSummaryCardsProps) {
+export function ReceptionSummaryCards({ canteenOrders = [], now, visits }: ReceptionSummaryCardsProps) {
   const childrenInside = visits.reduce((total, visit) => total + visit.childrenCount, 0)
-  const pendingPayments = visits.filter((visit) => visit.paymentStatus !== 'paid').length
+  const pendingAmount = visits.reduce((sum, visit) => sum + getVisitBillingSummary(visit, canteenOrders).totalPendingAmount, 0)
   const upcoming = visits.filter((visit) => getVisitTimeStatus(visit, now) === 'warning').length
   const expired = visits.filter((visit) => getVisitTimeStatus(visit, now) === 'expired').length
 
   return (
     <div className="reception-summary-grid">
-      <article className="summary-card">
+      <article className="summary-card compact green">
         <Baby color="var(--green)" />
         <div>
           <strong>{childrenInside}</strong>
-          <span>Ninos dentro ahora</span>
+          <span>Dentro ahora</span>
         </div>
       </article>
-      <article className="summary-card">
+      <article className="summary-card compact orange">
         <CreditCard color="var(--orange)" />
         <div>
-          <strong>{pendingPayments}</strong>
-          <span>Pagos pendientes</span>
+          <strong>{formatGuarani(pendingAmount)}</strong>
+          <span>Pendiente de cobro</span>
         </div>
       </article>
-      <article className="summary-card">
+      <article className="summary-card compact yellow">
         <Clock color="var(--yellow)" />
         <div>
           <strong>{upcoming}</strong>
-          <span>Salidas proximas</span>
+          <span>Salen pronto</span>
         </div>
       </article>
-      <article className="summary-card">
+      <article className="summary-card compact red">
         <AlertTriangle color="var(--red)" />
         <div>
           <strong>{expired}</strong>

@@ -1,4 +1,5 @@
-import { AdminModuleHeader } from '../../components/AdminModuleHeader'
+import { useState } from 'react'
+import { EventReceptionPanel } from '../../components/events/EventReceptionPanel'
 import { ReceptionWorkspace } from '../../components/reception/ReceptionWorkspace'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
 import { useCanteenOrders } from '../../hooks/useCanteen'
@@ -8,24 +9,22 @@ export function AdminReceptionPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
   const { orders: canteenOrders } = useCanteenOrders()
   const now = useCurrentTime(1000)
+  const [mode, setMode] = useState<'normal' | 'event'>('normal')
 
   return (
     <>
-      <AdminModuleHeader
-        eyebrow="Operacion"
-        title="Recepcion administrativa"
-        description="Monitoreo de visitas activas, temporizadores y acciones de cobro/finalizacion."
-      />
-
       <ReceptionWorkspace
         canteenOrders={canteenOrders}
         canteenPath="/admin/cantina"
+        eventModeActive={mode === 'event'}
         error={error}
         isLoading={isLoading}
         now={now}
+        onEventMode={() => setMode((current) => (current === 'event' ? 'normal' : 'event'))}
         storageMode={storageMode}
         visits={visits}
       />
+      {mode === 'event' ? <EventReceptionPanel /> : null}
     </>
   )
 }

@@ -1,10 +1,11 @@
-import { Baby, ClipboardList, X } from 'lucide-react'
+import { Baby, CalendarHeart, ClipboardList, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { ActiveVisitsList } from './ActiveVisitsList'
 import { ReceptionSummaryCards } from './ReceptionSummaryCards'
 import { StorageModeNotice } from './StorageModeNotice'
 import { TodayVisitsSection } from './TodayVisitsSection'
 import { VisitForm } from './VisitForm'
+import { BrandLogo } from '../BrandLogo'
 import { StatusPill } from '../StatusPill'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 
@@ -16,6 +17,8 @@ interface ReceptionWorkspaceProps {
   now: Date
   storageMode: 'firestore' | 'local' | null
   visits: ActiveVisit[]
+  onEventMode?: () => void
+  eventModeActive?: boolean
 }
 
 export function ReceptionWorkspace({
@@ -26,12 +29,42 @@ export function ReceptionWorkspace({
   now,
   storageMode,
   visits,
+  eventModeActive = false,
+  onEventMode,
 }: ReceptionWorkspaceProps) {
   const [isVisitFormOpen, setIsVisitFormOpen] = useState(false)
 
   return (
     <>
-      <ReceptionSummaryCards now={now} visits={visits} />
+      <header className="reception-control-header">
+        <div className="reception-brand-heading">
+          <BrandLogo className="compact" />
+          <span className="reception-header-separator" />
+          <div>
+            <h1>Recepción</h1>
+            <p>Control de ingresos y salidas</p>
+          </div>
+        </div>
+        <div className="reception-header-actions">
+          {onEventMode ? (
+            <button
+              aria-pressed={eventModeActive}
+              className={`button secondary ${eventModeActive ? 'active' : ''}`}
+              onClick={onEventMode}
+              type="button"
+            >
+              <CalendarHeart size={17} />
+              Día de evento
+            </button>
+          ) : null}
+          <button className="button primary" onClick={() => setIsVisitFormOpen(true)} type="button">
+            <Plus size={18} />
+            Registrar ingreso
+          </button>
+        </div>
+      </header>
+
+      <ReceptionSummaryCards canteenOrders={canteenOrders} now={now} visits={visits} />
       <StorageModeNotice mode={storageMode} />
 
       <article className="panel admin-active-visits-panel">
@@ -41,14 +74,9 @@ export function ReceptionWorkspace({
               <Baby color="var(--green)" />
               Visitas activas
             </h2>
-            <p className="muted">Ninos dentro del parque, pagos, tiempos y consumo asociado.</p>
           </div>
           <div className="module-actions">
             <StatusPill tone="available">Tiempo real</StatusPill>
-            <button className="button primary" onClick={() => setIsVisitFormOpen(true)} type="button">
-              <ClipboardList size={18} />
-              Registrar ingreso
-            </button>
           </div>
         </div>
         <ActiveVisitsList
@@ -56,11 +84,12 @@ export function ReceptionWorkspace({
           canteenPath={canteenPath}
           error={error}
           isLoading={isLoading}
+          now={now}
           visits={visits}
         />
       </article>
 
-      <TodayVisitsSection />
+      <TodayVisitsSection canteenOrders={canteenOrders} />
 
       {isVisitFormOpen ? (
         <div className="modal-backdrop" role="presentation">
