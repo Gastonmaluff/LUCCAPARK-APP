@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:pages": "tsc -b && vite build --base=/LUCCAPARK-APP/",
+    "build:pages": "tsc -b && vite build --base=/LUCCAPARK-APP/ && node scripts/create-pages-fallback.mjs",
     "predeploy": "npm run build:pages",
     "deploy": "gh-pages -d dist",
     "lint": "eslint .",
