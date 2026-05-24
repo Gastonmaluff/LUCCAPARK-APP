@@ -29,7 +29,8 @@ import {
 } from '../../services/canteenService'
 import { getLocalDateKey } from '../../utils/date'
 import { formatGuarani } from '../../utils/money'
-import { formatVisitStartTime } from '../../utils/visitTime'
+import { getVisitBillingSummary } from '../../utils/visitBilling'
+import { formatVisitStartTime, getVisitTimeStatus } from '../../utils/visitTime'
 import { StatusPill } from '../StatusPill'
 import type { ActiveVisit, CanteenOrder, CanteenOrderItem, CanteenProduct, LuccaEvent, PaymentMethod } from '../../types'
 
@@ -53,6 +54,8 @@ const orderTypeLabel: Record<CanteenOrder['type'], string> = {
   free: 'Otro',
 }
 
+type AccountFilter = 'all' | 'visit' | 'event' | 'free' | 'toCharge'
+
 const itemFromProduct = (product: CanteenProduct): CanteenOrderItem => ({
   productId: product.id,
   productName: product.name,
@@ -74,41 +77,100 @@ const orderSubtitle = (order: CanteenOrder) => {
   return order.customerName || 'Cuenta manual'
 }
 
+const accountSubtitle = (order: CanteenOrder) => {
+  if (order.customerName) {
+    return `Responsable: ${order.customerName}`
+  }
+  if (order.type === 'visit') {
+    return 'Registro de recepcion'
+  }
+  if (order.type === 'event') {
+    return 'Evento activo'
+  }
+  return 'Cuenta manual'
+}
+
+const initialsFromName = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'LP'
+
+const typeClass: Record<CanteenOrder['type'], string> = {
+  visit: 'visit',
+  event: 'event',
+  free: 'free',
+}
+
 function AccountCard({
+  relatedOrders,
   onCharge,
   onOpen,
   order,
+  visit,
 }: {
   order: CanteenOrder
+  visit?: ActiveVisit | null
+  relatedOrders: CanteenOrder[]
   onOpen: () => void
   onCharge: () => void
 }) {
   const productsSummary = order.items.length
     ? order.items.slice(0, 3).map((item) => `${item.quantity} ${item.productName}`).join(' · ')
     : 'Sin productos cargados'
+  void productsSummary
+  const visibleName = order.accountName || order.childName || 'Cuenta sin nombre'
+  const chips = order.items.slice(0, 2).map((item) => `${item.quantity} ${item.productName}`)
+  const extraItems = Math.max(0, order.items.length - chips.length)
+  const visitBilling = visit ? getVisitBillingSummary(visit, relatedOrders) : null
+  const canteenPending = visitBilling ? visitBilling.pendingCanteenAmount : order.paymentStatus === 'paid' ? 0 : order.total
+  const parkPending = visitBilling ? visitBilling.pendingParkAmount : 0
+  const parkPaid = visit ? parkPending <= 0 : false
+  const totalToCharge = visitBilling ? visitBilling.totalPendingAmount : canteenPending
+  const timeStatus = visit ? getVisitTimeStatus(visit) : null
+  const alertLabel = timeStatus === 'expired' ? 'Tiempo vencido' : timeStatus === 'warning' ? 'Salida proxima' : ''
 
   return (
-    <article className="canteen-account-card">
+    <article className={`canteen-account-card ${typeClass[order.type]} ${alertLabel ? 'with-alert' : ''}`}>
       <div className="account-card-main">
-        <span className="account-avatar">{(order.accountName || order.childName || 'C').slice(0, 1).toUpperCase()}</span>
-        <div>
-          <strong>{order.accountName || order.childName || 'Cuenta sin nombre'}</strong>
-          <p>{orderSubtitle(order)}</p>
-          <small>{productsSummary}</small>
+        <span className="account-avatar">{initialsFromName(visibleName)}</span>
+        <div className="account-card-copy">
+          <strong>{visibleName}</strong>
+          <p>{accountSubtitle(order)}</p>
+          <div className="account-card-badges">
+            <StatusPill tone="available">Abierta</StatusPill>
+            <StatusPill tone="info">{orderTypeLabel[order.type]}</StatusPill>
+            {alertLabel ? <StatusPill tone={timeStatus === 'expired' ? 'danger' : 'warning'}>{alertLabel}</StatusPill> : null}
+          </div>
+          <div className="account-product-chips">
+            {chips.length === 0 ? <span>Sin productos</span> : chips.map((chip) => <span key={chip}>{chip}</span>)}
+            {extraItems > 0 ? <span>+{extraItems}</span> : null}
+          </div>
         </div>
       </div>
-      <div className="account-card-side">
-        <StatusPill tone={order.status === 'paid' ? 'available' : 'warning'}>{order.status === 'paid' ? 'Pagada' : 'Abierta'}</StatusPill>
-        <StatusPill tone="info">{orderTypeLabel[order.type]}</StatusPill>
-        <strong>{formatGuarani(order.total)}</strong>
+      <div className="account-card-balance">
+        <div>
+          <span>Cantina pendiente</span>
+          <strong>{formatGuarani(canteenPending)}</strong>
+        </div>
+        <div>
+          <span>Parque</span>
+          <strong className={parkPending > 0 ? 'pending' : 'paid'}>{parkPending > 0 ? `${formatGuarani(parkPending)} pendiente` : parkPaid ? 'Pagado' : formatGuarani(0)}</strong>
+        </div>
+        <div className="account-card-total">
+          <span>Total a cobrar</span>
+          <strong>{formatGuarani(totalToCharge)}</strong>
+        </div>
       </div>
-      <div className="module-actions">
+      <div className="account-card-actions">
         <button className="button ghost" onClick={onOpen} type="button">
-          Abrir detalle
+          Cargar productos
         </button>
         {order.status === 'open' ? (
           <button className="button primary" onClick={onCharge} type="button">
-            Cobrar
+            Cobrar total
           </button>
         ) : null}
       </div>
@@ -129,6 +191,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const [manualName, setManualName] = useState('Cliente mostrador')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [isClosedTodayOpen, setIsClosedTodayOpen] = useState(false)
+  const [accountFilter, setAccountFilter] = useState<AccountFilter>('all')
   const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''>>('cash')
   const [checkoutVisit, setCheckoutVisit] = useState<ActiveVisit | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -146,6 +209,36 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const costToday = paidToday.reduce((sum, order) => sum + (order.costTotal ?? 0), 0)
   const hasCostData = paidToday.some((order) => (order.costTotal ?? 0) > 0)
   const estimatedProfit = soldToday - costToday
+  const relatedOrdersForVisit = (visitId: string) => ordersResult.orders.filter((order) => order.visitId === visitId)
+  const visitForOrder = (order: CanteenOrder) =>
+    order.type === 'visit' && order.visitId ? visits.find((visit) => visit.id === order.visitId) ?? null : null
+  const orderPendingTotal = (order: CanteenOrder) => {
+    const visit = visitForOrder(order)
+    if (visit) {
+      return getVisitBillingSummary(visit, relatedOrdersForVisit(visit.id)).totalPendingAmount
+    }
+    return order.paymentStatus === 'paid' ? 0 : order.total
+  }
+  const openOrdersForView = openOrders
+    .filter((order) => {
+      if (accountFilter === 'all') return true
+      if (accountFilter === 'toCharge') return orderPendingTotal(order) > 0
+      return order.type === accountFilter
+    })
+    .sort((a, b) => {
+      const aVisit = visitForOrder(a)
+      const bVisit = visitForOrder(b)
+      const priority = (order: CanteenOrder, visit: ActiveVisit | null) => {
+        const status = visit ? getVisitTimeStatus(visit) : null
+        if (status === 'expired') return 0
+        if (status === 'warning') return 1
+        if (visit && getVisitBillingSummary(visit, relatedOrdersForVisit(visit.id)).pendingParkAmount > 0 && order.total > 0) return 2
+        if (order.type === 'event') return 3
+        if (order.type === 'visit') return 4
+        return 5
+      }
+      return priority(a, aVisit) - priority(b, bVisit) || orderPendingTotal(b) - orderPendingTotal(a)
+    })
 
   const chargeOrder = async (order: CanteenOrder) => {
     if (order.type === 'visit' && order.visitId) {
@@ -323,11 +416,14 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const content = (
     <div className="canteen-operations">
       <header className="canteen-hero">
-        {standalone ? <BrandLogo className="compact" /> : null}
-        <div>
-          <span className="eyebrow">Operativo</span>
-          <h1>Cantina</h1>
-          <p>Cuentas abiertas, productos rapidos y cobro simple.</p>
+        <div className="canteen-hero-brand">
+          <BrandLogo className="compact" />
+          <span className="canteen-hero-separator" />
+          <div>
+            <span className="eyebrow">Operativo</span>
+            <h1>Cantina</h1>
+            <p>Cuentas abiertas y cobro rapido.</p>
+          </div>
         </div>
         <button className="button primary canteen-open-button" onClick={() => setIsAccountPickerOpen(true)} type="button">
           <Plus size={18} />
@@ -367,7 +463,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               <h2>{selectedOrder.accountName}</h2>
               <p>{orderSubtitle(selectedOrder)}</p>
             </div>
-            <strong>{formatGuarani(selectedOrder.total)}</strong>
+            <strong>{formatGuarani(selectedOrderVisit ? getVisitBillingSummary(selectedOrderVisit, relatedOrdersForVisit(selectedOrderVisit.id)).totalPendingAmount : selectedOrder.total)}</strong>
           </div>
 
           <div className="quick-product-grid">
@@ -411,7 +507,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
           </div>
 
           <div className="account-paybar">
-            <strong>Total {formatGuarani(selectedOrder.total)}</strong>
+            <strong>Total a cobrar {formatGuarani(selectedOrderVisit ? getVisitBillingSummary(selectedOrderVisit, relatedOrdersForVisit(selectedOrderVisit.id)).totalPendingAmount : selectedOrder.total)}</strong>
             <select onChange={(event) => setPaymentMethod(event.target.value as Exclude<PaymentMethod, ''>)} value={paymentMethod}>
               {paymentMethods.map((method) => (
                 <option key={method} value={method}>
@@ -424,7 +520,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
             </button>
             <button className="button primary" disabled={isSaving || (selectedOrder.total <= 0 && !selectedOrderVisit)} onClick={() => chargeOrder(selectedOrder)} type="button">
               <CreditCard size={18} />
-              Cobrar ahora
+              Cobrar total
             </button>
             <button className="button danger" disabled={isSaving} onClick={() => cancelOrder(selectedOrder)} type="button">
               Cancelar cuenta
@@ -441,14 +537,34 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               </h2>
               <StatusPill tone={openOrders.length > 0 ? 'warning' : 'available'}>{openOrders.length} abiertas</StatusPill>
             </div>
+            <div className="canteen-filter-tabs" role="group" aria-label="Filtrar cuentas abiertas">
+              {([
+                ['all', 'Todas'],
+                ['visit', 'Visitas'],
+                ['event', 'Eventos'],
+                ['free', 'Otros'],
+                ['toCharge', 'Por cobrar'],
+              ] as Array<[AccountFilter, string]>).map(([filter, label]) => (
+                <button className={accountFilter === filter ? 'active' : ''} key={filter} onClick={() => setAccountFilter(filter)} type="button">
+                  {label}
+                </button>
+              ))}
+            </div>
             {ordersResult.isLoading ? <div className="empty-state">Cargando cuentas...</div> : null}
             {ordersResult.error ? <div className="form-alert error">No se pudieron cargar cuentas: {ordersResult.error}</div> : null}
-            {!ordersResult.isLoading && !ordersResult.error && openOrders.length === 0 ? (
+            {!ordersResult.isLoading && !ordersResult.error && openOrdersForView.length === 0 ? (
               <div className="empty-state">No hay cuentas abiertas en este momento.</div>
             ) : null}
             <div className="canteen-account-grid">
-              {openOrders.map((order) => (
-                <AccountCard key={order.id} order={order} onCharge={() => chargeOrder(order)} onOpen={() => setSelectedOrderId(order.id)} />
+              {openOrdersForView.map((order) => (
+                <AccountCard
+                  key={order.id}
+                  order={order}
+                  relatedOrders={order.visitId ? relatedOrdersForVisit(order.visitId) : [order]}
+                  visit={visitForOrder(order)}
+                  onCharge={() => chargeOrder(order)}
+                  onOpen={() => setSelectedOrderId(order.id)}
+                />
               ))}
             </div>
           </section>

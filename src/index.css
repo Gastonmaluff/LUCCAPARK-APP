@@ -2893,6 +2893,23 @@ img {
   padding: 18px;
 }
 
+.canteen-hero-brand {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  min-width: 0;
+}
+
+.canteen-hero-brand .brand-logo.compact img {
+  height: 78px;
+}
+
+.canteen-hero-separator {
+  background: #d8dee8;
+  height: 72px;
+  width: 1px;
+}
+
 .canteen-hero h1 {
   font-size: clamp(2rem, 4vw, 3.2rem);
   line-height: 1;
@@ -2935,11 +2952,35 @@ img {
 .canteen-account-grid,
 .picker-grid {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.canteen-account-card,
+.canteen-account-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--turquoise);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(210px, 0.85fr);
+  padding: 18px;
+  text-align: left;
+}
+
+.canteen-account-card.event {
+  border-left-color: #a855f7;
+}
+
+.canteen-account-card.free {
+  border-left-color: #64748b;
+}
+
+.canteen-account-card.with-alert {
+  box-shadow: 0 14px 34px rgba(255, 90, 19, 0.08);
+}
+
 .picker-card {
   background: #fff;
   border: 1px solid var(--line);
@@ -2951,24 +2992,34 @@ img {
 }
 
 .account-card-main {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 
 .account-avatar {
   align-items: center;
-  background: rgba(255, 90, 19, 0.12);
+  background: rgba(8, 169, 181, 0.14);
   border-radius: 999px;
-  color: var(--orange);
+  color: var(--turquoise);
   display: inline-flex;
-  flex: 0 0 46px;
-  font-size: 1.2rem;
+  flex: 0 0 56px;
+  font-size: 1.1rem;
   font-weight: 950;
-  height: 46px;
+  height: 56px;
   justify-content: center;
-  width: 46px;
+  width: 56px;
+}
+
+.canteen-account-card.event .account-avatar {
+  background: rgba(168, 85, 247, 0.13);
+  color: #7e22ce;
+}
+
+.canteen-account-card.free .account-avatar {
+  background: rgba(100, 116, 139, 0.13);
+  color: #475569;
 }
 
 .account-card-main strong,
@@ -2988,17 +3039,105 @@ img {
   margin: 2px 0 0;
 }
 
-.account-card-side {
-  align-items: center;
+.account-card-copy {
+  min-width: 0;
+}
+
+.account-card-badges,
+.account-product-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.account-product-chips span {
+  background: #f4f7fb;
+  border: 1px solid #e8eef6;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 6px 9px;
+}
+
+.account-card-balance {
+  border-left: 1px solid var(--line);
+  display: grid;
+  gap: 9px;
+  padding-left: 18px;
+}
+
+.account-card-balance div {
+  align-items: center;
+  display: flex;
+  gap: 12px;
   justify-content: space-between;
 }
 
-.account-card-side strong {
+.account-card-balance span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.account-card-balance strong {
   color: var(--ink);
-  font-size: 1.5rem;
+  font-size: 0.92rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.account-card-balance strong.pending {
+  color: var(--orange-dark);
+}
+
+.account-card-balance strong.paid {
+  color: var(--green-dark);
+}
+
+.account-card-total {
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 10px;
+}
+
+.account-card-total strong {
+  color: var(--orange);
+  font-size: 1.45rem;
+}
+
+.account-card-actions {
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr 1fr;
+}
+
+.account-card-actions .button {
+  min-height: 46px;
+}
+
+.canteen-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.canteen-filter-tabs button {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #64748b;
+  font-weight: 850;
+  min-height: 36px;
+  padding: 0 13px;
+}
+
+.canteen-filter-tabs button.active {
+  background: rgba(8, 169, 181, 0.12);
+  border-color: rgba(8, 169, 181, 0.32);
+  color: var(--turquoise);
 }
 
 .canteen-detail-panel {
@@ -3498,8 +3637,16 @@ img {
   }
 
   .checkout-payment-grid,
+  .canteen-account-card,
   .consumption-consolidated {
     grid-template-columns: 1fr;
+  }
+
+  .account-card-balance {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-left: 0;
+    padding-top: 14px;
   }
 
   .hero-media,
