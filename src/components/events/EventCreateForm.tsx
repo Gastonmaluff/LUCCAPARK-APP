@@ -3,7 +3,8 @@ import { CalendarPlus } from 'lucide-react'
 import { createEvent } from '../../services/eventService'
 import { getTodayDateKey } from '../../utils/eventCapacity'
 import { formatGuarani, toNumber } from '../../utils/money'
-import type { CreateEventInput, EventStatus, EventType, LuccaEvent } from '../../types'
+import { formatEventTitle, formatParaguayanPhone, formatPersonName } from '../../utils/textFormat'
+import type { CreateEventInput, EventType, LuccaEvent } from '../../types'
 
 interface EventCreateFormProps {
   events?: LuccaEvent[]
@@ -98,16 +99,19 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
     }
 
     if (conflictingEvents.length > 0 && !allowOverlap) {
-      setError('Ya existe una reserva para este horario. Revisa el evento existente antes de confirmar una nueva reserva.')
+      setError('Ya existe una reserva para este horario. Revisa el evento existente antes de guardar una nueva reserva.')
       return
     }
 
     setIsSaving(true)
     try {
+      const normalizedTitle = formatEventTitle(form.title.trim())
+      const normalizedBirthdayChildName = formatPersonName(form.birthdayChildName.trim())
       const eventId = await createEvent({
         ...form,
-        title: form.title.trim() || `Cumpleaños de ${form.birthdayChildName.trim()}`,
-        birthdayChildName: form.birthdayChildName.trim() || form.title.trim(),
+        title: normalizedTitle || `Cumpleanos de ${normalizedBirthdayChildName}`,
+        birthdayChildName: normalizedBirthdayChildName || normalizedTitle,
+        customerName: formatPersonName(form.customerName),
         contractedChildrenCount: Number(form.contractedChildrenCount || 1),
         totalAmount: form.totalAmount ?? null,
         depositAmount: form.depositAmount ?? null,
@@ -139,7 +143,12 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
 
       <label className="field">
         <span>Nombre del evento o cumpleañero *</span>
-        <input onChange={(event) => updateField('title', event.target.value)} placeholder="Cumpleaños de Mateo" value={form.title} />
+        <input
+          onBlur={() => updateField('title', formatEventTitle(form.title))}
+          onChange={(event) => updateField('title', event.target.value)}
+          placeholder="Cumpleanos de Mateo"
+          value={form.title}
+        />
       </label>
 
       <div className="form-inline">
@@ -165,11 +174,19 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
       <div className="form-inline">
         <label className="field">
           <span>Cliente / responsable *</span>
-          <input onChange={(event) => updateField('customerName', event.target.value)} value={form.customerName} />
+          <input
+            onBlur={() => updateField('customerName', formatPersonName(form.customerName))}
+            onChange={(event) => updateField('customerName', event.target.value)}
+            value={form.customerName}
+          />
         </label>
         <label className="field">
           <span>Teléfono</span>
-          <input onChange={(event) => updateField('customerPhone', event.target.value)} value={form.customerPhone} />
+          <input
+            inputMode="numeric"
+            onChange={(event) => updateField('customerPhone', formatParaguayanPhone(event.target.value))}
+            value={form.customerPhone}
+          />
         </label>
       </div>
 
@@ -177,14 +194,6 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
         <label className="field">
           <span>Fecha *</span>
           <input onChange={(event) => updateField('date', event.target.value)} type="date" value={form.date} />
-        </label>
-        <label className="field">
-          <span>Estado inicial</span>
-          <select onChange={(event) => updateField('status', event.target.value as EventStatus)} value={form.status}>
-            <option value="inquiry">Consulta</option>
-            <option value="reserved">Reservado</option>
-            <option value="confirmed">Confirmado</option>
-          </select>
         </label>
       </div>
 

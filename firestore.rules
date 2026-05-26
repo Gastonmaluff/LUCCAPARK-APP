@@ -6,44 +6,180 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isBootstrapOwner() {
+      return signedIn() && request.auth.uid == 'SXaYNYcKFXP8FZDCk3DP38EyP903';
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return hasProfile() ? userDoc().data.role : '';
+    }
+
+    function isActiveUser() {
+      return hasProfile() && userDoc().data.isActive != false;
+    }
+
+    function isAdmin() {
+      return isBootstrapOwner()
+        || (isActiveUser() && role() in ['admin', 'owner', 'dueno', 'dueño']);
+    }
+
+    function isPartner() {
+      return isActiveUser() && role() in ['socio', 'partner'];
+    }
+
+    function isEventManager() {
+      return isActiveUser() && role() in ['encargado_eventos', 'event_manager'];
+    }
+
+    function isReception() {
+      return isActiveUser() && role() in ['recepcion', 'reception'];
+    }
+
+    function isCanteen() {
+      return isActiveUser() && role() in ['cantina', 'canteen'];
+    }
+
+    function canViewFinance() {
+      return isAdmin() || isPartner();
+    }
+
+    function canRegisterExpense() {
+      return isAdmin() || isPartner() || isEventManager();
+    }
+
+    function canManageTasks() {
+      return isAdmin() || isPartner();
+    }
+
+    function canOperatePayments() {
+      return isAdmin() || isPartner() || isReception() || isCanteen();
+    }
+
+    function canOperateBase() {
+      return signedIn();
+    }
+
+    function isAssignedTask() {
+      return signedIn()
+        && (
+          resource.data.assignedTo == request.auth.uid
+          || resource.data.assignedTo == request.auth.token.email
+        );
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /customers/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /children/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /activeVisits/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /visits/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /events/{document=**} {
-      allow read, write: if signedIn();
+      allow read: if canOperateBase();
+      allow write: if canOperateBase();
     }
 
     match /eventGuests/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /canteenProducts/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /canteenOrders/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canOperateBase();
     }
 
     match /dailyClosings/{document=**} {
-      allow read, write: if signedIn();
+      allow read, write: if canViewFinance();
     }
 
-    match /payments/{document=**} {
-      allow read, write: if signedIn();
+    match /payments/{paymentId} {
+      allow read: if canViewFinance();
+      allow create: if canOperatePayments();
+      allow update, delete: if false;
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if canViewFinance()
+        || (signedIn() && resource.data.createdBy == request.auth.uid);
+      allow create: if canRegisterExpense();
+      allow update: if isAdmin()
+        || isPartner()
+        || (signedIn()
+          && resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdBy == resource.data.createdBy);
+      allow delete: if false;
+    }
+
+    match /financialClosures/{closureId} {
+      allow read, create: if canViewFinance();
+      allow update, delete: if false;
+    }
+
+    match /tasks/{taskId} {
+      allow read: if canManageTasks()
+        || isAssignedTask();
+      allow create: if canManageTasks();
+      allow update: if canManageTasks()
+        || (
+          isAssignedTask()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'completedAt',
+            'completedBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+        );
+      allow delete: if false;
+    }
+
+    match /settings/{document=**} {
+      allow read: if canOperateBase();
+      allow write: if isAdmin() || isPartner();
+    }
+
+    match /landingContent/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin() || isPartner();
+    }
+
+    match /eventBudgets/{document=**} {
+      allow read, write: if canOperateBase();
+    }
+
+    match /tvDisplaySettings/{document=**} {
+      allow read: if canOperateBase();
+      allow write: if isAdmin() || isPartner() || isEventManager();
+    }
+
+    match /canteenInventoryMovements/{document=**} {
+      allow read, write: if canOperateBase();
     }
 
     match /{document=**} {

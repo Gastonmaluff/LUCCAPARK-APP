@@ -42,4 +42,7 @@ export type FirebaseCollectionName =
   | 'canteenInventoryMovements'
   | 'dailyClosings'
   | 'payments'
+  | 'expenses'
+  | 'financialClosures'
+  | 'tasks'
   | 'settings'

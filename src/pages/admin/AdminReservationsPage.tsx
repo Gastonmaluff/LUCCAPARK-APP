@@ -1,24 +1,39 @@
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Filter, Search, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, History, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { EventCreateForm } from '../../components/events/EventCreateForm'
+import { EventDayCallout } from '../../components/events/EventDayCallout'
 import { EventDetailPanel } from '../../components/events/EventDetailPanel'
+import { EventPaymentModal } from '../../components/events/EventPaymentModal'
 import { EventStatusBadge } from '../../components/events/EventStatusBadge'
+import { EventTvImageModal } from '../../components/events/EventTvImageModal'
 import { StatusPill } from '../../components/StatusPill'
 import { useCanteenOrders } from '../../hooks/useCanteen'
-import { useEvents } from '../../hooks/useEvents'
-import { formatEventTimeRange, getEventCapacityStats, getTodayDateKey } from '../../utils/eventCapacity'
+import { useEventDayContext } from '../../hooks/useEventDayContext'
+import { useEventGuests } from '../../hooks/useEvents'
+import {
+  canStartEvent,
+  formatEventTimeRange,
+  getEventCapacityStats,
+  getTodayDateKey,
+  isEventBlockingCalendar,
+  isUpcomingEventStatus,
+} from '../../utils/eventCapacity'
 import { formatGuarani } from '../../utils/money'
-import type { EventStatus, LuccaEvent } from '../../types'
+import { updateEventStatus } from '../../services/eventService'
+import type { LuccaEvent } from '../../types'
 
-const statusFilters: Array<{ label: string; value: 'upcoming' | EventStatus | 'all' }> = [
+type HistoryFilter = 'all' | 'finished' | 'cancelled'
+
+const unusedStatusFilters = [
   { label: 'Próximas', value: 'upcoming' },
-  { label: 'Confirmadas', value: 'confirmed' },
   { label: 'En curso', value: 'active' },
   { label: 'Finalizadas', value: 'finished' },
   { label: 'Canceladas', value: 'cancelled' },
   { label: 'Todas', value: 'all' },
 ]
+void unusedStatusFilters
 
 const weekdayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -60,22 +75,42 @@ const buildCalendarDays = (monthDate: Date) => {
 const eventSortKey = (event: LuccaEvent) => `${event.date} ${event.startTime}`
 
 const isUpcomingEvent = (event: LuccaEvent, todayKey: string) =>
-  ['inquiry', 'reserved', 'confirmed', 'active'].includes(event.status) && event.date >= todayKey
+  isUpcomingEventStatus(event.status) && event.date >= todayKey
 
 export function AdminReservationsPage() {
-  const { error, events, isLoading } = useEvents()
+  const { activeEvent, error, events, isLoading, mode, todayUpcomingEvent } = useEventDayContext()
   const { orders: canteenOrders } = useCanteenOrders()
+  const [searchParams] = useSearchParams()
   const todayKey = getTodayDateKey()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [createDate, setCreateDate] = useState(todayKey)
-  const [selectedEvent, setSelectedEvent] = useState<LuccaEvent | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [updatingEventId, setUpdatingEventId] = useState<string | null>(null)
   const [selectedDayKey, setSelectedDayKey] = useState(todayKey)
+  const [eventActionError, setEventActionError] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
+  const [tvEvent, setTvEvent] = useState<LuccaEvent | null>(null)
+  const [paymentEvent, setPaymentEvent] = useState<LuccaEvent | null>(null)
   const [monthDate, setMonthDate] = useState(() => {
     const [year, month] = todayKey.split('-').map(Number)
     return new Date(year, month - 1, 1)
   })
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<(typeof statusFilters)[number]['value']>('upcoming')
+  const featuredEvent = activeEvent ?? todayUpcomingEvent
+  const { guests: featuredGuests } = useEventGuests(featuredEvent?.id)
+  const featuredCanteenTotal = featuredEvent
+    ? canteenOrders
+        .filter((order) => order.eventId === featuredEvent.id && order.status !== 'cancelled')
+        .reduce((sum, order) => sum + order.total, 0)
+    : 0
+
+  useEffect(() => {
+    const eventId = searchParams.get('eventId')
+    if (eventId && events.some((event) => event.id === eventId)) {
+      setSelectedEventId(eventId)
+    }
+  }, [events, searchParams])
 
   const sortedEvents = useMemo(
     () =>
@@ -89,8 +124,9 @@ export function AdminReservationsPage() {
       }),
     [events, todayKey],
   )
+  const selectedEvent = selectedEventId ? events.find((event) => event.id === selectedEventId) ?? null : null
 
-  const filteredEvents = useMemo(
+  const upcomingReservations = useMemo(
     () =>
       sortedEvents.filter((event) => {
         const normalizedQuery = query.trim().toLowerCase()
@@ -99,13 +135,27 @@ export function AdminReservationsPage() {
           event.title.toLowerCase().includes(normalizedQuery) ||
           event.customerName.toLowerCase().includes(normalizedQuery) ||
           event.birthdayChildName.toLowerCase().includes(normalizedQuery)
-        const matchesFilter =
-          filter === 'all' ||
-          (filter === 'upcoming' && isUpcomingEvent(event, todayKey)) ||
-          event.status === filter
-        return matchesQuery && matchesFilter
+        return matchesQuery && isUpcomingEvent(event, todayKey) && event.id !== featuredEvent?.id
       }),
-    [filter, query, sortedEvents, todayKey],
+    [featuredEvent?.id, query, sortedEvents, todayKey],
+  )
+
+  const historyEvents = useMemo(
+    () =>
+      sortedEvents.filter((event) => {
+        const normalizedQuery = query.trim().toLowerCase()
+        const matchesQuery =
+          !normalizedQuery ||
+          event.title.toLowerCase().includes(normalizedQuery) ||
+          event.customerName.toLowerCase().includes(normalizedQuery) ||
+          event.birthdayChildName.toLowerCase().includes(normalizedQuery)
+        return (
+          matchesQuery &&
+          (event.status === 'finished' || event.status === 'cancelled') &&
+          (historyFilter === 'all' || event.status === historyFilter)
+        )
+      }),
+    [historyFilter, query, sortedEvents],
   )
 
   const calendarDays = useMemo(() => buildCalendarDays(monthDate), [monthDate])
@@ -126,6 +176,35 @@ export function AdminReservationsPage() {
     setSelectedDayKey(todayKey)
   }
 
+  const startEvent = async (event: LuccaEvent) => {
+    setUpdatingEventId(event.id)
+    setEventActionError(null)
+    try {
+      await updateEventStatus(event.id, 'active')
+      setSelectedEventId(event.id)
+    } catch (error) {
+      setEventActionError(error instanceof Error ? error.message : 'No se pudo empezar el evento.')
+    } finally {
+      setUpdatingEventId(null)
+    }
+  }
+
+  const finishEvent = async (event: LuccaEvent) => {
+    if (!window.confirm(`Finalizar el evento ${event.title}?`)) {
+      return
+    }
+
+    setUpdatingEventId(event.id)
+    setEventActionError(null)
+    try {
+      await updateEventStatus(event.id, 'finished')
+    } catch (error) {
+      setEventActionError(error instanceof Error ? error.message : 'No se pudo finalizar el evento.')
+    } finally {
+      setUpdatingEventId(null)
+    }
+  }
+
   return (
     <>
       <AdminModuleHeader
@@ -142,12 +221,34 @@ export function AdminReservationsPage() {
 
       <div className="reservations-stack">
         <article className="panel reservations-list-panel">
+          {eventActionError ? <div className="form-alert error">{eventActionError}</div> : null}
+          {featuredEvent ? (
+            <EventDayCallout
+              canteenTotal={featuredCanteenTotal}
+              detailTo={`/admin/reservas?eventId=${featuredEvent.id}`}
+              event={featuredEvent}
+              guestCount={featuredGuests.length || featuredEvent.registeredGuestsCount}
+              isBusy={updatingEventId === featuredEvent.id}
+              onFinish={mode === 'active' ? () => finishEvent(featuredEvent) : undefined}
+              onStart={mode === 'today' ? () => startEvent(featuredEvent) : undefined}
+              onConfigureTv={() => setTvEvent(featuredEvent)}
+              operationTo="/admin/recepcion"
+              variant={activeEvent ? 'active' : 'today'}
+            />
+          ) : null}
+
           <div className="panel-header">
             <h2 className="panel-title">
-              <Filter color="var(--turquoise)" />
-              Reservas y eventos
+              <CalendarDays color="var(--turquoise)" />
+              Proximas reservas
             </h2>
-            <StatusPill tone="info">{filteredEvents.length} visibles</StatusPill>
+            <div className="module-actions">
+              <StatusPill tone="info">{upcomingReservations.length} proximas</StatusPill>
+              <button className="button ghost" onClick={() => setShowHistory(true)} type="button">
+                <History size={17} />
+                Ver historial
+              </button>
+            </div>
           </div>
 
           <div className="reservations-toolbar">
@@ -157,21 +258,14 @@ export function AdminReservationsPage() {
               </span>
               <input onChange={(event) => setQuery(event.target.value)} placeholder="Evento, cumpleañero o cliente..." value={query} />
             </label>
-            <div className="reservation-filter-row">
-              {statusFilters.map((item) => (
-                <button className={filter === item.value ? 'active' : ''} key={item.value} onClick={() => setFilter(item.value)} type="button">
-                  {item.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {isLoading ? <div className="empty-state">Cargando reservas...</div> : null}
           {error ? <div className="form-alert error">No se pudieron cargar eventos: {error}</div> : null}
-          {!isLoading && !error && filteredEvents.length === 0 ? <div className="empty-state">No hay reservas para mostrar.</div> : null}
+          {!isLoading && !error && upcomingReservations.length === 0 ? <div className="empty-state">No hay proximas reservas para mostrar.</div> : null}
 
           <div className="reservation-list">
-            {filteredEvents.map((event) => {
+            {upcomingReservations.map((event) => {
               const stats = getEventCapacityStats(event)
               const eventCanteenTotal = canteenOrders
                 .filter((order) => order.eventId === event.id && order.status !== 'cancelled')
@@ -196,14 +290,24 @@ export function AdminReservationsPage() {
                       Seña {formatGuarani(event.depositAmount ?? 0)} · Saldo {formatGuarani(event.pendingAmount ?? 0)}
                     </small>
                   </div>
+                  <div className="reservation-financial-strip">
+                    <span>Cobrado <strong>{formatGuarani(event.eventPaidAmount ?? 0)}</strong></span>
+                    <span>Saldo <strong>{formatGuarani(event.pendingAmount ?? Math.max(0, (event.totalAmount ?? 0) - (event.eventPaidAmount ?? 0)))}</strong></span>
+                    <StatusPill tone={(event.pendingAmount ?? 0) <= 0 && (event.totalAmount ?? 0) > 0 ? 'available' : (event.eventPaidAmount ?? 0) > 0 ? 'warning' : 'info'}>
+                      {(event.pendingAmount ?? 0) <= 0 && (event.totalAmount ?? 0) > 0 ? 'Pagado completo' : (event.eventPaidAmount ?? 0) > 0 ? 'Saldo pendiente' : 'Sin pagos'}
+                    </StatusPill>
+                  </div>
                   <EventStatusBadge status={event.status} />
                   <div className="module-actions">
-                    <button className="button ghost" onClick={() => setSelectedEvent(event)} type="button">
+                    <button className="button ghost" onClick={() => setPaymentEvent(event)} type="button">
+                      Registrar cobro
+                    </button>
+                    <button className="button ghost" onClick={() => setSelectedEventId(event.id)} type="button">
                       Ver detalle
                     </button>
-                    {event.status === 'reserved' || event.status === 'confirmed' ? (
-                      <button className="button secondary" onClick={() => setSelectedEvent(event)} type="button">
-                        Activar evento
+                    {canStartEvent(event) ? (
+                      <button className="button secondary" disabled={updatingEventId === event.id} onClick={() => startEvent(event)} type="button">
+                        Empezar evento
                       </button>
                     ) : null}
                   </div>
@@ -241,7 +345,7 @@ export function AdminReservationsPage() {
             ))}
             {calendarDays.map((day) => {
               const dayEvents = sortedEvents.filter((event) => event.date === day.dateKey)
-              const primaryEvent = dayEvents[0]
+              const primaryEvent = dayEvents.find(isEventBlockingCalendar)
               const isToday = day.dateKey === todayKey
               const isPast = day.dateKey < todayKey
               const statusClass = primaryEvent ? `occupied ${primaryEvent.status}` : isPast ? 'past' : 'available'
@@ -296,7 +400,7 @@ export function AdminReservationsPage() {
                       </p>
                     </div>
                     <EventStatusBadge status={event.status} />
-                    <button className="button ghost" onClick={() => setSelectedEvent(event)} type="button">
+                    <button className="button ghost" onClick={() => setSelectedEventId(event.id)} type="button">
                       Ver detalle completo
                     </button>
                   </article>
@@ -326,12 +430,66 @@ export function AdminReservationsPage() {
               onCancel={() => setShowCreateForm(false)}
               onCreated={(eventId) => {
                 setShowCreateForm(false)
-                const created = events.find((event) => event.id === eventId)
-                if (created) {
-                  setSelectedEvent(created)
-                }
+                setSelectedEventId(eventId)
               }}
             />
+          </section>
+        </div>
+      ) : null}
+
+      {showHistory ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card reservation-detail-modal" role="dialog" aria-modal="true">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Historial</p>
+                <h2>Historial de eventos</h2>
+              </div>
+              <button className="button ghost" onClick={() => setShowHistory(false)} type="button" aria-label="Cerrar historial">
+                <X size={18} />
+                Cerrar
+              </button>
+            </div>
+            <div className="reservation-filter-row secondary">
+              {([
+                ['all', 'Todos'],
+                ['finished', 'Finalizados'],
+                ['cancelled', 'Cancelados'],
+              ] as Array<[HistoryFilter, string]>).map(([value, label]) => (
+                <button className={historyFilter === value ? 'active' : ''} key={value} onClick={() => setHistoryFilter(value)} type="button">
+                  {label}
+                </button>
+              ))}
+            </div>
+            {historyEvents.length === 0 ? <div className="empty-state">No hay eventos en historial para mostrar.</div> : null}
+            <div className="reservation-list">
+              {historyEvents.map((event) => {
+                const stats = getEventCapacityStats(event)
+                return (
+                  <article className={`reservation-row status-${event.status}`} key={event.id}>
+                    <div className="reservation-main">
+                      <strong>{event.title}</strong>
+                      <p>
+                        {event.customerName} · {formatDate(event.date)} · {formatEventTimeRange(event)}
+                      </p>
+                      <small>
+                        Cupo: {stats.contractedChildrenCount} ninos · Ingresaron: {stats.registeredGuestsCount}
+                      </small>
+                    </div>
+                    <div className="reservation-money">
+                      <span>Total</span>
+                      <strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong>
+                    </div>
+                    <EventStatusBadge status={event.status} />
+                    <div className="module-actions">
+                      <button className="button ghost" onClick={() => setSelectedEventId(event.id)} type="button">
+                        Ver detalle
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
           </section>
         </div>
       ) : null}
@@ -344,7 +502,7 @@ export function AdminReservationsPage() {
                 <p className="eyebrow">Detalle de reserva</p>
                 <h2>{selectedEvent.title}</h2>
               </div>
-              <button className="button ghost" onClick={() => setSelectedEvent(null)} type="button" aria-label="Cerrar detalle">
+              <button className="button ghost" onClick={() => setSelectedEventId(null)} type="button" aria-label="Cerrar detalle">
                 <X size={18} />
                 Cerrar
               </button>
@@ -353,6 +511,9 @@ export function AdminReservationsPage() {
           </section>
         </div>
       ) : null}
+
+      {tvEvent ? <EventTvImageModal event={tvEvent} onClose={() => setTvEvent(null)} /> : null}
+      {paymentEvent ? <EventPaymentModal event={paymentEvent} onClose={() => setPaymentEvent(null)} /> : null}
     </>
   )
 }

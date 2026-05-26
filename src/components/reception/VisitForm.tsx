@@ -2,7 +2,10 @@ import { Plus } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { timePlans } from '../../config/timePlans'
 import { createNormalVisit } from '../../services/visitService'
+import { calculateAgeYears, formatAgeLabel, formatBirthDateInput, parseBirthDateDisplay } from '../../utils/birthDate'
 import { formatGuarani } from '../../utils/money'
+import { formatParaguayanPhone, formatPersonName, phoneDigits } from '../../utils/textFormat'
+import { PaymentMethodSelector } from '../payments/PaymentMethodSelector'
 import type { CreateVisitInput, PaymentMethod, PaymentStatus, TimePlan } from '../../types'
 
 const formatTimeValue = (date: Date) =>
@@ -15,59 +18,13 @@ const parseTodayTime = (time: string) => {
   return date
 }
 
-const toTitleName = (value: string) => {
-  const lowercaseWords = new Set(['de', 'del', 'la', 'las', 'los', 'y'])
-  return value
-    .trim()
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .map((word, index) => {
-      const lower = word.toLocaleLowerCase('es-PY')
-      if (index > 0 && lowercaseWords.has(lower)) {
-        return lower
-      }
-      return lower.charAt(0).toLocaleUpperCase('es-PY') + lower.slice(1)
-    })
-    .join(' ')
-}
-
-const phoneDigits = (value: string) => value.replace(/\D/g, '').slice(0, 10)
-
-const formatPyPhone = (value: string) => {
-  const digits = phoneDigits(value)
-  const first = digits.slice(0, 4)
-  const second = digits.slice(4, 7)
-  const third = digits.slice(7, 10)
-  return [first, second, third].filter(Boolean).join(' ')
-}
-
-const calculateAge = (birthDate: string) => {
-  if (!birthDate) {
-    return null
-  }
-
-  const birth = new Date(`${birthDate}T00:00:00`)
-  if (Number.isNaN(birth.getTime())) {
-    return null
-  }
-
-  const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
-  const hasNotHadBirthday =
-    today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
-  if (hasNotHadBirthday) {
-    age -= 1
-  }
-  return Math.max(0, age)
-}
-
 const getPlanPrice = (planId: TimePlan['id']) => timePlans.find((plan) => plan.id === planId)?.defaultPrice ?? null
 
 const initialForm = () => {
   const defaultPlan = 'one-hour' as TimePlan['id']
   return {
     childName: '',
-    childBirthDate: '',
+    childBirthDateInput: '',
     childExactAge: '',
     childGender: '',
     childNotes: '',
@@ -97,12 +54,17 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [pendingPaidEntry, setPendingPaidEntry] = useState<CreateVisitInput | null>(null)
+  const [entryPaymentMethod, setEntryPaymentMethod] = useState<Exclude<PaymentMethod, ''> | ''>('')
+  const [entryCardType, setEntryCardType] = useState<'debit' | 'credit' | ''>('')
 
   const selectedPlan = useMemo(
     () => timePlans.find((plan) => plan.id === form.planId) ?? timePlans[0],
     [form.planId],
   )
-  const calculatedAge = useMemo(() => calculateAge(form.childBirthDate), [form.childBirthDate])
+  const birthDateResult = useMemo(() => parseBirthDateDisplay(form.childBirthDateInput), [form.childBirthDateInput])
+  const calculatedAge = useMemo(() => calculateAgeYears(birthDateResult.iso), [birthDateResult.iso])
+  const ageLabel = formatAgeLabel(calculatedAge)
   const defaultAmount = selectedPlan.defaultPrice ?? null
 
   const setField = (field: keyof ReturnType<typeof initialForm>, value: string | boolean) => {
@@ -119,7 +81,16 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
   }
 
   const normalizeNameField = (field: 'childName' | 'customerName') => {
-    setForm((current) => ({ ...current, [field]: toTitleName(current[field]) }))
+    setForm((current) => ({ ...current, [field]: formatPersonName(current[field]) }))
+  }
+
+  const handleBirthDateChange = (value: string) => {
+    const formatted = formatBirthDateInput(value)
+    setForm((current) => ({
+      ...current,
+      childBirthDateInput: formatted,
+      childExactAge: formatted ? '' : current.childExactAge,
+    }))
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -127,27 +98,25 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
     setError(null)
     setSuccess(null)
 
-    const childName = toTitleName(form.childName)
-    const customerName = toTitleName(form.customerName)
+    const childName = formatPersonName(form.childName)
+    const customerName = formatPersonName(form.customerName)
     const normalizedPhone = phoneDigits(form.customerPhone)
+    const birthDate = birthDateResult.iso
 
     if (!childName || !customerName || !form.planId || !form.paymentStatus) {
       setError('Completa nombre del nino, responsable, plan y estado de pago.')
       return
     }
 
-    if (form.paymentMethod === 'card' && !form.cardType) {
-      setError('Selecciona si la tarjeta es debito o credito.')
+    if (birthDateResult.error) {
+      setError(birthDateResult.error)
       return
     }
 
-    setIsSaving(true)
-
-    try {
-      const payload: CreateVisitInput = {
+    const payload: CreateVisitInput = {
         childName,
-        childBirthDate: form.childBirthDate,
-        childExactAge: form.childBirthDate ? null : form.childExactAge ? Number(form.childExactAge) : null,
+        childBirthDate: birthDate,
+        childExactAge: birthDate ? null : form.childExactAge ? Number(form.childExactAge) : null,
         childAgeCalculated: calculatedAge,
         childGender: form.childGender,
         childNotes: form.childNotes,
@@ -158,14 +127,24 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         planId: selectedPlan.id,
         startedAt: parseTodayTime(form.startedAtTime),
         paymentStatus: form.paymentStatus,
-        paymentMethod: form.paymentMethod,
-        cardType: form.paymentMethod === 'card' ? form.cardType : '',
+        paymentMethod: form.paymentStatus === 'paid' ? '' : form.paymentMethod,
+        cardType: '',
         amountCharged: form.amountCharged ? Number(form.amountCharged) : null,
         defaultAmount,
         customAmount: Boolean(form.customAmount),
         notes: form.notes,
       }
 
+    if (form.paymentStatus === 'paid') {
+      setPendingPaidEntry(payload)
+      setEntryPaymentMethod('')
+      setEntryCardType('')
+      return
+    }
+
+    setIsSaving(true)
+
+    try {
       const visitId = await createNormalVisit(payload)
       setSuccess('Ingreso registrado correctamente.')
       setForm(initialForm())
@@ -177,7 +156,38 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
     }
   }
 
+  const confirmPaidEntry = async () => {
+    if (!pendingPaidEntry) return
+    if (!entryPaymentMethod) {
+      setError('Selecciona un metodo de pago para confirmar el ingreso.')
+      return
+    }
+    if (entryPaymentMethod === 'card' && !entryCardType) {
+      setError('Selecciona si la tarjeta es debito o credito.')
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+    try {
+      const visitId = await createNormalVisit({
+        ...pendingPaidEntry,
+        paymentMethod: entryPaymentMethod,
+        cardType: entryPaymentMethod === 'card' ? entryCardType : '',
+      })
+      setPendingPaidEntry(null)
+      setSuccess('Cobro e ingreso registrados correctamente.')
+      setForm(initialForm())
+      onCreated?.(visitId)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'No se pudo registrar el ingreso.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
+    <>
     <form className="form-grid" onSubmit={handleSubmit}>
       {error ? <div className="form-alert error">{error}</div> : null}
       {success ? <div className="form-alert success">{success}</div> : null}
@@ -197,21 +207,23 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
           <label className="field">
             <span>Fecha de nacimiento</span>
             <input
-              onChange={(event) => setField('childBirthDate', event.target.value)}
-              type="date"
-              value={form.childBirthDate}
+              inputMode="numeric"
+              maxLength={10}
+              onChange={(event) => handleBirthDateChange(event.target.value)}
+              placeholder="DD/MM/AAAA"
+              value={form.childBirthDateInput}
             />
-            {calculatedAge !== null ? <small className="field-hint">Edad calculada: {calculatedAge} años</small> : null}
+            {birthDateResult.error ? <small className="field-error">{birthDateResult.error}</small> : null}
           </label>
           <label className="field">
-            <span>Edad exacta</span>
+            <span>{birthDateResult.iso ? 'Edad' : 'Edad exacta'}</span>
             <input
-              disabled={Boolean(form.childBirthDate)}
+              disabled={Boolean(birthDateResult.iso)}
               min={0}
               onChange={(event) => setField('childExactAge', event.target.value)}
-              placeholder={form.childBirthDate ? 'Calculada por fecha' : 'Ej. 7'}
-              type="number"
-              value={form.childExactAge}
+              placeholder={birthDateResult.iso ? '' : 'Ej. 7'}
+              type={birthDateResult.iso ? 'text' : 'number'}
+              value={birthDateResult.iso ? ageLabel : form.childExactAge}
             />
           </label>
         </div>
@@ -244,7 +256,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
           <span>Telefono</span>
           <input
             inputMode="numeric"
-            onChange={(event) => setField('customerPhone', formatPyPhone(event.target.value))}
+            onChange={(event) => setField('customerPhone', formatParaguayanPhone(event.target.value))}
             placeholder="Ej. 0983 626 000"
             value={form.customerPhone}
           />
@@ -290,45 +302,6 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         </select>
       </label>
 
-      <div className="form-inline">
-        <label className="field">
-          <span>Estado de pago *</span>
-          <select
-            onChange={(event) => setField('paymentStatus', event.target.value)}
-            value={form.paymentStatus}
-          >
-            <option value="paid">Pagado al ingresar</option>
-            <option value="payAtExit">Paga al salir</option>
-            <option value="pending">Pendiente</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>Forma de pago</span>
-          <select
-            onChange={(event) => setField('paymentMethod', event.target.value)}
-            value={form.paymentMethod}
-          >
-            <option value="">Sin definir</option>
-            <option value="cash">Efectivo</option>
-            <option value="transfer">Transferencia</option>
-            <option value="card">Tarjeta</option>
-            <option value="qr">QR</option>
-            <option value="other">Otro</option>
-          </select>
-        </label>
-      </div>
-
-      {form.paymentMethod === 'card' ? (
-        <label className="field">
-          <span>Tipo de tarjeta *</span>
-          <select onChange={(event) => setField('cardType', event.target.value)} value={form.cardType}>
-            <option value="">Seleccionar</option>
-            <option value="debit">Debito</option>
-            <option value="credit">Credito</option>
-          </select>
-        </label>
-      ) : null}
-
       <div className="form-inline amount-inline">
         <label className="field">
           <span>Monto cobrado</span>
@@ -373,6 +346,26 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         />
       </label>
 
+      <section className="payment-status-panel" aria-label="Estado de pago">
+        <strong>ESTADO DE PAGO</strong>
+        <div className="payment-status-options">
+          <button
+            className={form.paymentStatus === 'paid' ? 'active paid' : 'paid'}
+            onClick={() => setField('paymentStatus', 'paid')}
+            type="button"
+          >
+            Pagado al entrar
+          </button>
+          <button
+            className={form.paymentStatus === 'payAtExit' ? 'active pay-at-exit' : 'pay-at-exit'}
+            onClick={() => setField('paymentStatus', 'payAtExit')}
+            type="button"
+          >
+            Paga al salir
+          </button>
+        </div>
+      </section>
+
       <div className="module-actions">
         {onCancel ? (
           <button className="button ghost" onClick={onCancel} type="button">
@@ -385,5 +378,46 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         </button>
       </div>
     </form>
+    {pendingPaidEntry ? (
+      <div className="modal-backdrop" role="presentation">
+        <section className="modal-card checkout-modal" role="dialog" aria-modal="true">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Cobro al ingresar</p>
+              <h2>Confirmar cobro e ingreso</h2>
+              <p className="muted">
+                {pendingPaidEntry.childName} · Responsable: {pendingPaidEntry.customerName}
+              </p>
+            </div>
+          </div>
+          <div className="checkout-block">
+            <div className="checkout-line">
+              <span>Parque · {selectedPlan.name}</span>
+              <strong>{formatGuarani(pendingPaidEntry.amountCharged ?? pendingPaidEntry.defaultAmount ?? 0)}</strong>
+            </div>
+          </div>
+          <div className="checkout-total">
+            <span>Total a cobrar</span>
+            <strong>{formatGuarani(pendingPaidEntry.amountCharged ?? pendingPaidEntry.defaultAmount ?? 0)}</strong>
+          </div>
+          <PaymentMethodSelector
+            cardType={entryCardType}
+            disabled={isSaving}
+            onCardTypeChange={setEntryCardType}
+            onPaymentMethodChange={setEntryPaymentMethod}
+            paymentMethod={entryPaymentMethod}
+          />
+          <div className="module-actions">
+            <button className="button ghost" disabled={isSaving} onClick={() => setPendingPaidEntry(null)} type="button">
+              Cancelar
+            </button>
+            <button className="button primary" disabled={isSaving || !entryPaymentMethod || (entryPaymentMethod === 'card' && !entryCardType)} onClick={confirmPaidEntry} type="button">
+              Confirmar cobro e ingreso
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   )
 }

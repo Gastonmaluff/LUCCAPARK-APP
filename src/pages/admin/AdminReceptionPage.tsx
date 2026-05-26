@@ -1,30 +1,64 @@
 import { useState } from 'react'
 import { EventReceptionPanel } from '../../components/events/EventReceptionPanel'
+import { EventDayCallout } from '../../components/events/EventDayCallout'
 import { ReceptionWorkspace } from '../../components/reception/ReceptionWorkspace'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
 import { useCanteenOrders } from '../../hooks/useCanteen'
 import { useCurrentTime } from '../../hooks/useCurrentTime'
+import { useEventDayContext } from '../../hooks/useEventDayContext'
+import { updateEventStatus } from '../../services/eventService'
 
 export function AdminReceptionPage() {
   const { error, isLoading, storageMode, visits } = useActiveVisits()
   const { orders: canteenOrders } = useCanteenOrders()
+  const { activeEvent, todayUpcomingEvent } = useEventDayContext()
   const now = useCurrentTime(1000)
-  const [mode, setMode] = useState<'normal' | 'event'>('normal')
+  const [manualMode, setManualMode] = useState(false)
+  const [eventActionError, setEventActionError] = useState<string | null>(null)
+  const [isStartingEvent, setIsStartingEvent] = useState(false)
+
+  const startTodayEvent = async () => {
+    if (!todayUpcomingEvent) return
+    setIsStartingEvent(true)
+    setEventActionError(null)
+    try {
+      await updateEventStatus(todayUpcomingEvent.id, 'active')
+    } catch (startError) {
+      setEventActionError(startError instanceof Error ? startError.message : 'No se pudo empezar el evento.')
+    } finally {
+      setIsStartingEvent(false)
+    }
+  }
+
+  if (activeEvent) {
+    return <EventReceptionPanel canteenPath="/admin/cantina" reservationsPath="/admin/reservas" />
+  }
 
   return (
     <>
+      {eventActionError ? <div className="form-alert error">{eventActionError}</div> : null}
+      {todayUpcomingEvent ? (
+        <EventDayCallout
+          detailTo={`/admin/reservas?eventId=${todayUpcomingEvent.id}`}
+          event={todayUpcomingEvent}
+          isBusy={isStartingEvent}
+          onStart={startTodayEvent}
+          operationTo="/admin/recepcion"
+          variant="today"
+        />
+      ) : null}
       <ReceptionWorkspace
         canteenOrders={canteenOrders}
         canteenPath="/admin/cantina"
-        eventModeActive={mode === 'event'}
+        eventModeActive={manualMode}
         error={error}
         isLoading={isLoading}
         now={now}
-        onEventMode={() => setMode((current) => (current === 'event' ? 'normal' : 'event'))}
+        onEventMode={() => setManualMode((current) => !current)}
         storageMode={storageMode}
         visits={visits}
       />
-      {mode === 'event' ? <EventReceptionPanel /> : null}
+      {manualMode ? <EventReceptionPanel canteenPath="/admin/cantina" reservationsPath="/admin/reservas" /> : null}
     </>
   )
 }

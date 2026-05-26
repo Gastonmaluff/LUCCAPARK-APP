@@ -1,5 +1,6 @@
 import { getTimePlanById } from '../config/timePlans'
 import type { ActiveVisit, ChargeVisitInput, CreateVisitInput } from '../types'
+import { formatPersonName, normalizeWhitespace } from '../utils/textFormat'
 import { getExpectedEndAt, getRealDurationMinutes } from '../utils/visitTime'
 
 const activeVisitsKey = 'lucca:activeVisits'
@@ -9,10 +10,8 @@ const channelName = 'lucca-visits'
 const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(channelName)
 const listeners = new Set<(visits: ActiveVisit[]) => void>()
 
-const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ')
-
 const optionalText = (value?: string) => {
-  const normalized = normalizeText(value ?? '')
+  const normalized = normalizeWhitespace(value ?? '')
   return normalized.length > 0 ? normalized : ''
 }
 
@@ -82,12 +81,14 @@ export const createLocalNormalVisit = async (input: CreateVisitInput) => {
   const visit: ActiveVisit = {
     id: visitId,
     childId,
-    childName: normalizeText(input.childName),
+    childName: formatPersonName(input.childName),
     childBirthDate: optionalText(input.childBirthDate),
     childAgeRange: optionalText(input.childAgeRange),
+    childExactAge: input.childExactAge ?? null,
+    childAgeCalculated: input.childAgeCalculated ?? null,
     childGender: optionalText(input.childGender),
     customerId,
-    customerName: normalizeText(input.customerName),
+    customerName: formatPersonName(input.customerName),
     customerPhone: optionalText(input.customerPhone),
     customerRelation: optionalText(input.customerRelation),
     childrenCount: input.childrenCount,
@@ -100,6 +101,12 @@ export const createLocalNormalVisit = async (input: CreateVisitInput) => {
     paymentStatus: input.paymentStatus,
     paymentMethod: input.paymentMethod ?? '',
     amountCharged: input.amountCharged ?? null,
+    parkChargeAmount: input.amountCharged ?? input.defaultAmount ?? plan.defaultPrice ?? null,
+    parkPaymentStatus: input.paymentStatus === 'paid' ? 'paid' : 'pending',
+    parkPaidAt: input.paymentStatus === 'paid' ? startedAt : null,
+    parkPaymentMethod: input.paymentStatus === 'paid' ? input.paymentMethod ?? '' : '',
+    defaultAmount: input.defaultAmount ?? plan.defaultPrice ?? null,
+    customAmount: Boolean(input.customAmount),
     notes: optionalText(input.notes),
     status: 'active',
     createdAt: now,

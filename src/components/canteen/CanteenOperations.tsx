@@ -16,19 +16,19 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { BrandLogo } from '../BrandLogo'
 import { ProductManager } from './ProductManager'
-import { ConsolidatedCheckoutModal } from '../reception/ConsolidatedCheckoutModal'
+import { CanteenCheckoutModal } from './CanteenCheckoutModal'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
 import { useCanteenOrders, useCanteenProducts, usePaidCanteenOrdersForDate } from '../../hooks/useCanteen'
-import { useEvents } from '../../hooks/useEvents'
+import { useEventDayContext } from '../../hooks/useEventDayContext'
 import {
   addItemsToCanteenOrder,
   cancelCanteenOrder,
-  chargeCanteenOrder,
   createCanteenOrder,
   updateCanteenOrderItems,
 } from '../../services/canteenService'
 import { getLocalDateKey } from '../../utils/date'
 import { formatGuarani } from '../../utils/money'
+import { formatPersonName } from '../../utils/textFormat'
 import { getVisitBillingSummary } from '../../utils/visitBilling'
 import { formatVisitStartTime, getVisitTimeStatus } from '../../utils/visitTime'
 import { StatusPill } from '../StatusPill'
@@ -37,8 +37,6 @@ import type { ActiveVisit, CanteenOrder, CanteenOrderItem, CanteenProduct, Lucca
 type CanteenOperationsProps = {
   standalone?: boolean
 }
-
-const paymentMethods: Array<Exclude<PaymentMethod, ''>> = ['cash', 'transfer', 'card', 'qr', 'other']
 
 const paymentLabel: Record<Exclude<PaymentMethod, ''>, string> = {
   cash: 'Efectivo',
@@ -53,8 +51,6 @@ const orderTypeLabel: Record<CanteenOrder['type'], string> = {
   event: 'Evento',
   free: 'Otro',
 }
-
-type AccountFilter = 'all' | 'visit' | 'event' | 'free' | 'toCharge'
 
 const itemFromProduct = (product: CanteenProduct): CanteenOrderItem => ({
   productId: product.id,
@@ -103,6 +99,14 @@ const typeClass: Record<CanteenOrder['type'], string> = {
   event: 'event',
   free: 'free',
 }
+
+const formatOrderTime = (date?: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('es-PY', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date)
+    : ''
 
 function AccountCard({
   relatedOrders,
@@ -184,16 +188,15 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const ordersResult = useCanteenOrders()
   const paidTodayResult = usePaidCanteenOrdersForDate(getLocalDateKey())
   const { visits } = useActiveVisits()
-  const { events } = useEvents()
+  const { activeEvent, events } = useEventDayContext()
   const activeEvents = events.filter((event) => event.status === 'active')
   const [isAccountPickerOpen, setIsAccountPickerOpen] = useState(false)
   const [creationMode, setCreationMode] = useState<'visit' | 'event' | 'free'>('visit')
-  const [manualName, setManualName] = useState('Cliente mostrador')
+  const [manualName, setManualName] = useState('')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [isClosedTodayOpen, setIsClosedTodayOpen] = useState(false)
-  const [accountFilter, setAccountFilter] = useState<AccountFilter>('all')
-  const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''>>('cash')
-  const [checkoutVisit, setCheckoutVisit] = useState<ActiveVisit | null>(null)
+  const [checkoutOrder, setCheckoutOrder] = useState<CanteenOrder | null>(null)
+  const [closedOrderDetail, setClosedOrderDetail] = useState<CanteenOrder | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const handledPreselectedVisit = useRef('')
@@ -204,6 +207,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const selectedOrderVisit = selectedOrder?.type === 'visit' && selectedOrder.visitId ? visits.find((visit) => visit.id === selectedOrder.visitId) ?? null : null
   const activeProducts = productsResult.products.filter((product) => product.isActive)
   const productCount = activeProducts.length
+  const activeEventGuestsCount = activeEvent?.registeredGuestsCount ?? 0
 
   const soldToday = paidToday.reduce((sum, order) => sum + order.total, 0)
   const costToday = paidToday.reduce((sum, order) => sum + (order.costTotal ?? 0), 0)
@@ -220,11 +224,6 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
     return order.paymentStatus === 'paid' ? 0 : order.total
   }
   const openOrdersForView = openOrders
-    .filter((order) => {
-      if (accountFilter === 'all') return true
-      if (accountFilter === 'toCharge') return orderPendingTotal(order) > 0
-      return order.type === accountFilter
-    })
     .sort((a, b) => {
       const aVisit = visitForOrder(a)
       const bVisit = visitForOrder(b)
@@ -240,26 +239,9 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
       return priority(a, aVisit) - priority(b, bVisit) || orderPendingTotal(b) - orderPendingTotal(a)
     })
 
-  const chargeOrder = async (order: CanteenOrder) => {
-    if (order.type === 'visit' && order.visitId) {
-      const visit = visits.find((item) => item.id === order.visitId)
-      if (visit) {
-        setCheckoutVisit(visit)
-        return
-      }
-    }
-
+  const openChargeModal = (order: CanteenOrder) => {
     setMessage(null)
-    setIsSaving(true)
-    try {
-      await chargeCanteenOrder(order, paymentMethod)
-      setMessage('Cuenta cobrada.')
-      setSelectedOrderId(null)
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No se pudo cobrar la cuenta.')
-    } finally {
-      setIsSaving(false)
-    }
+    setCheckoutOrder(order)
   }
 
   const openVisitOrder = async (visit: ActiveVisit) => {
@@ -342,8 +324,10 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   }
 
   const createManualOrder = async () => {
-    if (!manualName.trim()) {
-      setMessage('Carga un nombre para la cuenta.')
+    const normalizedManualName = formatPersonName(manualName)
+
+    if (!normalizedManualName) {
+      setMessage('Ingresa el nombre del cliente para abrir la cuenta.')
       return
     }
 
@@ -351,8 +335,8 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
     try {
       const id = await createCanteenOrder({
         type: 'free',
-        accountName: manualName,
-        customerName: manualName,
+        accountName: normalizedManualName,
+        customerName: normalizedManualName,
         items: [],
         chargeNow: false,
       })
@@ -425,7 +409,16 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
             <p>Cuentas abiertas y cobro rapido.</p>
           </div>
         </div>
-        <button className="button primary canteen-open-button" onClick={() => setIsAccountPickerOpen(true)} type="button">
+        <button
+          className="button primary canteen-open-button"
+          onClick={() => {
+            if (activeEvent) {
+              setCreationMode('event')
+            }
+            setIsAccountPickerOpen(true)
+          }}
+          type="button"
+        >
           <Plus size={18} />
           Abrir cuenta
         </button>
@@ -444,6 +437,17 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
           </span>
         </div>
       </header>
+
+      {activeEvent ? (
+        <section className="canteen-active-event-strip">
+          <span>
+            Evento activo: <strong>{activeEvent.title}</strong> - {activeEventGuestsCount} / {activeEvent.contractedChildrenCount} invitados
+          </span>
+          <button className="button secondary" disabled={isSaving} onClick={() => openEventOrder(activeEvent)} type="button">
+            Ver cuenta del evento
+          </button>
+        </section>
+      ) : null}
 
       {message ? <div className={message.includes('No se') || message.includes('Carga') ? 'form-alert error' : 'form-alert success'}>{message}</div> : null}
 
@@ -466,23 +470,31 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
             <strong>{formatGuarani(selectedOrderVisit ? getVisitBillingSummary(selectedOrderVisit, relatedOrdersForVisit(selectedOrderVisit.id)).totalPendingAmount : selectedOrder.total)}</strong>
           </div>
 
-          <div className="quick-product-grid">
-            {productCount === 0 ? <div className="empty-state">No hay productos activos en inventario.</div> : null}
-            {activeProducts.map((product) => (
-              <button className="quick-product-card" key={product.id} onClick={() => addProduct(selectedOrder, product)} type="button">
-                <span className="quick-product-image">
-                  {product.imageUrl ? <img alt={product.name} src={product.imageUrl} /> : <ShoppingBasket size={34} />}
-                </span>
-                <strong>{product.name}</strong>
-                <small>{product.category}</small>
-                <b>{formatGuarani(product.salePrice ?? product.price)}</b>
-              </button>
-            ))}
-          </div>
+          <section className="available-products-panel">
+            <div className="section-subheader">
+              <div>
+                <h3>Productos disponibles</h3>
+                <p>Toca un producto para agregar 1 unidad a esta cuenta.</p>
+              </div>
+            </div>
+            <div className="quick-product-grid">
+              {productCount === 0 ? <div className="empty-state">No hay productos activos en inventario.</div> : null}
+              {activeProducts.map((product) => (
+                <button className="quick-product-card" key={product.id} onClick={() => addProduct(selectedOrder, product)} type="button">
+                  <span className="quick-product-image">
+                    {product.imageUrl ? <img alt={product.name} src={product.imageUrl} /> : <ShoppingBasket size={34} />}
+                  </span>
+                  <strong>{product.name}</strong>
+                  <small>{product.category}</small>
+                  <b>{formatGuarani(product.salePrice ?? product.price)}</b>
+                </button>
+              ))}
+            </div>
+          </section>
 
           <div className="account-summary">
             <h3>Resumen de consumo</h3>
-            {selectedOrder.items.length === 0 ? <div className="empty-state">Esta cuenta todavia no tiene productos.</div> : null}
+            {selectedOrder.items.length === 0 ? <div className="empty-state">Esta cuenta todavia no tiene productos cargados.</div> : null}
             {selectedOrder.items.map((item) => (
               <div className="account-item-row" key={item.productId}>
                 <div>
@@ -508,17 +520,10 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
 
           <div className="account-paybar">
             <strong>Total a cobrar {formatGuarani(selectedOrderVisit ? getVisitBillingSummary(selectedOrderVisit, relatedOrdersForVisit(selectedOrderVisit.id)).totalPendingAmount : selectedOrder.total)}</strong>
-            <select onChange={(event) => setPaymentMethod(event.target.value as Exclude<PaymentMethod, ''>)} value={paymentMethod}>
-              {paymentMethods.map((method) => (
-                <option key={method} value={method}>
-                  {paymentLabel[method]}
-                </option>
-              ))}
-            </select>
             <button className="button ghost" onClick={() => setSelectedOrderId(null)} type="button">
               Guardar abierta
             </button>
-            <button className="button primary" disabled={isSaving || (selectedOrder.total <= 0 && !selectedOrderVisit)} onClick={() => chargeOrder(selectedOrder)} type="button">
+            <button className="button primary" disabled={isSaving || (selectedOrder.total <= 0 && !selectedOrderVisit)} onClick={() => openChargeModal(selectedOrder)} type="button">
               <CreditCard size={18} />
               Cobrar total
             </button>
@@ -537,19 +542,6 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               </h2>
               <StatusPill tone={openOrders.length > 0 ? 'warning' : 'available'}>{openOrders.length} abiertas</StatusPill>
             </div>
-            <div className="canteen-filter-tabs" role="group" aria-label="Filtrar cuentas abiertas">
-              {([
-                ['all', 'Todas'],
-                ['visit', 'Visitas'],
-                ['event', 'Eventos'],
-                ['free', 'Otros'],
-                ['toCharge', 'Por cobrar'],
-              ] as Array<[AccountFilter, string]>).map(([filter, label]) => (
-                <button className={accountFilter === filter ? 'active' : ''} key={filter} onClick={() => setAccountFilter(filter)} type="button">
-                  {label}
-                </button>
-              ))}
-            </div>
             {ordersResult.isLoading ? <div className="empty-state">Cargando cuentas...</div> : null}
             {ordersResult.error ? <div className="form-alert error">No se pudieron cargar cuentas: {ordersResult.error}</div> : null}
             {!ordersResult.isLoading && !ordersResult.error && openOrdersForView.length === 0 ? (
@@ -562,7 +554,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
                   order={order}
                   relatedOrders={order.visitId ? relatedOrdersForVisit(order.visitId) : [order]}
                   visit={visitForOrder(order)}
-                  onCharge={() => chargeOrder(order)}
+                  onCharge={() => openChargeModal(order)}
                   onOpen={() => setSelectedOrderId(order.id)}
                 />
               ))}
@@ -589,6 +581,10 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
                     </span>
                     <strong>{formatGuarani(order.total)}</strong>
                     <StatusPill tone="available">{order.paymentMethod ? paymentLabel[order.paymentMethod as Exclude<PaymentMethod, ''>] : 'Cobrado'}</StatusPill>
+                    {order.paidAt ? <small>{formatOrderTime(order.paidAt)} hs</small> : null}
+                    <button className="button ghost" onClick={() => setClosedOrderDetail(order)} type="button">
+                      Ver detalle
+                    </button>
                   </div>
                 ))}
               </div>
@@ -609,14 +605,22 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               </button>
             </div>
             <div className="order-type-switch large">
+              {activeEvent ? (
+                <button className={creationMode === 'event' ? 'active' : ''} onClick={() => setCreationMode('event')} type="button">
+                  <CalendarDays size={18} />
+                  Evento activo
+                </button>
+              ) : null}
               <button className={creationMode === 'visit' ? 'active' : ''} onClick={() => setCreationMode('visit')} type="button">
                 <Users size={18} />
                 Registro de recepcion
               </button>
-              <button className={creationMode === 'event' ? 'active' : ''} onClick={() => setCreationMode('event')} type="button">
-                <CalendarDays size={18} />
-                Evento activo
-              </button>
+              {!activeEvent ? (
+                <button className={creationMode === 'event' ? 'active' : ''} onClick={() => setCreationMode('event')} type="button">
+                  <CalendarDays size={18} />
+                  Evento activo
+                </button>
+              ) : null}
               <button className={creationMode === 'free' ? 'active' : ''} onClick={() => setCreationMode('free')} type="button">
                 <ChefHat size={18} />
                 Otro
@@ -660,7 +664,12 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               <div className="manual-account-box">
                 <label className="field">
                   <span>Nombre de cuenta manual</span>
-                  <input onChange={(event) => setManualName(event.target.value)} value={manualName} />
+                  <input
+                    onBlur={() => setManualName(formatPersonName(manualName))}
+                    onChange={(event) => setManualName(event.target.value)}
+                    placeholder="Ej. Carlos Benitez"
+                    value={manualName}
+                  />
                 </label>
                 <button className="button primary" disabled={isSaving} onClick={createManualOrder} type="button">
                   Crear cuenta manual
@@ -671,14 +680,60 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
         </div>
       ) : null}
 
-      {checkoutVisit ? (
-        <ConsolidatedCheckoutModal
-          allowFinishChoice
-          onClose={() => setCheckoutVisit(null)}
-          orders={ordersResult.orders.filter((order) => order.visitId === checkoutVisit.id)}
-          source="canteen"
-          visit={checkoutVisit}
+      {checkoutOrder ? (
+        <CanteenCheckoutModal
+          onClose={() => setCheckoutOrder(null)}
+          onDone={(total, method) => {
+            setMessage(`Cobro registrado correctamente · ${formatGuarani(total)} · ${paymentLabel[method]}`)
+            setSelectedOrderId(null)
+          }}
+          order={checkoutOrder}
+          relatedOrders={checkoutOrder.visitId ? relatedOrdersForVisit(checkoutOrder.visitId) : [checkoutOrder]}
+          visit={checkoutOrder.type === 'visit' ? visitForOrder(checkoutOrder) : null}
         />
+      ) : null}
+
+      {closedOrderDetail ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card closed-order-detail-modal" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Cuenta cerrada</span>
+                <h2>{closedOrderDetail.accountName}</h2>
+                <p>
+                  {orderTypeLabel[closedOrderDetail.type]}
+                  {closedOrderDetail.paidAt ? ` · ${formatOrderTime(closedOrderDetail.paidAt)} hs` : ''}
+                </p>
+              </div>
+              <button className="button ghost" onClick={() => setClosedOrderDetail(null)} type="button">
+                Cerrar
+              </button>
+            </div>
+            <div className="checkout-detail-list">
+              {closedOrderDetail.items.length === 0 ? <div className="empty-state">Sin productos cargados.</div> : null}
+              {closedOrderDetail.items.map((item) => (
+                <div className="checkout-line" key={`${closedOrderDetail.id}-${item.productId}`}>
+                  <span>
+                    <strong>
+                      {item.productName} x{item.quantity}
+                    </strong>
+                    <small>{formatGuarani(item.unitPrice)} c/u</small>
+                  </span>
+                  <strong>{formatGuarani(item.subtotal)}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="checkout-total-bar">
+              <span>Total cobrado</span>
+              <strong>{formatGuarani(closedOrderDetail.total)}</strong>
+            </div>
+            <div className="closed-order-meta">
+              <span>Metodo: {closedOrderDetail.paymentMethod ? paymentLabel[closedOrderDetail.paymentMethod as Exclude<PaymentMethod, ''>] : 'Cobrado'}</span>
+              {closedOrderDetail.cardType ? <span>Tarjeta: {closedOrderDetail.cardType === 'debit' ? 'Debito' : 'Credito'}</span> : null}
+              {closedOrderDetail.updatedBy ? <span>Usuario: {closedOrderDetail.updatedBy}</span> : null}
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   )

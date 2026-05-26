@@ -12,6 +12,8 @@ import { AdminReceptionPage } from './pages/admin/AdminReceptionPage'
 import { AdminReportsPage } from './pages/admin/AdminReportsPage'
 import { AdminReservationsPage } from './pages/admin/AdminReservationsPage'
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
+import { AdminTasksPage } from './pages/admin/AdminTasksPage'
+import { AppMobilePage } from './pages/AppMobilePage'
 import { AvailabilityPage } from './pages/AvailabilityPage'
 import { ContactPage } from './pages/ContactPage'
 import { LandingPage } from './pages/LandingPage'
@@ -54,12 +56,14 @@ function App() {
             <Route path="finanzas" element={<AdminFinancePage />} />
             <Route path="reportes" element={<AdminReportsPage />} />
             <Route path="clientes" element={<AdminClientsPage />} />
+            <Route path="tareas" element={<AdminTasksPage />} />
             <Route path="configuracion" element={<AdminSettingsPage />} />
             <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
           </Route>
           <Route path="cantina" element={<CanteenPage />} />
           <Route path="recepcion" element={<ReceptionPage />} />
           <Route path="tv" element={<TVPage />} />
+          <Route path="appmovil" element={<AppMobilePage />} />
         </Route>
         <Route path="login" element={<LoginPage />} />
         <Route path="inicio" element={<Navigate to="/" replace />} />

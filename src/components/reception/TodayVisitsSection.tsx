@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { StatusPill } from '../StatusPill'
 import { useTodayVisits } from '../../hooks/useTodayVisits'
@@ -20,13 +20,17 @@ export function TodayVisitsSection({ canteenOrders = [] }: { canteenOrders?: Can
   return (
     <article className="panel today-visits-panel">
       <button className="collapsible-header" onClick={() => setIsOpen((current) => !current)} type="button">
-        <span>
-          {isOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
-          <strong>Visitas de hoy</strong>
+        <span className="today-visits-title">
+          <span className="today-visits-icon"><CalendarDays size={18} /></span>
+          <span>
+            <strong>Visitas de hoy</strong>
+            <small>Al tocar, desplegar historial del dia</small>
+          </span>
         </span>
         <span className="today-visits-summary">
           <StatusPill tone="info">{visits.length} registros</StatusPill>
           <StatusPill tone="available">{formatGuarani(collectedToday)} cobrados</StatusPill>
+          {isOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
         </span>
       </button>
 

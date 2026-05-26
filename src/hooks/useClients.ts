@@ -131,6 +131,7 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   status: (data.status as CanteenOrder['status']) ?? 'open',
   paymentStatus: (data.paymentStatus as CanteenOrder['paymentStatus']) ?? 'pending',
   paymentMethod: (data.paymentMethod as CanteenOrder['paymentMethod']) ?? '',
+  cardType: (data.cardType as CanteenOrder['cardType']) ?? '',
   notes: String(data.notes ?? ''),
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),

@@ -35,5 +35,15 @@ export const getEventCapacityStats = (event: LuccaEvent, guestCount = event.regi
 export const formatEventTimeRange = (event: Pick<LuccaEvent, 'startTime' | 'endTime'>) =>
   `${event.startTime} a ${event.endTime} hs`
 
+export const isUpcomingEventStatus = (status: LuccaEvent['status']) =>
+  ['inquiry', 'reserved', 'confirmed'].includes(status)
+
+export const canStartEvent = (event: Pick<LuccaEvent, 'status'>) => isUpcomingEventStatus(event.status)
+
+export const canCancelEvent = (event: Pick<LuccaEvent, 'status'>) => isUpcomingEventStatus(event.status)
+
+export const isEventBlockingCalendar = (event: Pick<LuccaEvent, 'status'>) =>
+  ['inquiry', 'reserved', 'confirmed', 'active'].includes(event.status)
+
 export const isEventVisibleForReception = (event: LuccaEvent) =>
-  ['reserved', 'confirmed', 'active'].includes(event.status)
+  event.status === 'active'

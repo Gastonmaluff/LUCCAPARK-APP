@@ -60,6 +60,7 @@ export const checkoutVisitBalance = async ({
       status: 'paid',
       paymentStatus: 'paid',
       paymentMethod,
+      cardType,
       paidAt: Timestamp.fromDate(now),
       updatedAt: serverTimestamp(),
       updatedBy: userId,
@@ -90,7 +91,7 @@ export const checkoutVisitBalance = async ({
     batch.set(paymentRef, {
       id: paymentRef.id,
       visitId: visit.id,
-      source,
+      source: source === 'reception' ? 'reception_exit' : 'canteen',
       concepts:
         summary.pendingParkAmount > 0 && summary.pendingCanteenAmount > 0
           ? 'both'
@@ -103,6 +104,10 @@ export const checkoutVisitBalance = async ({
       totalPaid: summary.totalPendingAmount,
       paymentMethod,
       cardType,
+      childName: visit.childName,
+      customerName: visit.customerName,
+      description: source === 'reception' ? `Salida ${visit.childName}` : `Cobro cantina ${visit.childName}`,
+      paidAt: Timestamp.fromDate(now),
       createdAt: serverTimestamp(),
       createdBy: userId,
     })

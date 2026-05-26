@@ -10,9 +10,10 @@ import {
 } from 'firebase/firestore'
 import { auth } from '../config/firebase'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { storage } from '../config/firebase'
+import { firebaseConfig, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { formatPersonName, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CanteenOrder,
   CanteenOrderItem,
@@ -22,8 +23,6 @@ import type {
 } from '../types'
 
 const currentUserId = () => auth.currentUser?.uid ?? null
-
-const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ')
 
 const totalFromItems = (items: CanteenOrderItem[]) =>
   items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
@@ -57,7 +56,7 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
     productRef,
     {
       id: productRef.id,
-      name: normalizeText(input.name),
+      name: normalizeWhitespace(input.name),
       category: input.category,
       price: Number(input.price),
       salePrice: Number(input.price),
@@ -68,7 +67,7 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
           ? null
           : Number(input.minStock),
       isActive: input.isActive,
-      imageUrl: normalizeText(input.imageUrl ?? ''),
+      imageUrl: normalizeWhitespace(input.imageUrl ?? ''),
       updatedAt: serverTimestamp(),
       ...(input.id ? {} : { createdAt: serverTimestamp() }),
     },
@@ -78,12 +77,68 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
   return productRef.id
 }
 
-export const uploadCanteenProductImage = async (file: File) => {
+const maxProductImageSize = 5 * 1024 * 1024
+const allowedProductImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
+
+export const uploadCanteenProductImage = async (file: File, productId = 'new') => {
   await ensureReceptionSession()
+
+  const user = auth.currentUser
+  if (!user) {
+    throw new Error('Necesitas iniciar sesion como administrador para subir imagenes.')
+  }
+
+  if (!allowedProductImageTypes.has(file.type)) {
+    throw new Error('Selecciona una imagen PNG, JPG o WEBP.')
+  }
+
+  if (file.size > maxProductImageSize) {
+    throw new Error('La imagen supera el limite de 5 MB.')
+  }
+
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '-')
-  const storageRef = ref(storage, `canteen-products/${Date.now()}-${safeName}`)
-  await uploadBytes(storageRef, file)
-  return getDownloadURL(storageRef)
+  const safeProductId = productId.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const storagePath = `canteen-products/${safeProductId}/${Date.now()}-${safeName}`
+  const storageRef = ref(storage, storagePath)
+
+  try {
+    console.info('[Cantina Storage] Upload start', {
+      bucket: firebaseConfig.storageBucket,
+      contentType: file.type,
+      path: storagePath,
+      size: file.size,
+      uid: user.uid,
+    })
+    await uploadBytes(storageRef, file, { contentType: file.type })
+  } catch (error) {
+    console.error('[Cantina Storage] uploadBytes failed', {
+      bucket: firebaseConfig.storageBucket,
+      error,
+      path: storagePath,
+      uid: user.uid,
+    })
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('storage/unauthorized')) {
+      throw new Error('No tenes permiso para subir esta imagen. Verifica las reglas de Firebase Storage.')
+    }
+    throw error
+  }
+
+  try {
+    return await getDownloadURL(storageRef)
+  } catch (error) {
+    console.error('[Cantina Storage] getDownloadURL failed', {
+      bucket: firebaseConfig.storageBucket,
+      error,
+      path: storagePath,
+      uid: user.uid,
+    })
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('storage/unauthorized')) {
+      throw new Error('La imagen subio, pero no se pudo obtener la URL. Verifica las reglas de lectura de Firebase Storage.')
+    }
+    throw error
+  }
 }
 
 export const setCanteenProductActive = async (productId: string, isActive: boolean) => {
@@ -113,11 +168,11 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
     visitId: input.visitId ?? '',
     eventId: input.eventId ?? '',
     childId: input.childId ?? '',
-    childName: normalizeText(input.childName ?? ''),
+    childName: formatPersonName(input.childName ?? ''),
     customerId: input.customerId ?? '',
-    accountName: normalizeText(input.accountName),
-    customerName: normalizeText(input.customerName ?? ''),
-    customerPhone: normalizeText(input.customerPhone ?? ''),
+    accountName: formatPersonName(input.accountName),
+    customerName: formatPersonName(input.customerName ?? ''),
+    customerPhone: phoneDigits(input.customerPhone ?? ''),
     items,
     total,
     costTotal,
@@ -125,7 +180,7 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
     status,
     paymentStatus,
     paymentMethod: input.chargeNow ? input.paymentMethod ?? 'cash' : '',
-    notes: normalizeText(input.notes ?? ''),
+    notes: normalizeWhitespace(input.notes ?? ''),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     paidAt: input.chargeNow ? Timestamp.fromDate(now) : null,
@@ -200,17 +255,51 @@ export const updateCanteenOrderItems = async (order: CanteenOrder, items: Cantee
   await batch.commit()
 }
 
-export const chargeCanteenOrder = async (order: CanteenOrder, paymentMethod: Exclude<PaymentMethod, ''>) => {
+export const chargeCanteenOrder = async (
+  order: CanteenOrder,
+  paymentMethod: Exclude<PaymentMethod, ''>,
+  cardType: 'debit' | 'credit' | '' = '',
+) => {
   await ensureReceptionSession()
 
-  await updateDoc(getDocumentRef('canteenOrders', order.id), {
+  const now = new Date()
+  const userId = currentUserId()
+  const batch = writeBatch(getDocumentRef('canteenOrders', order.id).firestore)
+  const paymentRef = doc(getCollectionRef('payments'))
+
+  batch.update(getDocumentRef('canteenOrders', order.id), {
     status: 'paid',
     paymentStatus: 'paid',
     paymentMethod,
-    paidAt: serverTimestamp(),
+    cardType,
+    paidAt: Timestamp.fromDate(now),
     updatedAt: serverTimestamp(),
-    updatedBy: currentUserId(),
+    updatedBy: userId,
   })
+
+  batch.set(paymentRef, {
+    id: paymentRef.id,
+    source: 'canteen',
+    concepts: 'canteen',
+    totalPaid: order.total,
+    canteenAmountPaid: order.total,
+    parkAmountPaid: 0,
+    canteenOrderId: order.id,
+    canteenOrderIds: [order.id],
+    visitId: order.visitId ?? '',
+    eventId: order.eventId ?? '',
+    accountType: order.type,
+    paymentMethod,
+    cardType,
+    childName: order.childName ?? order.accountName,
+    customerName: order.customerName ?? '',
+    description: `Cantina - ${order.accountName}`,
+    paidAt: Timestamp.fromDate(now),
+    createdAt: serverTimestamp(),
+    createdBy: userId,
+  })
+
+  await batch.commit()
 }
 
 export const cancelCanteenOrder = async (order: CanteenOrder) => {

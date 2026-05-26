@@ -6,6 +6,7 @@ interface EventGuestListProps {
   guests: EventGuest[]
   isLoading: boolean
   error: string | null
+  contractedChildrenCount?: number
 }
 
 const formatTime = (date: Date) =>
@@ -14,7 +15,7 @@ const formatTime = (date: Date) =>
     minute: '2-digit',
   }).format(date)
 
-export function EventGuestList({ error, guests, isLoading }: EventGuestListProps) {
+export function EventGuestList({ contractedChildrenCount = 0, error, guests, isLoading }: EventGuestListProps) {
   if (isLoading) {
     return <div className="empty-state">Cargando invitados...</div>
   }
@@ -42,7 +43,9 @@ export function EventGuestList({ error, guests, isLoading }: EventGuestListProps
             <Clock size={15} />
             {formatTime(guest.checkedInAt)}
           </span>
-          <StatusPill tone={guest.isExtra ? 'danger' : 'available'}>{guest.isExtra ? 'Adicional' : `Incluido #${guest.guestNumber}`}</StatusPill>
+          <StatusPill tone={guest.isExtra ? 'warning' : 'available'}>
+            {guest.isExtra ? `Adicional #${Math.max(1, guest.guestNumber - contractedChildrenCount)}` : `Incluido #${guest.guestNumber}`}
+          </StatusPill>
           {guest.notes ? <p className="muted event-guest-note">{guest.notes}</p> : null}
         </article>
       ))}

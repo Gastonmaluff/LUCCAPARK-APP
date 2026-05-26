@@ -20,19 +20,18 @@ import { chargeLocalVisit, createLocalNormalVisit, finishLocalVisit } from './lo
 import { getVisitStorageMode } from './visitStorageMode'
 import type { ActiveVisit, ChargeVisitInput, CreateVisitInput } from '../types'
 import { getExpectedEndAt, getRealDurationMinutes } from '../utils/visitTime'
+import { formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 
 const currentUserId = () => auth.currentUser?.uid ?? null
 
 const timestampOrNull = (date: Date | null) => (date ? Timestamp.fromDate(date) : null)
 
-const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ')
-
 const optionalText = (value?: string) => {
-  const normalized = normalizeText(value ?? '')
+  const normalized = normalizeWhitespace(value ?? '')
   return normalized.length > 0 ? normalized : undefined
 }
 
-const lowerKey = (value: string) => normalizeText(value).toLocaleLowerCase('es-PY')
+const lowerKey = (value: string) => lowerSearchKey(value)
 
 const findCustomerByPhone = async (phone?: string) => {
   if (!phone) {
@@ -71,9 +70,9 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
 
   await ensureReceptionSession()
 
-  const childName = normalizeText(input.childName)
-  const customerName = normalizeText(input.customerName)
-  const customerPhone = optionalText(input.customerPhone)
+  const childName = formatPersonName(input.childName)
+  const customerName = formatPersonName(input.customerName)
+  const customerPhone = optionalText(phoneDigits(input.customerPhone ?? ''))
   const plan = getTimePlanById(input.planId)
   const startedAt = input.startedAt
   const expectedEndAt = getExpectedEndAt(startedAt, plan.durationMinutes, plan.isUnlimited)
@@ -172,6 +171,26 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
   const batch = writeBatch(activeVisitRef.firestore)
   batch.set(visitRef, visitPayload)
   batch.set(activeVisitRef, visitPayload)
+  if (input.paymentStatus === 'paid' && amountCharged && input.paymentMethod) {
+    const paymentRef = doc(getCollectionRef('payments'))
+    batch.set(paymentRef, {
+      id: paymentRef.id,
+      visitId: visitRef.id,
+      source: 'reception_entry',
+      concepts: 'park',
+      description: `Entrada ${plan.name} - ${childName}`,
+      childName,
+      customerName,
+      parkAmountPaid: amountCharged,
+      canteenAmountPaid: 0,
+      totalPaid: amountCharged,
+      paymentMethod: input.paymentMethod,
+      cardType: input.cardType ?? '',
+      paidAt: Timestamp.fromDate(startedAt),
+      createdAt: serverTimestamp(),
+      createdBy: userId,
+    })
+  }
   await batch.commit()
 
   return visitRef.id

@@ -17,6 +17,9 @@ export const firestoreCollections: Record<FirebaseCollectionName, FirebaseCollec
   canteenInventoryMovements: 'canteenInventoryMovements',
   dailyClosings: 'dailyClosings',
   payments: 'payments',
+  expenses: 'expenses',
+  financialClosures: 'financialClosures',
+  tasks: 'tasks',
   settings: 'settings',
 }
 

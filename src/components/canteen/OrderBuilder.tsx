@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { StatusPill } from '../StatusPill'
 import { addItemsToCanteenOrder, chargeCanteenOrder, createCanteenOrder } from '../../services/canteenService'
 import { formatGuarani, toNumber } from '../../utils/money'
+import { formatPersonName } from '../../utils/textFormat'
 import { formatVisitStartTime } from '../../utils/visitTime'
 import type {
   ActiveVisit,
@@ -42,7 +43,7 @@ export function OrderBuilder({ activeEvents, activeVisits, canteenOrders = [], p
   const [type, setType] = useState<CanteenAccountType>(preselectedVisitId ? 'visit' : 'free')
   const [visitId, setVisitId] = useState(preselectedVisitId)
   const [eventId, setEventId] = useState('')
-  const [freeName, setFreeName] = useState('Cliente mostrador')
+  const [freeName, setFreeName] = useState('')
   const [notes, setNotes] = useState('')
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState(1)
@@ -117,8 +118,8 @@ export function OrderBuilder({ activeEvents, activeVisits, canteenOrders = [], p
     }
 
     return {
-      accountName: freeName,
-      customerName: freeName,
+      accountName: formatPersonName(freeName),
+      customerName: formatPersonName(freeName),
       customerPhone: '',
     }
   }
@@ -246,7 +247,12 @@ export function OrderBuilder({ activeEvents, activeVisits, canteenOrders = [], p
         {type === 'free' ? (
           <label className="field">
             <span>Nombre de cuenta</span>
-            <input onChange={(event) => setFreeName(event.target.value)} value={freeName} />
+            <input
+              onBlur={() => setFreeName(formatPersonName(freeName))}
+              onChange={(event) => setFreeName(event.target.value)}
+              placeholder="Ingresar nombre del cliente"
+              value={freeName}
+            />
           </label>
         ) : null}
 

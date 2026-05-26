@@ -1,8 +1,14 @@
-import { BarChart3, Filter, LineChart } from 'lucide-react'
+import { BarChart3, LineChart } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
-import { MetricCard } from '../../components/MetricCard'
 import { StatusPill } from '../../components/StatusPill'
-import { demoReportCards } from '../../data/demoData'
+
+const reportIdeas = [
+  'Niños por periodo y horarios de mayor concurrencia',
+  'Clientes recurrentes y cumpleaños próximos',
+  'Eventos realizados por mes',
+  'Productos más y menos vendidos',
+  'Ticket promedio por visita y por evento',
+]
 
 export function AdminReportsPage() {
   return (
@@ -10,45 +16,26 @@ export function AdminReportsPage() {
       <AdminModuleHeader
         eyebrow="Analitica"
         title="Reportes"
-        description="Filtros y visualizaciones placeholder para estadisticas futuras."
-        action={
-          <button
-            className="button ghost"
-            onClick={() => window.alert('Filtro demo. Los reportes reales se implementan en fases posteriores.')}
-            type="button"
-          >
-            <Filter size={18} />
-            Filtrar demo
-          </button>
-        }
+        description="Analisis comercial y operativo. La caja, gastos y cierres quedan en Finanzas y cierres."
       />
-      <div className="metric-grid reports-grid">
-        {demoReportCards.map((card, index) => (
-          <MetricCard
-            color={['var(--turquoise)', 'var(--orange)', 'var(--green)'][index]}
-            detail={card.detail}
-            icon={<LineChart />}
-            key={card.label}
-            label={card.label}
-            value={card.value}
-          />
-        ))}
-      </div>
       <article className="panel">
         <div className="panel-header">
           <h2 className="panel-title">
             <BarChart3 color="var(--orange)" />
-            Evolucion mensual
+            Reportes analiticos
           </h2>
-          <StatusPill tone="info">Placeholder</StatusPill>
+          <StatusPill tone="info">Preparado sin datos demo</StatusPill>
         </div>
-        <div className="mini-chart" aria-label="Grafico placeholder de reportes">
-          {[34, 48, 58, 46, 70, 82, 76, 90].map((height, index) => (
-            <span className="bar turquoise" style={{ height: `${height}%` }} key={index} />
+        <div className="module-list">
+          {reportIdeas.map((idea) => (
+            <div className="module-row" key={idea}>
+              <span>{idea}</span>
+              <LineChart color="var(--turquoise)" size={18} />
+            </div>
           ))}
         </div>
         <div className="empty-state" style={{ marginTop: 16 }}>
-          En fases posteriores esta vista mostrara estadisticas reales de visitas, reservas, cantina, finanzas y cumpleanos.
+          Los reportes se construiran sobre datos reales de visitas, clientes, eventos y productos. No se muestran cierres ni caja financiera en este modulo.
         </div>
       </article>
     </>

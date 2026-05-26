@@ -3,6 +3,7 @@ import { CreditCard, X } from 'lucide-react'
 import { checkoutVisitBalance } from '../../services/checkoutService'
 import { formatGuarani } from '../../utils/money'
 import { getVisitBillingSummary } from '../../utils/visitBilling'
+import { PaymentMethodSelector } from '../payments/PaymentMethodSelector'
 import type { ActiveVisit, CanteenOrder, PaymentMethod } from '../../types'
 
 interface ConsolidatedCheckoutModalProps {
@@ -15,16 +16,6 @@ interface ConsolidatedCheckoutModalProps {
   onDone?: () => void
 }
 
-const paymentMethods: Array<Exclude<PaymentMethod, ''>> = ['cash', 'transfer', 'card', 'qr', 'other']
-
-const paymentLabel: Record<Exclude<PaymentMethod, ''>, string> = {
-  cash: 'Efectivo',
-  transfer: 'Transferencia',
-  card: 'Tarjeta',
-  qr: 'QR',
-  other: 'Otro',
-}
-
 export function ConsolidatedCheckoutModal({
   allowFinishChoice = false,
   finishByDefault = false,
@@ -34,7 +25,7 @@ export function ConsolidatedCheckoutModal({
   source,
   visit,
 }: ConsolidatedCheckoutModalProps) {
-  const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''>>('cash')
+  const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''> | ''>('')
   const [cardType, setCardType] = useState<'debit' | 'credit' | ''>('')
   const [finishVisit, setFinishVisit] = useState(finishByDefault)
   const [isSaving, setIsSaving] = useState(false)
@@ -42,6 +33,11 @@ export function ConsolidatedCheckoutModal({
   const summary = getVisitBillingSummary(visit, orders)
 
   const confirmCheckout = async () => {
+    if (!paymentMethod && summary.totalPendingAmount > 0) {
+      setError('Selecciona un metodo de pago.')
+      return
+    }
+
     if (paymentMethod === 'card' && !cardType) {
       setError('Selecciona si la tarjeta es debito o credito.')
       return
@@ -62,7 +58,7 @@ export function ConsolidatedCheckoutModal({
       await checkoutVisitBalance({
         visit,
         orders,
-        paymentMethod,
+        paymentMethod: paymentMethod || 'cash',
         cardType,
         source,
         finishVisit,
@@ -125,28 +121,13 @@ export function ConsolidatedCheckoutModal({
           <strong>{formatGuarani(summary.totalPendingAmount)}</strong>
         </div>
 
-        <div className="checkout-payment-grid">
-          <label className="field">
-            <span>Forma de pago</span>
-            <select onChange={(event) => setPaymentMethod(event.target.value as Exclude<PaymentMethod, ''>)} value={paymentMethod}>
-              {paymentMethods.map((method) => (
-                <option key={method} value={method}>
-                  {paymentLabel[method]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {paymentMethod === 'card' ? (
-            <label className="field">
-              <span>Tipo de tarjeta</span>
-              <select onChange={(event) => setCardType(event.target.value as 'debit' | 'credit' | '')} value={cardType}>
-                <option value="">Seleccionar</option>
-                <option value="debit">Debito</option>
-                <option value="credit">Credito</option>
-              </select>
-            </label>
-          ) : null}
-        </div>
+        <PaymentMethodSelector
+          cardType={cardType}
+          disabled={isSaving}
+          onCardTypeChange={setCardType}
+          onPaymentMethodChange={setPaymentMethod}
+          paymentMethod={paymentMethod}
+        />
 
         {allowFinishChoice ? (
           <label className="field inline-check checkout-finish-check">
@@ -159,7 +140,12 @@ export function ConsolidatedCheckoutModal({
           <button className="button ghost" onClick={onClose} type="button">
             Cancelar
           </button>
-          <button className="button primary" disabled={isSaving || (summary.totalPendingAmount <= 0 && !finishVisit)} onClick={confirmCheckout} type="button">
+          <button
+            className="button primary"
+            disabled={isSaving || (!paymentMethod && summary.totalPendingAmount > 0) || (summary.totalPendingAmount <= 0 && !finishVisit)}
+            onClick={confirmCheckout}
+            type="button"
+          >
             <CreditCard size={18} />
             {finishVisit ? 'Cobrar y finalizar' : 'Confirmar cobro'}
           </button>

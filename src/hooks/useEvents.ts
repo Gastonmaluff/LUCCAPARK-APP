@@ -33,8 +33,13 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
   totalAmount: data.totalAmount === null || data.totalAmount === undefined ? null : Number(data.totalAmount),
   depositAmount: data.depositAmount === null || data.depositAmount === undefined ? null : Number(data.depositAmount),
   pendingAmount: data.pendingAmount === null || data.pendingAmount === undefined ? null : Number(data.pendingAmount),
+  eventPaidAmount: data.eventPaidAmount === null || data.eventPaidAmount === undefined ? null : Number(data.eventPaidAmount),
+  financialStatus: String(data.financialStatus ?? ''),
   notes: String(data.notes ?? ''),
   tvModeEnabled: data.tvModeEnabled !== false,
+  tvDisplayEnabled: data.tvDisplayEnabled === undefined ? data.tvModeEnabled !== false : data.tvDisplayEnabled !== false,
+  tvImageUrl: String(data.tvImageUrl ?? data.tvBannerImageUrl ?? ''),
+  tvImageUpdatedAt: dateFromTimestamp(data.tvImageUpdatedAt),
   tvTitle: String(data.tvTitle ?? ''),
   tvMessage: String(data.tvMessage ?? ''),
   tvBannerImageUrl: String(data.tvBannerImageUrl ?? ''),
@@ -54,6 +59,8 @@ const mapGuest = (id: string, data: Record<string, unknown>): EventGuest => ({
   customerId: String(data.customerId ?? ''),
   childName: String(data.childName ?? ''),
   childBirthDate: String(data.childBirthDate ?? ''),
+  childExactAge: data.childExactAge === null || data.childExactAge === undefined ? null : Number(data.childExactAge),
+  childAgeCalculated: data.childAgeCalculated === null || data.childAgeCalculated === undefined ? null : Number(data.childAgeCalculated),
   childAgeRange: String(data.childAgeRange ?? ''),
   childGender: String(data.childGender ?? ''),
   responsibleName: String(data.responsibleName ?? ''),
@@ -133,7 +140,7 @@ export function useActiveEvent() {
   const activeEvent = useMemo(
     () =>
       result.events
-        .filter((event) => event.status === 'active' && event.tvModeEnabled)
+        .filter((event) => event.status === 'active')
         .sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`))[0] ?? null,
     [result.events],
   )

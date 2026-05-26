@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, PackagePlus, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, ImageIcon, PackagePlus, Search } from 'lucide-react'
 import { canteenCategories } from '../../config/canteen'
 import { setCanteenProductActive, upsertCanteenProduct, uploadCanteenProductImage } from '../../services/canteenService'
 import { formatGuarani, toNumber } from '../../utils/money'
@@ -24,6 +24,13 @@ const emptyProduct: UpsertCanteenProductInput = {
   isActive: true,
 }
 
+const moneyDigits = (value: string) => value.replace(/\D/g, '')
+const parseMoneyInput = (value: string) => {
+  const digits = moneyDigits(value)
+  return digits ? Number(digits) : 0
+}
+const formatMoneyInput = (value?: number | null) => (value && value > 0 ? new Intl.NumberFormat('es-PY').format(value) : '')
+
 export function ProductManager({ defaultOpen = false, error, isLoading, products }: ProductManagerProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -33,6 +40,8 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
   const [category, setCategory] = useState<CanteenCategory | 'Todas'>('Todas')
   const [showInactive, setShowInactive] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('')
   const [message, setMessage] = useState<string | null>(null)
 
   const activeProductsCount = products.filter((product) => product.isActive).length
@@ -50,6 +59,17 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
       }),
     [category, products, query, showInactive],
   )
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl('')
+      return undefined
+    }
+
+    const objectUrl = URL.createObjectURL(imageFile)
+    setImagePreviewUrl(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [imageFile])
 
   const editProduct = (product: CanteenProduct) => {
     setForm({
@@ -86,13 +106,17 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
 
     setIsSaving(true)
     try {
-      const imageUrl = imageFile ? await uploadCanteenProductImage(imageFile) : form.imageUrl
+      setIsUploadingImage(Boolean(imageFile))
+      const imageUrl = imageFile ? await uploadCanteenProductImage(imageFile, form.id ?? 'new') : form.imageUrl
+      setIsUploadingImage(false)
       await upsertCanteenProduct({ ...form, imageUrl })
       resetForm()
       setMessage('Producto guardado.')
     } catch (saveError) {
+      console.error('[Inventario] No se pudo guardar el producto', saveError)
       setMessage(saveError instanceof Error ? saveError.message : 'No se pudo guardar el producto.')
     } finally {
+      setIsUploadingImage(false)
       setIsSaving(false)
     }
   }
@@ -137,7 +161,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
           </div>
 
           {message ? (
-            <div className={message.includes('No se') || message.includes('Completa') ? 'form-alert error' : 'form-alert success'}>
+            <div className={message.includes('No se') || message.includes('Completa') || message.includes('permiso') ? 'form-alert error' : 'form-alert success'}>
               {message}
             </div>
           ) : null}
@@ -164,22 +188,21 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               <label className="field">
                 <span>Precio de venta</span>
                 <input
-                  min={0}
-                  onChange={(event) => setForm((current) => ({ ...current, price: toNumber(event.target.value) }))}
-                  type="number"
-                  value={form.price}
+                  inputMode="numeric"
+                  onChange={(event) => setForm((current) => ({ ...current, price: parseMoneyInput(event.target.value) }))}
+                  placeholder="Ej: 12.000"
+                  value={formatMoneyInput(form.price)}
                 />
               </label>
               <label className="field">
                 <span>Costo unitario</span>
                 <input
-                  min={0}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, unitCost: event.target.value === '' ? null : toNumber(event.target.value) }))
+                    setForm((current) => ({ ...current, unitCost: moneyDigits(event.target.value) === '' ? null : parseMoneyInput(event.target.value) }))
                   }
+                  inputMode="numeric"
                   placeholder="Opcional"
-                  type="number"
-                  value={form.unitCost ?? ''}
+                  value={formatMoneyInput(form.unitCost)}
                 />
               </label>
               <label className="field">
@@ -206,8 +229,15 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               </label>
               <label className="field">
                 <span>Foto PNG sin fondo</span>
-                <input accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} type="file" />
+                <input accept="image/png,image/jpeg,image/webp" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} type="file" />
               </label>
+              {imagePreviewUrl || form.imageUrl ? (
+                <div className="product-image-preview">
+                  <span>{imageFile ? 'Vista previa nueva' : 'Imagen actual'}</span>
+                  <img alt="Vista previa del producto" src={imagePreviewUrl || form.imageUrl} />
+                  {isUploadingImage ? <small>Subiendo imagen...</small> : null}
+                </div>
+              ) : null}
               {form.imageUrl ? (
                 <label className="field">
                   <span>URL de imagen actual</span>
@@ -227,7 +257,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
                   Cancelar
                 </button>
                 <button className="button primary" disabled={isSaving} type="submit">
-                  {form.id ? 'Actualizar' : 'Crear'}
+                  {isUploadingImage ? 'Subiendo imagen...' : form.id ? 'Actualizar' : 'Crear'}
                 </button>
               </div>
             </form>
@@ -267,11 +297,9 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               const outOfStock = product.stock !== null && product.stock <= 0
               return (
                 <article className={`product-card ${!product.isActive ? 'inactive' : ''}`} key={product.id}>
-                  {product.imageUrl ? (
-                    <div className="product-card-image">
-                      <img alt={product.name} src={product.imageUrl} />
-                    </div>
-                  ) : null}
+                  <div className="product-card-image">
+                    {product.imageUrl ? <img alt={product.name} src={product.imageUrl} /> : <ImageIcon size={30} />}
+                  </div>
                   <div>
                     <strong>{product.name}</strong>
                     <p className="muted">{product.category}</p>

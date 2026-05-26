@@ -3,18 +3,18 @@ import type { EventStatus } from '../../types'
 import type { ComponentProps } from 'react'
 
 const statusLabel: Record<EventStatus, string> = {
-  inquiry: 'Consulta',
-  reserved: 'Reservado',
-  confirmed: 'Confirmado',
-  active: 'Activo',
-  finished: 'Finalizado',
-  cancelled: 'Cancelado',
+  inquiry: 'Proxima / Reservada',
+  reserved: 'Proxima / Reservada',
+  confirmed: 'Proxima / Reservada',
+  active: 'En curso',
+  finished: 'Finalizada',
+  cancelled: 'Cancelada',
 }
 
 const statusTone: Record<EventStatus, ComponentProps<typeof StatusPill>['tone']> = {
-  inquiry: 'info',
+  inquiry: 'reserved',
   reserved: 'reserved',
-  confirmed: 'available',
+  confirmed: 'reserved',
   active: 'available',
   finished: 'info',
   cancelled: 'danger',

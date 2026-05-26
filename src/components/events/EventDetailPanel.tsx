@@ -1,32 +1,53 @@
 import { useState } from 'react'
-import { CheckCircle2, Monitor, PartyPopper, Power, Square } from 'lucide-react'
+import { Monitor, PartyPopper, Power, Square, XCircle } from 'lucide-react'
 import { EventCapacityBadge } from './EventCapacityBadge'
 import { EventGuestList } from './EventGuestList'
+import { EventPaymentModal } from './EventPaymentModal'
 import { EventStatusBadge } from './EventStatusBadge'
+import { EventTvImageModal } from './EventTvImageModal'
+import { ExpenseModal } from '../finance/ExpenseModal'
+import { TaskModal } from '../tasks/TaskModal'
 import { StatusPill } from '../StatusPill'
-import { updateEventStatus, updateEventTvSettings } from '../../services/eventService'
+import { updateEventStatus } from '../../services/eventService'
 import { useCanteenOrders } from '../../hooks/useCanteen'
+import { useFinanceData } from '../../hooks/useFinance'
 import { useEventGuests } from '../../hooks/useEvents'
-import { formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
+import { useTasks } from '../../hooks/useTasks'
+import { updateTaskStatus } from '../../services/taskService'
+import { canCancelEvent, canStartEvent, formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
 import { formatGuarani } from '../../utils/money'
-import type { LuccaEvent, UpdateEventTvInput } from '../../types'
+import type { LuccaEvent } from '../../types'
 
 interface EventDetailPanelProps {
   event: LuccaEvent | null
 }
 
+const methodLabel = (method?: string, cardType?: string) => {
+  if (method === 'card' && cardType === 'debit') return 'Tarjeta debito'
+  if (method === 'card' && cardType === 'credit') return 'Tarjeta credito'
+  if (method === 'cash') return 'Efectivo'
+  if (method === 'transfer') return 'Transferencia'
+  if (method === 'qr') return 'QR'
+  if (method === 'other') return 'Otro'
+  return 'Sin metodo'
+}
+
 export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const { error, guests, isLoading } = useEventGuests(event?.id)
   const { orders: canteenOrders } = useCanteenOrders()
+  const finance = useFinanceData({ from: '2000-01-01', to: '2099-12-31' })
+  const { tasks } = useTasks()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
-  const [isSavingTv, setIsSavingTv] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [tvDraft, setTvDraft] = useState<{ eventId: string; data: UpdateEventTvInput } | null>(null)
+  const [isTvModalOpen, setIsTvModalOpen] = useState(false)
+  const [isExpenseOpen, setIsExpenseOpen] = useState(false)
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [isTaskOpen, setIsTaskOpen] = useState(false)
 
   if (!event) {
     return (
       <article className="panel">
-        <div className="empty-state">Seleccioná una reserva para ver el detalle e invitados.</div>
+        <div className="empty-state">Selecciona una reserva para ver el detalle e invitados.</div>
       </article>
     )
   }
@@ -35,26 +56,25 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const eventCanteenOrders = canteenOrders.filter((order) => order.eventId === event.id && order.status !== 'cancelled')
   const openEventCanteenOrders = eventCanteenOrders.filter((order) => order.status === 'open')
   const eventCanteenTotal = eventCanteenOrders.reduce((sum, order) => sum + order.total, 0)
-  const eventTvSettings: UpdateEventTvInput = {
-    tvModeEnabled: event.tvModeEnabled,
-    tvTitle: event.tvTitle,
-    tvMessage: event.tvMessage,
-    tvBannerImageUrl: event.tvBannerImageUrl,
-    showGuestCounterOnTv: event.showGuestCounterOnTv,
-    showEventNameOnTv: event.showEventNameOnTv,
-    hideSensitiveInfoOnTv: event.hideSensitiveInfoOnTv,
-  }
-  const tvForm = tvDraft?.eventId === event.id ? tvDraft.data : eventTvSettings
-
-  const updateTvForm = <Field extends keyof UpdateEventTvInput>(field: Field, value: UpdateEventTvInput[Field]) => {
-    setTvDraft({
-      eventId: event.id,
-      data: {
-        ...tvForm,
-        [field]: value,
-      },
-    })
-  }
+  const eventPayments = finance.payments.filter((payment) => payment.eventId === event.id)
+  const eventExpenses = finance.expenses.filter((expense) => expense.eventId === event.id)
+  const eventDirectCollected = eventPayments
+    .filter((payment) => payment.source === 'event_payment' || payment.concepts === 'event')
+    .reduce((sum, payment) => sum + payment.totalPaid, 0)
+  const eventCollectedTotal = Math.max(eventDirectCollected, event.eventPaidAmount ?? 0)
+  const eventPendingAmount = event.totalAmount ? Math.max(0, event.totalAmount - eventCollectedTotal) : event.pendingAmount ?? 0
+  const financialStatus =
+    event.totalAmount && eventPendingAmount <= 0
+      ? 'Pagado completo'
+      : eventCollectedTotal <= 0
+        ? 'Sin pagos'
+        : event.depositAmount && eventCollectedTotal <= event.depositAmount
+          ? 'Sena registrada'
+          : 'Pago parcial'
+  const eventCanteenCollected = eventCanteenOrders.filter((order) => order.status === 'paid').reduce((sum, order) => sum + order.total, 0)
+  const eventExpensesTotal = eventExpenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const eventEstimatedResult = eventCollectedTotal + eventCanteenCollected - eventExpensesTotal
+  const eventTasks = tasks.filter((task) => task.eventId === event.id)
 
   const changeStatus = async (status: LuccaEvent['status']) => {
     setIsUpdatingStatus(true)
@@ -66,21 +86,6 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
       setMessage(statusError instanceof Error ? statusError.message : 'No se pudo actualizar el estado.')
     } finally {
       setIsUpdatingStatus(false)
-    }
-  }
-
-  const saveTvSettings = async (submitEvent: React.FormEvent<HTMLFormElement>) => {
-    submitEvent.preventDefault()
-    setIsSavingTv(true)
-    setMessage(null)
-    try {
-      await updateEventTvSettings(event.id, tvForm)
-      setMessage('Configuracion de TV guardada.')
-      setTvDraft(null)
-    } catch (tvError) {
-      setMessage(tvError instanceof Error ? tvError.message : 'No se pudo guardar la TV.')
-    } finally {
-      setIsSavingTv(false)
     }
   }
 
@@ -101,31 +106,20 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
           <p className="eyebrow">Evento</p>
           <h3>{event.title}</h3>
           <p className="muted">
-            {event.customerName} · {event.date} · {formatEventTimeRange(event)}
+            {event.customerName} - {event.date} - {formatEventTimeRange(event)}
           </p>
         </div>
         <EventCapacityBadge event={event} guestCount={guests.length || event.registeredGuestsCount} />
       </div>
 
       <div className="event-finance-summary">
-        <span>
-          <small>Monto total</small>
-          <strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong>
-        </span>
-        <span>
-          <small>Seña</small>
-          <strong>{formatGuarani(event.depositAmount ?? 0)}</strong>
-        </span>
-        <span>
-          <small>Saldo pendiente</small>
-          <strong>{formatGuarani(event.pendingAmount ?? 0)}</strong>
-        </span>
+        <span><small>Monto total</small><strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong></span>
+        <span><small>Total cobrado</small><strong>{formatGuarani(eventCollectedTotal)}</strong></span>
+        <span><small>Saldo pendiente</small><strong>{formatGuarani(eventPendingAmount)}</strong></span>
       </div>
 
       <div className="event-owner-summary">
-        <strong>
-          Entraron {stats.registeredGuestsCount} ninos de {stats.contractedChildrenCount} contratados
-        </strong>
+        <strong>Entraron {stats.registeredGuestsCount} ninos de {stats.contractedChildrenCount} contratados</strong>
         <StatusPill tone={stats.extraGuestsCount > 0 ? 'danger' : stats.includedRemaining <= 5 ? 'warning' : 'available'}>
           Adicionales: {stats.extraGuestsCount}
         </StatusPill>
@@ -138,98 +132,141 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         </StatusPill>
       </div>
 
+      <section className="event-finance-block">
+        <div className="panel-header">
+          <h3 className="panel-title">Finanzas del evento</h3>
+          <div className="module-actions">
+            <StatusPill tone={eventPendingAmount <= 0 && event.totalAmount ? 'available' : eventCollectedTotal > 0 ? 'warning' : 'info'}>
+              {financialStatus}
+            </StatusPill>
+            <button className="button primary" onClick={() => setIsPaymentOpen(true)} type="button">
+              + Registrar cobro
+            </button>
+            <button className="button ghost" onClick={() => setIsExpenseOpen(true)} type="button">
+              + Registrar gasto asociado
+            </button>
+          </div>
+        </div>
+
+        <div className="event-finance-summary">
+          <span><small>Paquete contratado</small><strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong></span>
+          <span><small>Total cobrado</small><strong>{formatGuarani(eventCollectedTotal)}</strong></span>
+          <span><small>Sena registrada</small><strong>{formatGuarani(Math.min(eventCollectedTotal, event.depositAmount ?? eventCollectedTotal))}</strong></span>
+          <span><small>Saldo pendiente</small><strong>{formatGuarani(eventPendingAmount)}</strong></span>
+          <span><small>Cantina cobrada</small><strong>{formatGuarani(eventCanteenCollected)}</strong></span>
+          <span><small>Gastos asociados</small><strong>{formatGuarani(eventExpensesTotal)}</strong></span>
+          <span><small>Resultado estimado</small><strong>{formatGuarani(eventEstimatedResult)}</strong></span>
+        </div>
+
+        <div className="event-subsection-title">Historial de cobros</div>
+        <div className="module-list">
+          {eventPayments.length === 0 ? <div className="empty-state">No hay cobros registrados para este evento.</div> : null}
+          {eventPayments.map((payment) => (
+            <div className="module-row" key={payment.id}>
+              <span>
+                <strong>{payment.description || 'Cobro de evento'}</strong>
+                <small>{payment.paidAt?.toLocaleString('es-PY') ?? 'Sin fecha'} - {methodLabel(payment.paymentMethod, payment.cardType)} - {payment.createdBy || 'Sin usuario'}</small>
+              </span>
+              <strong>{formatGuarani(payment.totalPaid)}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="event-subsection-title">Gastos asociados</div>
+        <div className="module-list">
+          {eventExpenses.length === 0 ? <div className="empty-state">No hay gastos asociados a este evento.</div> : null}
+          {eventExpenses.map((expense) => (
+            <div className="module-row" key={expense.id}>
+              <span>
+                <strong>{expense.description}</strong>
+                <small>{expense.date} - {expense.category}</small>
+              </span>
+              <strong>{formatGuarani(expense.amount)}</strong>
+              {expense.receiptUrl ? <a className="button ghost" href={expense.receiptUrl} rel="noreferrer" target="_blank">Ver comprobante</a> : <StatusPill tone="info">Sin comprobante</StatusPill>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="event-finance-block">
+        <div className="panel-header">
+          <h3 className="panel-title">Tareas del evento</h3>
+          <button className="button ghost" onClick={() => setIsTaskOpen(true)} type="button">
+            + Crear tarea para este evento
+          </button>
+        </div>
+        <div className="module-list">
+          {eventTasks.length === 0 ? <div className="empty-state">No hay tareas vinculadas a este evento.</div> : null}
+          {eventTasks.map((task) => (
+            <div className="module-row" key={task.id}>
+              <span>
+                <strong>{task.title}</strong>
+                <small>{task.assignedToName || task.assignedTo || 'Sin asignar'} - {task.priority}</small>
+              </span>
+              <StatusPill tone={task.status === 'completed' ? 'available' : task.status === 'in_progress' ? 'info' : 'warning'}>
+                {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En proceso' : 'Pendiente'}
+              </StatusPill>
+              {task.status !== 'completed' ? (
+                <button className="button ghost" onClick={() => updateTaskStatus(task, 'completed')} type="button">
+                  Completar
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="module-actions event-actions">
-        <button className="button primary" disabled={isUpdatingStatus} onClick={() => changeStatus('active')} type="button">
-          <Power size={18} />
-          Activar evento
-        </button>
-        <button className="button ghost" disabled={isUpdatingStatus} onClick={() => changeStatus('finished')} type="button">
-          <Square size={18} />
-          Finalizar evento
-        </button>
-        <button className="button secondary" disabled={isUpdatingStatus} onClick={() => changeStatus('confirmed')} type="button">
-          <CheckCircle2 size={18} />
-          Confirmar
-        </button>
+        {canStartEvent(event) ? (
+          <button className="button primary" disabled={isUpdatingStatus} onClick={() => changeStatus('active')} type="button">
+            <Power size={18} />
+            Empezar evento
+          </button>
+        ) : null}
+        {event.status === 'active' ? (
+          <button className="button ghost" disabled={isUpdatingStatus} onClick={() => changeStatus('finished')} type="button">
+            <Square size={18} />
+            Finalizar evento
+          </button>
+        ) : null}
+        {canCancelEvent(event) ? (
+          <button className="button danger" disabled={isUpdatingStatus} onClick={() => changeStatus('cancelled')} type="button">
+            <XCircle size={18} />
+            Cancelar reserva
+          </button>
+        ) : null}
       </div>
 
-      <form className="tv-settings-form" onSubmit={saveTvSettings}>
+      <section className="tv-settings-form">
         <div className="panel-header">
           <h3 className="panel-title">
             <Monitor color="var(--turquoise)" />
-            Configuracion TV
+            Imagen para TV
           </h3>
-          <StatusPill tone="info">Modo evento</StatusPill>
+          <StatusPill tone={event.tvDisplayEnabled ? 'available' : 'blocked'}>
+            {event.tvDisplayEnabled ? 'Activa' : 'Desactivada'}
+          </StatusPill>
         </div>
-
-        <label className="field">
-          <span>Titulo TV</span>
-          <input
-            onChange={(changeEvent) => updateTvForm('tvTitle', changeEvent.target.value)}
-            value={tvForm.tvTitle}
-          />
-        </label>
-        <label className="field">
-          <span>Mensaje TV</span>
-          <input
-            onChange={(changeEvent) => updateTvForm('tvMessage', changeEvent.target.value)}
-            value={tvForm.tvMessage}
-          />
-        </label>
-        <label className="field">
-          <span>URL banner</span>
-          <input
-            onChange={(changeEvent) => updateTvForm('tvBannerImageUrl', changeEvent.target.value)}
-            placeholder="https://..."
-            value={tvForm.tvBannerImageUrl}
-          />
-        </label>
-
-        <div className="settings-toggle-grid">
-          <label>
-            <input
-              checked={tvForm.tvModeEnabled}
-              onChange={(changeEvent) => updateTvForm('tvModeEnabled', changeEvent.target.checked)}
-              type="checkbox"
-            />
-            Activar TV evento
-          </label>
-          <label>
-            <input
-              checked={tvForm.showEventNameOnTv}
-              onChange={(changeEvent) => updateTvForm('showEventNameOnTv', changeEvent.target.checked)}
-              type="checkbox"
-            />
-            Mostrar nombre
-          </label>
-          <label>
-            <input
-              checked={tvForm.showGuestCounterOnTv}
-              onChange={(changeEvent) => updateTvForm('showGuestCounterOnTv', changeEvent.target.checked)}
-              type="checkbox"
-            />
-            Mostrar contador
-          </label>
-          <label>
-            <input
-              checked={tvForm.hideSensitiveInfoOnTv}
-              onChange={(changeEvent) => updateTvForm('hideSensitiveInfoOnTv', changeEvent.target.checked)}
-              type="checkbox"
-            />
-            Ocultar datos sensibles
-          </label>
-        </div>
-
-        <button className="button ghost" disabled={isSavingTv} type="submit">
-          Guardar TV
+        <p className="muted">Carga una unica imagen horizontal para mostrarla a pantalla completa en /tv.</p>
+        {event.tvImageUrl || event.tvBannerImageUrl ? (
+          <div className="event-tv-thumb">
+            <img alt="Imagen actual de TV" src={event.tvImageUrl || event.tvBannerImageUrl} />
+          </div>
+        ) : null}
+        <button className="button ghost" onClick={() => setIsTvModalOpen(true)} type="button">
+          Configurar TV
         </button>
-      </form>
+      </section>
 
       <div className="panel-header guests-detail-header">
         <h3 className="panel-title">Invitados del evento</h3>
         <StatusPill tone="info">{guests.length} registrados</StatusPill>
       </div>
       <EventGuestList error={error} guests={guests} isLoading={isLoading} />
+      {isTvModalOpen ? <EventTvImageModal event={event} onClose={() => setIsTvModalOpen(false)} /> : null}
+      {isExpenseOpen ? <ExpenseModal events={[event]} initialEvent={event} onClose={() => setIsExpenseOpen(false)} /> : null}
+      {isPaymentOpen ? <EventPaymentModal event={event} existingPayments={eventPayments} onClose={() => setIsPaymentOpen(false)} onDone={() => setMessage('Cobro registrado.')} /> : null}
+      {isTaskOpen ? <TaskModal events={[event]} initialEvent={event} onClose={() => setIsTaskOpen(false)} /> : null}
     </article>
   )
 }

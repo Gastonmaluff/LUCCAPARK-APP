@@ -22,6 +22,7 @@ const adminNavItems = [
   { label: 'Finanzas', to: '/admin/finanzas', icon: WalletCards },
   { label: 'Reportes', to: '/admin/reportes', icon: BarChart3 },
   { label: 'Clientes', to: '/admin/clientes', icon: UserRound },
+  { label: 'Tareas', to: '/admin/tareas', icon: ClipboardList },
   { label: 'Configuracion', to: '/admin/configuracion', icon: Settings },
 ]
 

@@ -1,6 +1,7 @@
 export type AvailabilityStatus = 'available' | 'reserved' | 'blocked' | 'consult'
 export type PaymentStatus = 'paid' | 'payAtExit' | 'pending'
 export type PaymentMethod = 'cash' | 'transfer' | 'card' | 'qr' | 'other' | ''
+export type UserRole = 'admin' | 'socio' | 'encargado_eventos' | 'recepcion' | 'cantina'
 export type VisitTone = 'ok' | 'warn' | 'danger'
 export type VisitTimeStatus = 'ok' | 'warning' | 'expired' | 'unlimited'
 export type EventStatus = 'inquiry' | 'reserved' | 'confirmed' | 'active' | 'finished' | 'cancelled'
@@ -182,6 +183,107 @@ export interface ChargeVisitInput {
   amountCharged?: number | null
 }
 
+export interface AppUserProfile {
+  id: string
+  uid: string
+  displayName: string
+  email: string
+  role: UserRole
+  isActive: boolean
+  createdAt?: Date | null
+  updatedAt?: Date | null
+}
+
+export interface PaymentRecord {
+  id: string
+  totalPaid: number
+  paymentMethod?: PaymentMethod
+  cardType?: 'debit' | 'credit' | ''
+  paidAt?: Date | null
+  createdAt?: Date | null
+  source: 'reception_entry' | 'reception_exit' | 'canteen' | 'event_payment' | 'legacy' | string
+  concepts?: 'park' | 'canteen' | 'event' | 'both' | string
+  description?: string
+  accountType?: string
+  childName?: string
+  customerName?: string
+  eventName?: string
+  visitId?: string
+  canteenOrderId?: string
+  canteenOrderIds?: string[]
+  eventId?: string
+  parkAmountPaid?: number
+  canteenAmountPaid?: number
+  eventAmountPaid?: number
+  createdBy?: string | null
+}
+
+export type ExpenseCategory =
+  | 'canteen_purchase'
+  | 'decoration'
+  | 'cleaning'
+  | 'maintenance'
+  | 'wages'
+  | 'services'
+  | 'operations'
+  | 'other'
+
+export interface ExpenseRecord {
+  id: string
+  date: string
+  spentAt?: Date | null
+  category: ExpenseCategory
+  description: string
+  amount: number
+  paymentMethod: Exclude<PaymentMethod, ''>
+  cardType?: 'debit' | 'credit' | ''
+  type: 'general' | 'event'
+  eventId?: string
+  eventName?: string
+  receiptUrl?: string
+  notes?: string
+  status?: 'active' | 'void'
+  createdAt?: Date | null
+  createdBy?: string | null
+  updatedAt?: Date | null
+  updatedBy?: string | null
+}
+
+export interface FinancialClosureRecord {
+  id: string
+  dateFrom: string
+  dateTo: string
+  generatedAt?: Date | null
+  generatedBy?: string | null
+  totalCollected: number
+  totalExpenses: number
+  netResult: number
+  pendingAmount: number
+  pdfUrl?: string
+  totalsSnapshot?: Record<string, unknown>
+}
+
+export interface LuccaTask {
+  id: string
+  title: string
+  description?: string
+  assignedTo?: string
+  assignedToName?: string
+  createdBy?: string | null
+  createdByName?: string
+  createdAt?: Date | null
+  dueAt?: Date | null
+  priority: 'low' | 'medium' | 'high'
+  status: 'pending' | 'in_progress' | 'completed'
+  eventId?: string
+  eventName?: string
+  notes?: string
+  completedAt?: Date | null
+  completedBy?: string | null
+  updatedAt?: Date | null
+  updatedBy?: string | null
+}
+
 export interface LuccaEvent {
   id: string
   title: string
@@ -198,8 +300,13 @@ export interface LuccaEvent {
   totalAmount?: number | null
   depositAmount?: number | null
   pendingAmount?: number | null
+  eventPaidAmount?: number | null
+  financialStatus?: 'unpaid' | 'deposit' | 'partial' | 'paid' | 'pending' | string
   notes?: string
   tvModeEnabled: boolean
+  tvDisplayEnabled?: boolean
+  tvImageUrl?: string
+  tvImageUpdatedAt?: Date | null
   tvTitle?: string
   tvMessage?: string
   tvBannerImageUrl?: string
@@ -236,6 +343,8 @@ export interface EventGuest {
   customerId?: string
   childName: string
   childBirthDate?: string
+  childExactAge?: number | null
+  childAgeCalculated?: number | null
   childAgeRange?: string
   childGender?: string
   responsibleName: string
@@ -257,6 +366,8 @@ export interface CreateEventGuestInput {
   event: LuccaEvent
   childName: string
   childBirthDate?: string
+  childExactAge?: number | null
+  childAgeCalculated?: number | null
   childAgeRange?: string
   childGender?: string
   responsibleName: string
@@ -266,6 +377,8 @@ export interface CreateEventGuestInput {
 
 export interface UpdateEventTvInput {
   tvModeEnabled: boolean
+  tvDisplayEnabled?: boolean
+  tvImageUrl?: string
   tvTitle?: string
   tvMessage?: string
   tvBannerImageUrl?: string
@@ -318,6 +431,7 @@ export interface CanteenOrder {
   status: CanteenOrderStatus
   paymentStatus: 'pending' | 'paid'
   paymentMethod?: PaymentMethod
+  cardType?: 'debit' | 'credit' | ''
   notes?: string
   createdAt?: Date | null
   updatedAt?: Date | null

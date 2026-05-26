@@ -1,7 +1,7 @@
 interface MetricCardProps {
   label: string
   value: string
-  detail: string
+  detail: React.ReactNode
   icon: React.ReactNode
   color: string
 }
@@ -15,7 +15,7 @@ export function MetricCard({ label, value, detail, icon, color }: MetricCardProp
             {label}
           </p>
           <strong>{value}</strong>
-          <p className="muted">{detail}</p>
+          <div className="metric-detail">{detail}</div>
         </div>
         <span className="metric-icon" style={{ background: `${color}1f`, color }}>
           {icon}

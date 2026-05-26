@@ -12,25 +12,36 @@ import {
   where,
 } from 'firebase/firestore'
 import { auth } from '../config/firebase'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { firebaseConfig, storage } from '../config/firebase'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { ensureReceptionSession } from './authSession'
+import { formatEventTitle, formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CreateEventGuestInput,
   CreateEventInput,
   EventStatus,
+  PaymentMethod,
   UpdateEventTvInput,
 } from '../types'
 
 const currentUserId = () => auth.currentUser?.uid ?? null
 
-const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ')
+interface RegisterEventPaymentInput {
+  amount: number
+  cardType?: 'debit' | 'credit' | ''
+  concept: 'deposit' | 'partial' | 'balance' | 'other'
+  eventId: string
+  notes?: string
+  paymentMethod: Exclude<PaymentMethod, ''>
+}
 
 const optionalText = (value?: string) => {
-  const normalized = normalizeText(value ?? '')
+  const normalized = normalizeWhitespace(value ?? '')
   return normalized.length > 0 ? normalized : ''
 }
 
-const lowerKey = (value: string) => normalizeText(value).toLocaleLowerCase('es-PY')
+const lowerKey = (value: string) => lowerSearchKey(value)
 
 const findCustomerByPhone = async (phone?: string) => {
   const normalizedPhone = optionalText(phone)
@@ -67,10 +78,10 @@ const findChildByNameAndPhone = async (childName: string, phone?: string) => {
 export const createEvent = async (input: CreateEventInput) => {
   await ensureReceptionSession()
 
-  const title = normalizeText(input.title || `Cumpleanos de ${input.birthdayChildName}`)
-  const birthdayChildName = normalizeText(input.birthdayChildName)
-  const customerName = normalizeText(input.customerName)
-  const customerPhone = optionalText(input.customerPhone)
+  const title = formatEventTitle(input.title || `Cumpleanos de ${input.birthdayChildName}`)
+  const birthdayChildName = formatPersonName(input.birthdayChildName)
+  const customerName = formatPersonName(input.customerName)
+  const customerPhone = phoneDigits(input.customerPhone ?? '')
   const eventRef = doc(getCollectionRef('events'))
   const userId = currentUserId()
 
@@ -101,6 +112,9 @@ export const createEvent = async (input: CreateEventInput) => {
         : Number(input.pendingAmount),
     notes: optionalText(input.notes),
     tvModeEnabled: true,
+    tvDisplayEnabled: false,
+    tvImageUrl: '',
+    tvImageUpdatedAt: null,
     tvTitle: `Bienvenidos al cumpleanos de ${birthdayChildName || title}`,
     tvMessage: 'Que empiece la diversion',
     tvBannerImageUrl: '',
@@ -119,6 +133,15 @@ export const createEvent = async (input: CreateEventInput) => {
 export const updateEventStatus = async (eventId: string, status: EventStatus) => {
   await ensureReceptionSession()
 
+  if (status === 'active') {
+    const activeSnapshot = await getDocs(query(getCollectionRef('events'), where('status', '==', 'active'), limit(5)))
+    const anotherActiveEvent = activeSnapshot.docs.find((docSnapshot) => docSnapshot.id !== eventId)
+
+    if (anotherActiveEvent) {
+      throw new Error('Ya existe un evento en curso. Finalizalo antes de iniciar otro.')
+    }
+  }
+
   await updateDoc(getDocumentRef('events', eventId), {
     status,
     updatedAt: serverTimestamp(),
@@ -126,14 +149,94 @@ export const updateEventStatus = async (eventId: string, status: EventStatus) =>
   })
 }
 
-export const updateEventTvSettings = async (eventId: string, input: UpdateEventTvInput) => {
+export const registerEventPayment = async ({
+  amount,
+  cardType = '',
+  concept,
+  eventId,
+  notes,
+  paymentMethod,
+}: RegisterEventPaymentInput) => {
   await ensureReceptionSession()
 
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Ingresa un monto valido para registrar el cobro.')
+  }
+
+  const eventRef = getDocumentRef('events', eventId)
+  const paymentRef = doc(getCollectionRef('payments'))
+  const now = new Date()
+  const userId = currentUserId()
+  const conceptLabel = {
+    balance: 'Saldo final',
+    deposit: 'Sena',
+    other: 'Otro cobro',
+    partial: 'Pago parcial',
+  }[concept]
+
+  await runTransaction(eventRef.firestore, async (transaction) => {
+    const eventSnapshot = await transaction.get(eventRef)
+    if (!eventSnapshot.exists()) {
+      throw new Error('La reserva seleccionada ya no existe.')
+    }
+
+    const eventData = eventSnapshot.data()
+    const totalAmount = Number(eventData.totalAmount ?? 0)
+    const previousPaid = Number(eventData.eventPaidAmount ?? 0)
+    const nextPaid = previousPaid + amount
+    const nextPending = Math.max(0, totalAmount - nextPaid)
+    const financialStatus =
+      totalAmount > 0 && nextPending <= 0
+        ? 'paid'
+        : nextPaid <= 0
+          ? 'unpaid'
+          : concept === 'deposit'
+            ? 'deposit'
+            : 'partial'
+
+    transaction.set(paymentRef, {
+      id: paymentRef.id,
+      eventId,
+      eventName: String(eventData.title ?? ''),
+      customerName: String(eventData.customerName ?? ''),
+      source: 'event_payment',
+      concepts: 'event',
+      eventAmountPaid: amount,
+      totalPaid: amount,
+      paymentMethod,
+      cardType,
+      description: `${conceptLabel} - ${String(eventData.title ?? 'Evento')}`,
+      notes: optionalText(notes),
+      paidAt: Timestamp.fromDate(now),
+      createdAt: serverTimestamp(),
+      createdBy: userId,
+    })
+
+    transaction.update(eventRef, {
+      eventPaidAmount: nextPaid,
+      financialStatus,
+      pendingAmount: totalAmount > 0 ? nextPending : Number(eventData.pendingAmount ?? 0),
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    })
+  })
+
+  return paymentRef.id
+}
+
+export const updateEventTvSettings = async (eventId: string, input: UpdateEventTvInput) => {
+  await ensureReceptionSession()
+  const imageUrl = optionalText(input.tvImageUrl ?? input.tvBannerImageUrl)
+  const displayEnabled = input.tvDisplayEnabled ?? input.tvModeEnabled
+
   await updateDoc(getDocumentRef('events', eventId), {
-    tvModeEnabled: input.tvModeEnabled,
+    tvModeEnabled: displayEnabled,
+    tvDisplayEnabled: displayEnabled,
+    tvImageUrl: imageUrl,
+    tvImageUpdatedAt: imageUrl ? serverTimestamp() : null,
     tvTitle: optionalText(input.tvTitle),
     tvMessage: optionalText(input.tvMessage),
-    tvBannerImageUrl: optionalText(input.tvBannerImageUrl),
+    tvBannerImageUrl: imageUrl,
     showGuestCounterOnTv: input.showGuestCounterOnTv,
     showEventNameOnTv: input.showEventNameOnTv,
     hideSensitiveInfoOnTv: input.hideSensitiveInfoOnTv,
@@ -142,12 +245,61 @@ export const updateEventTvSettings = async (eventId: string, input: UpdateEventT
   })
 }
 
+const maxEventTvImageSize = 5 * 1024 * 1024
+const allowedEventTvImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
+
+export const uploadEventTvImage = async (eventId: string, file: File) => {
+  await ensureReceptionSession()
+
+  const user = auth.currentUser
+  if (!user) {
+    throw new Error('Necesitas iniciar sesion como administrador para subir imagenes.')
+  }
+
+  if (!allowedEventTvImageTypes.has(file.type)) {
+    throw new Error('Selecciona una imagen PNG, JPG o WEBP.')
+  }
+
+  if (file.size > maxEventTvImageSize) {
+    throw new Error('La imagen supera el limite de 5 MB.')
+  }
+
+  const extension = file.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'image'
+  const safeEventId = eventId.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const storagePath = `event-tv-images/${safeEventId}/tv-image-${Date.now()}.${extension}`
+  const storageRef = ref(storage, storagePath)
+
+  try {
+    console.info('[Evento TV Storage] Upload start', {
+      bucket: firebaseConfig.storageBucket,
+      contentType: file.type,
+      path: storagePath,
+      size: file.size,
+      uid: user.uid,
+    })
+    await uploadBytes(storageRef, file, { contentType: file.type })
+    return await getDownloadURL(storageRef)
+  } catch (error) {
+    console.error('[Evento TV Storage] upload failed', {
+      bucket: firebaseConfig.storageBucket,
+      error,
+      path: storagePath,
+      uid: user.uid,
+    })
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('storage/unauthorized')) {
+      throw new Error('No tenes permiso para subir esta imagen. Verifica las reglas de Firebase Storage.')
+    }
+    throw error
+  }
+}
+
 export const createEventGuest = async (input: CreateEventGuestInput) => {
   await ensureReceptionSession()
 
-  const childName = normalizeText(input.childName)
-  const responsibleName = normalizeText(input.responsibleName)
-  const responsiblePhone = optionalText(input.responsiblePhone)
+  const childName = formatPersonName(input.childName)
+  const responsibleName = formatPersonName(input.responsibleName)
+  const responsiblePhone = phoneDigits(input.responsiblePhone ?? '')
   const existingCustomer = await findCustomerByPhone(responsiblePhone)
   const customerRef = existingCustomer
     ? getDocumentRef('customers', existingCustomer.id)
@@ -191,6 +343,8 @@ export const createEventGuest = async (input: CreateEventGuestInput) => {
     eventGuestCount: increment(1),
     lastVisitAt: serverTimestamp(),
     ...(childBirthDate ? { birthDate: childBirthDate } : {}),
+    ...(input.childExactAge !== undefined && input.childExactAge !== null ? { exactAge: input.childExactAge } : {}),
+    ...(input.childAgeCalculated !== undefined && input.childAgeCalculated !== null ? { ageCalculated: input.childAgeCalculated } : {}),
     ...(childAgeRange ? { ageRange: childAgeRange } : {}),
     ...(childGender ? { gender: childGender } : {}),
     ...(childNotes ? { notes: childNotes } : {}),
@@ -221,6 +375,8 @@ export const createEventGuest = async (input: CreateEventGuestInput) => {
       customerId: customerRef.id,
       childName,
       childBirthDate: optionalText(input.childBirthDate),
+      childExactAge: input.childExactAge ?? null,
+      childAgeCalculated: input.childAgeCalculated ?? null,
       childAgeRange: optionalText(input.childAgeRange),
       childGender: optionalText(input.childGender),
       responsibleName,
