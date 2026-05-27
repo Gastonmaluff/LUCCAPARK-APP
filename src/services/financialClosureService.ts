@@ -78,19 +78,19 @@ const formatDateTime = (date?: Date | null) =>
     : '-'
 
 const methodLabel = (payment: Pick<PaymentRecord | ExpenseRecord, 'paymentMethod' | 'cardType'>) => {
-  if (payment.paymentMethod === 'card' && payment.cardType === 'debit') return 'Tarjeta debito'
-  if (payment.paymentMethod === 'card' && payment.cardType === 'credit') return 'Tarjeta credito'
+  if (payment.paymentMethod === 'card' && payment.cardType === 'debit') return 'Tarjeta débito'
+  if (payment.paymentMethod === 'card' && payment.cardType === 'credit') return 'Tarjeta crédito'
   if (payment.paymentMethod === 'cash') return 'Efectivo'
   if (payment.paymentMethod === 'transfer') return 'Transferencia'
   if (payment.paymentMethod === 'qr') return 'QR'
   if (payment.paymentMethod === 'other') return 'Otro'
-  return 'Sin metodo registrado'
+  return 'Sin método registrado'
 }
 
 const moduleLabel = (payment: PaymentRecord) => {
   if (payment.source === 'canteen' || payment.concepts === 'canteen') return 'Cantina'
   if (payment.source === 'event_payment' || payment.concepts === 'event') return 'Eventos'
-  if (payment.source === 'reception_entry' || payment.source === 'reception_exit') return 'Recepcion'
+  if (payment.source === 'reception_entry' || payment.source === 'reception_exit') return 'Recepción'
   if (payment.concepts === 'park') return 'Parque'
   return 'Anterior'
 }
@@ -99,7 +99,7 @@ const expenseCategoryLabel = (category: ExpenseRecord['category']) =>
   ({
     canteen_purchase: 'Cantina / productos',
     cleaning: 'Limpieza',
-    decoration: 'Decoracion',
+    decoration: 'Decoración',
     maintenance: 'Mantenimiento',
     operations: 'Compra operativa',
     other: 'Otro',
@@ -160,20 +160,31 @@ const drawRoundedBox = (page: PDFPage, x: number, y: number, width: number, heig
   })
 }
 
+const drawSectionTitleAt = (page: PDFPage, fonts: Fonts, icon: string, title: string, x: number, y: number, width = pageWidth - marginX * 2) => {
+  page.drawCircle({ x: x + 13, y: y + 8, size: 12, borderColor: black, borderWidth: 1.1 })
+  drawText(page, icon, x + 13, y + 3.2, fonts.bold, 9, { align: 'center' })
+  drawFittedText(page, title.toUpperCase(), x + 34, y + 1, fonts.bold, 15, width - 34, { minSize: 11 })
+}
+
 const drawSectionTitle = (page: PDFPage, fonts: Fonts, icon: string, title: string, y: number) => {
-  page.drawCircle({ x: marginX + 13, y: y + 8, size: 12, borderColor: black, borderWidth: 1.1 })
-  drawText(page, icon, marginX + 13, y + 3.2, fonts.bold, 9, { align: 'center' })
-  drawText(page, title.toUpperCase(), marginX + 34, y + 1, fonts.bold, 15)
+  drawSectionTitleAt(page, fonts, icon, title, marginX, y)
 }
 
 const drawMetricCard = (page: PDFPage, fonts: Fonts, x: number, y: number, width: number, height: number, label: string, value: string, icon: string, detail?: string) => {
   drawRoundedBox(page, x, y, width, height, { fill: rgb(1, 1, 1), border: lineGray, borderWidth: 0.8 })
-  page.drawCircle({ x: x + 30, y: y + height - 29, size: 17, color: lightGray })
-  drawText(page, icon, x + 30, y + height - 34, fonts.bold, 12, { align: 'center' })
-  drawText(page, label, x + 60, y + height - 32, fonts.regular, 8.8, { maxWidth: width - 68 })
-  drawFittedText(page, value, x + 14, y + 14, fonts.bold, 16.8, width - 28, { minSize: 10 })
+  if (height < 64) {
+    page.drawCircle({ x: x + 28, y: y + height - 18, size: 14, color: lightGray })
+    drawText(page, icon, x + 28, y + height - 22, fonts.bold, 9.8, { align: 'center' })
+    drawFittedText(page, label, x + 50, y + height - 22, fonts.regular, 8.1, width - 58, { minSize: 6.6 })
+    drawFittedText(page, value, x + 14, y + 10, fonts.bold, 15, width - 28, { minSize: 9 })
+    return
+  }
+  page.drawCircle({ x: x + 25, y: y + height - 26, size: 16, color: lightGray })
+  drawText(page, icon, x + 25, y + height - 31, fonts.bold, 11, { align: 'center' })
+  drawFittedText(page, label, x + 48, y + height - 29, fonts.regular, 8.4, width - 56, { minSize: 6.7 })
+  drawFittedText(page, value, x + 14, detail ? y + 30 : y + 14, fonts.bold, detail ? 15.5 : 16.8, width - 28, { minSize: 9.5 })
   if (detail) {
-    page.drawLine({ start: { x: x + 14, y: y + 29 }, end: { x: x + width - 14, y: y + 29 }, color: lineGray, thickness: 0.6 })
+    page.drawLine({ start: { x: x + 14, y: y + 24 }, end: { x: x + width - 14, y: y + 24 }, color: lineGray, thickness: 0.6 })
     drawText(page, detail, x + width / 2, y + 10, fonts.regular, 8, { align: 'center', color: darkGray, maxWidth: width - 20 })
   }
 }
@@ -227,7 +238,7 @@ const drawHeaderFooter = (ctx: PdfContext, input: ClosurePdfInput, generatedAt: 
       drawText(page, 'PARK', 75, 742, ctx.fonts.regular, 13)
     }
     page.drawLine({ start: { x: 172, y: 724 }, end: { x: 172, y: 808 }, color: black, thickness: 0.9 })
-    drawText(page, 'CIERRE FINANCIERO - LUCCA PARK', 192, 779, ctx.fonts.bold, index === 0 ? 22 : 20, { maxWidth: 360 })
+    drawFittedText(page, 'CIERRE FINANCIERO - LUCCA PARK', 192, 779, ctx.fonts.bold, index === 0 ? 22 : 20, 360, { minSize: 16 })
     drawText(page, `Periodo: ${formatDateKey(input.dateFrom)} al ${formatDateKey(input.dateTo)}`, 196, 754, ctx.fonts.bold, 9.8)
     if (index === 0) {
       drawText(page, `Generado: ${formatDateTime(generatedAt)}`, 196, 737, ctx.fonts.bold, 9.8)
@@ -236,8 +247,8 @@ const drawHeaderFooter = (ctx: PdfContext, input: ClosurePdfInput, generatedAt: 
       drawText(page, `Pagina ${index + 1} de ${ctx.pages.length}`, 196, 732, ctx.fonts.bold, 9.8)
     }
     page.drawLine({ start: { x: marginX, y: 704 }, end: { x: pageWidth - marginX, y: 704 }, color: midGray, thickness: 0.9 })
-    page.drawLine({ start: { x: marginX, y: 34 }, end: { x: pageWidth - marginX, y: 34 }, color: midGray, thickness: 0.7 })
-    drawText(page, `Pagina ${index + 1} de ${ctx.pages.length}`, pageWidth / 2, 19, ctx.fonts.regular, 9, { align: 'center', color: darkGray })
+    page.drawLine({ start: { x: marginX, y: 28 }, end: { x: pageWidth - marginX, y: 28 }, color: midGray, thickness: 0.7 })
+    drawText(page, `Pagina ${index + 1} de ${ctx.pages.length}`, pageWidth / 2, 13, ctx.fonts.regular, 8.6, { align: 'center', color: darkGray })
   })
 }
 
@@ -291,22 +302,22 @@ const buildObservations = (input: ClosurePdfInput) => {
   if (input.pendingAmount > 0) observations.push(`Existe pendiente de cobro por ${money(input.pendingAmount)}.`)
   const cash = input.methodTotals.cash ?? 0
   if (input.totals.totalCollected > 0) observations.push(`El ${Math.round((cash / input.totals.totalCollected) * 100)}% de los cobros fueron en efectivo.`)
-  if ((input.methodTotals.missing ?? 0) > 0) observations.push(`Existen movimientos sin metodo de pago registrado por ${money(input.methodTotals.missing ?? 0)}.`)
+  if ((input.methodTotals.missing ?? 0) > 0) observations.push(`Existen movimientos sin método de pago registrado por ${money(input.methodTotals.missing ?? 0)}.`)
   const eventExpenses = input.expenses.filter((expense) => expense.type === 'event').length
   observations.push(eventExpenses > 0 ? `Se registraron ${eventExpenses} gastos asociados a eventos.` : 'No se registraron gastos asociados a eventos en el periodo.')
-  if (observations.length === 0) observations.push('No se detectaron observaciones automaticas para este periodo.')
+  if (observations.length === 0) observations.push('No se detectaron observaciones automáticas para este periodo.')
   return observations
 }
 
 const buildFindings = (input: ClosurePdfInput, topProducts: Array<{ name: string; revenue: number }>, expenseCategories: Array<{ category: string; amount: number }>) => {
   const findings: string[] = []
   if (input.totals.totalCollected > 0) {
-    findings.push(`La cantina represento el ${Math.round((input.totals.canteenCollected / input.totals.totalCollected) * 100)}% del total cobrado durante el periodo.`)
+    findings.push(`La cantina representó el ${Math.round((input.totals.canteenCollected / input.totals.totalCollected) * 100)}% del total cobrado durante el periodo.`)
     findings.push(`El resultado neto del periodo fue ${input.totals.netResult >= 0 ? 'positivo' : 'negativo'} por ${money(Math.abs(input.totals.netResult))}.`)
   }
-  if (topProducts[0]) findings.push(`${topProducts[0].name} fue el producto de mayor facturacion de cantina.`)
-  if (expenseCategories[0]) findings.push(`${expenseCategories[0].category} fue la categoria de gasto con mayor importe registrado.`)
-  if ((input.methodTotals.missing ?? 0) > 0) findings.push(`Existen movimientos sin metodo de pago registrado por revisar.`)
+  if (topProducts[0]) findings.push(`${topProducts[0].name} fue el producto de mayor facturación de cantina.`)
+  if (expenseCategories[0]) findings.push(`${expenseCategories[0].category} fue la categoría de gasto con mayor importe registrado.`)
+  if ((input.methodTotals.missing ?? 0) > 0) findings.push(`Existen movimientos sin método de pago registrado por revisar.`)
   if (findings.length === 0) findings.push('No existen datos suficientes para generar recomendaciones adicionales.')
   return findings
 }
@@ -330,13 +341,16 @@ const groupExpenses = (expenses: ExpenseRecord[]) => {
   return Array.from(map.entries()).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount)
 }
 
-const drawBullets = (page: PDFPage, fonts: Fonts, items: string[], x: number, y: number, width: number) => {
+const drawBullets = (page: PDFPage, fonts: Fonts, items: string[], x: number, y: number, width: number, options: { fontSize?: number; lineHeight?: number; maxLines?: number } = {}) => {
   let cursorY = y
+  const fontSize = options.fontSize ?? 9
+  const lineHeight = options.lineHeight ?? 11
+  const maxLines = options.maxLines ?? 2
   items.forEach((item) => {
     page.drawCircle({ x: x + 4, y: cursorY + 3, size: 1.8, color: black })
-    const lines = wrapText(item, fonts.regular, 9, width - 20, 2)
-    lines.forEach((line, index) => drawText(page, line, x + 16, cursorY - index * 11, fonts.regular, 9, { maxWidth: width - 20 }))
-    cursorY -= Math.max(14, lines.length * 11 + 3)
+    const lines = wrapText(item, fonts.regular, fontSize, width - 20, maxLines)
+    lines.forEach((line, index) => drawText(page, line, x + 16, cursorY - index * lineHeight, fonts.regular, fontSize, { maxWidth: width - 20 }))
+    cursorY -= Math.max(lineHeight + 3, lines.length * lineHeight + 3)
   })
 }
 
@@ -404,15 +418,15 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   drawMetricCard(page1, fonts, 396, 480, 168, 74, 'Eventos', money(input.totals.eventCollected), 'E', `${eventMovements} movimientos`)
 
   page1.drawLine({ start: { x: marginX, y: 462 }, end: { x: pageWidth - marginX, y: 462 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page1, fonts, '$', 'Cobros por metodo de pago', 432)
+  drawSectionTitle(page1, fonts, '$', 'Cobros por método de pago', 432)
   const methodRows = [
     ['Efectivo', input.methodTotals.cash ?? 0],
     ['Transferencia', input.methodTotals.transfer ?? 0],
     ['QR', input.methodTotals.qr ?? 0],
-    ['Tarjeta debito', input.methodTotals.debit ?? 0],
-    ['Tarjeta credito', input.methodTotals.credit ?? 0],
+    ['Tarjeta débito', input.methodTotals.debit ?? 0],
+    ['Tarjeta crédito', input.methodTotals.credit ?? 0],
     ['Otro', input.methodTotals.other ?? 0],
-    ['Sin metodo registrado', input.methodTotals.missing ?? 0],
+    ['Sin método registrado', input.methodTotals.missing ?? 0],
     ['TOTAL', input.totals.totalCollected],
   ]
   drawDataTable(page1, fonts, 32, 405, [
@@ -439,9 +453,9 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     drawText(page1, value, x + indicatorW / 2, 125, fonts.bold, 13.5, { align: 'center', maxWidth: indicatorW })
   })
 
-  page1.drawLine({ start: { x: marginX, y: 104 }, end: { x: pageWidth - marginX, y: 104 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page1, fonts, '!', 'Alertas y observaciones', 76)
-  drawBullets(page1, fonts, buildObservations(input), 42, 54, 500)
+  page1.drawLine({ start: { x: marginX, y: 106 }, end: { x: pageWidth - marginX, y: 106 }, color: lineGray, thickness: 0.7 })
+  drawSectionTitle(page1, fonts, '!', 'Alertas y observaciones', 82)
+  drawBullets(page1, fonts, buildObservations(input), 42, 61, 500, { fontSize: 7.7, lineHeight: 8.7, maxLines: 1 })
 
   const incomeRows = input.payments.map((payment) => ({
     client: paymentClient(payment),
@@ -460,13 +474,13 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     relation: expense.type === 'event' ? `Evento: ${safe(expense.eventName, 'Sin nombre')}` : 'Operativa general',
   }))
 
-  const incomeChunks = splitRows(incomeRows, 12, 24)
-  const expenseChunks = splitRows(expenseRows, Math.max(0, 18 - incomeChunks[0].length), 24)
+  const incomeChunks = splitRows(incomeRows, 12, 20)
+  const expenseChunks = splitRows(expenseRows, Math.max(0, 16 - incomeChunks[0].length), 20)
   const detailPagesCount = Math.max(incomeChunks.length, expenseChunks.length, 1)
   for (let index = 0; index < detailPagesCount; index += 1) {
-    const page = newContentPage(ctx)
+    let page = newContentPage(ctx)
     let y = contentTop - 32
-    drawSectionTitle(page, fonts, 'I', index === 0 ? 'Detalle de ingresos cobrados' : 'Detalle de ingresos cobrados - continuacion', y)
+    drawSectionTitle(page, fonts, 'I', index === 0 ? 'Detalle de ingresos cobrados' : 'Detalle de ingresos cobrados - continuación', y)
     y -= 28
     const incomeHeight = drawDataTable(page, fonts, 32, y, [
       { header: 'Fecha y hora', render: (row) => row.date, width: 92 },
@@ -478,42 +492,50 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     ], incomeChunks[index] ?? [], { emptyText: 'No se registraron ingresos cobrados en este periodo.', fontSize: 7.6, rowHeight: 18 })
     y -= incomeHeight + 22
     if (index === detailPagesCount - 1) {
-      drawText(page, 'Subtotal ingresos cobrados', 395, y + 4, fonts.bold, 9)
+      drawText(page, 'Subtotal ingresos cobrados', 470, y + 4, fonts.bold, 9, { align: 'right' })
       drawText(page, money(input.totals.totalCollected), 564, y + 4, fonts.bold, 9.5, { align: 'right' })
       y -= 28
     }
-    drawSectionTitle(page, fonts, 'G', index === 0 ? 'Detalle de gastos registrados' : 'Detalle de gastos registrados - continuacion', y)
+    if (y < 150) {
+      page = newContentPage(ctx)
+      y = contentTop - 32
+    }
+    drawSectionTitle(page, fonts, 'G', index === 0 ? 'Detalle de gastos registrados' : 'Detalle de gastos registrados - continuación', y)
     y -= 28
     const expenseHeight = drawDataTable(page, fonts, 32, y, [
       { header: 'Fecha', render: (row) => row.date, width: 66 },
-      { header: 'Categoria', render: (row) => row.category, width: 86 },
-      { header: 'Descripcion', render: (row) => row.description, width: 134 },
-      { header: 'Relacion', render: (row) => row.relation, width: 118 },
+      { header: 'Categoría', render: (row) => row.category, width: 86 },
+      { header: 'Descripción', render: (row) => row.description, width: 134 },
+      { header: 'Relación', render: (row) => row.relation, width: 118 },
       { header: 'Método', render: (row) => row.method, width: 74 },
       { align: 'right', header: 'Monto', render: (row) => money(row.amount), width: 54 },
     ], expenseChunks[index] ?? [], { emptyText: 'No se registraron gastos en este periodo.', fontSize: 7.4, rowHeight: 18 })
     y -= expenseHeight + 20
     if (index === detailPagesCount - 1) {
-      drawText(page, 'Subtotal gastos registrados', 395, y + 4, fonts.bold, 9)
+      drawText(page, 'Subtotal gastos registrados', 470, y + 4, fonts.bold, 9, { align: 'right' })
       drawText(page, money(input.totals.totalExpenses), 564, y + 4, fonts.bold, 9.5, { align: 'right' })
       y -= 30
+      if (y < 150) {
+        page = newContentPage(ctx)
+        y = contentTop - 32
+      }
       drawSectionTitle(page, fonts, 'O', 'Observaciones de cierre', y)
       drawRoundedBox(page, 32, y - 74, 532, 58, { fill: rgb(1, 1, 1), border: lineGray })
       drawBullets(page, fonts, [
-        input.payments.length ? 'Se registraron cobros provenientes de los modulos operativos.' : 'No se registraron cobros en el periodo.',
+        input.payments.length ? 'Se registraron cobros provenientes de los módulos operativos.' : 'No se registraron cobros en el periodo.',
         input.expenses.length ? `Se registraron ${input.expenses.length} gastos clasificados.` : 'No se registraron gastos en el periodo.',
-        (input.methodTotals.missing ?? 0) > 0 ? `Quedan ${money(input.methodTotals.missing ?? 0)} sin metodo registrado.` : 'Los cobros del periodo tienen metodo registrado.',
+        (input.methodTotals.missing ?? 0) > 0 ? `Quedan ${money(input.methodTotals.missing ?? 0)} sin método registrado.` : 'Los cobros del periodo tienen método registrado.',
       ], 44, y - 32, 500)
     }
   }
 
   const page3 = newContentPage(ctx)
-  drawSectionTitle(page3, fonts, 'A', 'Analisis operativo del periodo', 674)
+  drawSectionTitle(page3, fonts, 'A', 'Análisis operativo del periodo', 674)
   const conversion = totalVisits > 0 ? (visitsWithConsumption / totalVisits) * 100 : Number.NaN
   const margin = input.totals.totalCollected > 0 ? (input.totals.netResult / input.totals.totalCollected) * 100 : Number.NaN
   ;[
     ['Niños con consumo', totalVisits > 0 ? `${visitsWithConsumption} de ${totalVisits}` : '-'],
-    ['Conversion cantina', percent(conversion)],
+    ['Conversión cantina', percent(conversion)],
     ['Ticket promedio total', input.payments.length ? money(input.totals.totalCollected / totalOperations) : '-'],
     ['Ingreso promedio diario', input.totals.totalCollected ? money(input.totals.totalCollected / days) : '-'],
     ['Margen operativo', percent(margin)],
@@ -526,24 +548,24 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     { header: 'Producto', render: (row) => row.name, width: 112 },
     { align: 'center', header: 'Unidades', render: (row) => String(row.quantity), width: 55 },
     { align: 'right', header: 'Ingreso', render: (row) => money(row.revenue), width: 70 },
-    { align: 'right', header: 'Participacion', render: (row) => percent(row.percent), width: 70 },
+    { align: 'right', header: 'Participación', render: (row) => percent(row.percent), width: 70 },
   ], topRows, { emptyText: 'No se registraron ventas de cantina en este periodo.', rowHeight: 22 })
   drawBarList(page3, fonts, topRows.map((row) => ({ label: row.name, percent: row.percent, value: row.revenue })), 350, 528, 214, 132)
 
   page3.drawLine({ start: { x: marginX, y: 374 }, end: { x: pageWidth - marginX, y: 374 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page3, fonts, 'G', 'Gastos por categoria', 344)
+  drawSectionTitle(page3, fonts, 'G', 'Gastos por categoría', 344)
   const expenseCategoryRows = expenseCategories.map((row) => ({ ...row, percent: (row.amount / totalExpenseAmount) * 100 }))
   drawDataTable(page3, fonts, 32, 318, [
-    { header: 'Categoria', render: (row) => row.category, width: 118 },
+    { header: 'Categoría', render: (row) => row.category, width: 118 },
     { align: 'right', header: 'Monto', render: (row) => money(row.amount), width: 95 },
-    { align: 'right', header: 'Participacion', render: (row) => percent(row.percent), width: 95 },
+    { align: 'right', header: 'Participación', render: (row) => percent(row.percent), width: 95 },
   ], expenseCategoryRows.length ? [...expenseCategoryRows, { amount: input.totals.totalExpenses, category: 'TOTAL', percent: 100 }] : [], { emptyText: 'No se registraron gastos en este periodo.', rowHeight: 20 })
   drawBarList(page3, fonts, expenseCategoryRows.map((row) => ({ label: row.category, percent: row.percent, value: row.amount })), 350, 318, 214, 140)
 
-  page3.drawLine({ start: { x: marginX, y: 152 }, end: { x: pageWidth - marginX, y: 152 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page3, fonts, 'H', 'Hallazgos y recomendaciones', 122)
-  drawRoundedBox(page3, 32, 54, 532, 52, { fill: rgb(1, 1, 1), border: lineGray })
-  drawBullets(page3, fonts, buildFindings(input, topProducts, expenseCategories), 44, 88, 500)
+  page3.drawLine({ start: { x: marginX, y: 170 }, end: { x: pageWidth - marginX, y: 170 }, color: lineGray, thickness: 0.7 })
+  drawSectionTitle(page3, fonts, 'H', 'Hallazgos y recomendaciones', 140)
+  drawRoundedBox(page3, 32, 58, 532, 66, { fill: rgb(1, 1, 1), border: lineGray })
+  drawBullets(page3, fonts, buildFindings(input, topProducts, expenseCategories), 44, 108, 500, { fontSize: 8.2, lineHeight: 9.5, maxLines: 1 })
 
   const activeEvents = (input.events ?? []).filter((event) => {
     const hasPayment = input.payments.some((payment) => payment.eventId === event.id)
@@ -555,7 +577,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     const chunks = splitRows(activeEvents, 18, 24)
     chunks.forEach((chunk, index) => {
       const page = newContentPage(ctx)
-      drawSectionTitle(page, fonts, 'E', index ? 'Detalle financiero de eventos - continuacion' : 'Detalle financiero de eventos', 674)
+      drawSectionTitle(page, fonts, 'E', index ? 'Detalle financiero de eventos - continuación' : 'Detalle financiero de eventos', 674)
       drawDataTable(page, fonts, 32, 646, [
         { header: 'Evento', render: (row) => safe(row.title || row.birthdayChildName), width: 94 },
         { header: 'Fecha', render: (row) => formatDateKey(row.date), width: 54 },
@@ -576,24 +598,24 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     const key = dateKey(date)
     const ingresos = input.payments.filter((payment) => dateKey(payment.paidAt ?? payment.createdAt ?? date) === key).reduce((sum, payment) => sum + payment.totalPaid, 0)
     const gastos = input.expenses.filter((expense) => dateKey(expense.spentAt ?? expense.createdAt ?? date) === key).reduce((sum, expense) => sum + expense.amount, 0)
-    return { gastos, ingresos, label: days > 10 ? `Dia ${index + 1}` : formatDateKey(key), neto: ingresos - gastos }
+    return { gastos, ingresos, label: days > 10 ? `Día ${index + 1}` : formatDateKey(key), neto: ingresos - gastos }
   }).filter((row) => row.ingresos > 0 || row.gastos > 0).slice(0, 4)
-  drawSectionTitle(page4, fonts, 'E', days === 1 ? 'Resumen de la jornada' : days <= 10 ? 'Evolucion diaria del periodo' : 'Evolucion semanal del periodo', 674)
+  drawSectionTitle(page4, fonts, 'E', days === 1 ? 'Resumen de la jornada' : days <= 10 ? 'Evolución diaria del periodo' : 'Evolución semanal del periodo', 674)
   drawDataTable(page4, fonts, 32, 646, [
     { header: days > 10 ? 'Periodo' : 'Fecha', render: (row) => row.label, width: 78 },
     { align: 'right', header: 'Ingresos', render: (row) => money(row.ingresos), width: 78 },
     { align: 'right', header: 'Gastos', render: (row) => money(row.gastos), width: 78 },
     { align: 'right', header: 'Resultado neto', render: (row) => money(row.neto), width: 78 },
-  ], weekRows.length ? [...weekRows, { gastos: input.totals.totalExpenses, ingresos: input.totals.totalCollected, label: 'TOTAL', neto: input.totals.netResult }] : [], { emptyText: 'Periodo insuficiente o sin movimientos para evolucion.', rowHeight: 23 })
+  ], weekRows.length ? [...weekRows, { gastos: input.totals.totalExpenses, ingresos: input.totals.totalCollected, label: 'TOTAL', neto: input.totals.netResult }] : [], { emptyText: 'Periodo insuficiente o sin movimientos para evolución.', rowHeight: 23 })
   drawBarList(page4, fonts, weekRows.map((row) => ({ label: row.label, percent: input.totals.totalCollected ? (row.ingresos / input.totals.totalCollected) * 100 : 0, value: row.ingresos })), 372, 646, 192, 145)
 
   page4.drawLine({ start: { x: marginX, y: 478 }, end: { x: pageWidth - marginX, y: 478 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page4, fonts, 'P', 'Cuentas pendientes y conciliacion', 448)
+  drawSectionTitle(page4, fonts, 'P', 'Cuentas pendientes y conciliación', 448)
   const pendingRows = [
-    ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - visita activa`, origin: 'Recepcion', state: 'Pendiente de cobro', total: Number(visit.amountCharged ?? visit.defaultAmount ?? 0) })),
+    ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - visita activa`, origin: 'Recepción', state: 'Pendiente de cobro', total: Number(visit.amountCharged ?? visit.defaultAmount ?? 0) })),
     ...pendingOrders.map((order) => ({ date: formatDate(order.createdAt), detail: safe(order.accountName), origin: 'Cantina', state: 'Pendiente de cobro', total: order.total })),
     ...pendingEvents.map((event) => ({ date: formatDateKey(event.date), detail: safe(event.title || event.birthdayChildName), origin: 'Evento', state: 'Pendiente de cobro', total: event.pendingAmount ?? 0 })),
-    ...(input.methodTotals.missing ? [{ date: formatDateKey(input.dateTo), detail: 'Movimientos sin metodo registrado', origin: 'Finanzas', state: 'Pendiente de revision', total: input.methodTotals.missing }] : []),
+    ...(input.methodTotals.missing ? [{ date: formatDateKey(input.dateTo), detail: 'Movimientos sin método registrado', origin: 'Finanzas', state: 'Pendiente de revisión', total: input.methodTotals.missing }] : []),
   ].slice(0, 4)
   drawDataTable(page4, fonts, 32, 420, [
     { header: 'Fecha', render: (row) => row.date, width: 72 },
@@ -607,10 +629,10 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   drawMetricCard(page4, fonts, 396, 248, 168, 55, 'Cuentas abiertas', String(pendingOrders.length + pendingVisits.length), 'OK')
 
   page4.drawLine({ start: { x: marginX, y: 230 }, end: { x: pageWidth - marginX, y: 230 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page4, fonts, 'C', 'Checklist de cierre', 200)
+  drawSectionTitleAt(page4, fonts, 'C', 'Checklist de cierre', 32, 200, 254)
   drawRoundedBox(page4, 32, 96, 254, 88, { fill: rgb(1, 1, 1), border: lineGray })
   ;[
-    ['Cobros de recepcion registrados', parkMovements > 0],
+    ['Cobros de recepción registrados', parkMovements > 0],
     ['Cobros de cantina registrados', canteenMovements > 0],
     ['Gastos registrados y clasificados', input.expenses.length > 0],
     ['Métodos de pago completos', (input.methodTotals.missing ?? 0) === 0],
@@ -622,21 +644,21 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     drawText(page4, ok ? 'OK' : '!', 49, y, fonts.bold, 5.2, { align: 'center' })
     drawText(page4, label as string, 62, y, fonts.regular, 8.4, { maxWidth: 205 })
   })
-  drawSectionTitle(page4, fonts, '*', 'Conclusiones finales', 200)
+  drawSectionTitleAt(page4, fonts, '*', 'Conclusiones finales', 310, 200, 254)
   drawRoundedBox(page4, 310, 96, 254, 88, { fill: rgb(1, 1, 1), border: lineGray })
   drawBullets(page4, fonts, [
-    input.totals.netResult >= 0 ? `El negocio cerro el periodo con resultado neto positivo de ${money(input.totals.netResult)}.` : `El periodo cerro con resultado neto negativo de ${money(Math.abs(input.totals.netResult))}.`,
+    input.totals.netResult >= 0 ? `El negocio cerró el periodo con resultado neto positivo de ${money(input.totals.netResult)}.` : `El periodo cerró con resultado neto negativo de ${money(Math.abs(input.totals.netResult))}.`,
     input.totals.parkCollected >= input.totals.canteenCollected ? 'El parque fue la principal fuente de ingresos del periodo.' : 'La cantina tuvo un peso relevante dentro de los ingresos del periodo.',
-    (input.methodTotals.missing ?? 0) > 0 ? 'Conviene revisar los cobros sin metodo registrado.' : 'Los metodos de pago del periodo quedaron identificados.',
+    (input.methodTotals.missing ?? 0) > 0 ? 'Conviene revisar los cobros sin método registrado.' : 'Los métodos de pago del periodo quedaron identificados.',
   ], 322, 166, 230)
 
-  drawSectionTitle(page4, fonts, 'F', 'Validacion y firmas', 66)
-  ;['Elaboro', 'Reviso', 'Aprobo'].forEach((label, index) => {
+  drawSectionTitle(page4, fonts, 'F', 'Validación y firmas', 88)
+  ;['Elaboró', 'Revisó', 'Aprobó'].forEach((label, index) => {
     const x = 32 + index * 182
-    drawRoundedBox(page4, x, 38, 168, 42, { fill: rgb(1, 1, 1), border: lineGray })
-    drawText(page4, label, x + 84, 66, fonts.regular, 8.4, { align: 'center' })
-    page4.drawLine({ start: { x: x + 22, y: 51 }, end: { x: x + 146, y: 51 }, color: black, thickness: 0.7 })
-    drawText(page4, 'Nombre y firma', x + 84, 42, fonts.regular, 7.8, { align: 'center' })
+    drawRoundedBox(page4, x, 42, 168, 42, { fill: rgb(1, 1, 1), border: lineGray })
+    drawText(page4, label, x + 84, 70, fonts.regular, 8.4, { align: 'center' })
+    page4.drawLine({ start: { x: x + 22, y: 55 }, end: { x: x + 146, y: 55 }, color: black, thickness: 0.7 })
+    drawText(page4, 'Nombre y firma', x + 84, 46, fonts.regular, 7.8, { align: 'center' })
   })
 
   drawHeaderFooter(ctx, input, generatedAt)
