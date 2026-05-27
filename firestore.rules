@@ -52,7 +52,7 @@ service cloud.firestore {
     }
 
     function canRegisterExpense() {
-      return isAdmin() || isPartner() || isEventManager();
+      return isAdmin() || isPartner() || isEventManager() || isReception() || isCanteen();
     }
 
     function canManageTasks() {
