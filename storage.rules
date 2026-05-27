@@ -57,6 +57,18 @@ service firebase.storage {
       return isAdmin() || isPartner() || isEventManager();
     }
 
+    function canUploadOwnExpenseReceipt(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && isActiveUser()
+        && canManageExpenseReceipts();
+    }
+
+    function canReadExpenseReceipt(userId) {
+      return signedIn()
+        && (isAdmin() || isPartner() || (request.auth.uid == userId && isActiveUser()));
+    }
+
     function canManageFinancialClosures() {
       return isAdmin() || isPartner();
     }
@@ -65,6 +77,15 @@ service firebase.storage {
       return request.resource != null
         && request.resource.contentType.matches('image/.*')
         && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    function validExpenseReceipt() {
+      return request.resource != null
+        && (
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf'
+        )
+        && request.resource.size <= 8 * 1024 * 1024;
     }
 
     match /canteen-products/{allPaths=**} {
@@ -79,10 +100,10 @@ service firebase.storage {
       allow delete: if canManageEventTvImages();
     }
 
-    match /expense-receipts/{allPaths=**} {
-      allow read: if canManageExpenseReceipts();
-      allow create, update: if canManageExpenseReceipts() && validProductImage();
-      allow delete: if isAdmin() || isPartner();
+    match /expense-receipts/{userId}/{fileName} {
+      allow read: if canReadExpenseReceipt(userId);
+      allow create: if canUploadOwnExpenseReceipt(userId) && validExpenseReceipt();
+      allow update, delete: if false;
     }
 
     match /financial-closures/{allPaths=**} {

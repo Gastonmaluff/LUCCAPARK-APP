@@ -8,7 +8,7 @@ import type { ExpenseCategory, LuccaEvent, PaymentMethod } from '../../types'
 
 const categories: Array<[ExpenseCategory, string]> = [
   ['canteen_purchase', 'Cantina / compra de productos'],
-  ['decoration', 'Decoracion'],
+  ['decoration', 'Decoración'],
   ['cleaning', 'Limpieza'],
   ['maintenance', 'Mantenimiento'],
   ['wages', 'Sueldos / jornales'],
@@ -56,15 +56,15 @@ export function ExpenseModal({ events, initialEvent, onClose, onSaved }: Expense
 
   const save = async () => {
     if (!description.trim() || amount <= 0 || !paymentMethod) {
-      setError('Completa descripcion, monto y metodo de pago.')
+      setError('Completá descripción, monto y método de pago.')
       return
     }
     if (paymentMethod === 'card' && !cardType) {
-      setError('Selecciona si la tarjeta es debito o credito.')
+      setError('Seleccioná si la tarjeta es débito o crédito.')
       return
     }
     if (type === 'event' && !selectedEvent) {
-      setError('Selecciona el evento asociado.')
+      setError('Seleccioná el evento asociado.')
       return
     }
 
@@ -112,7 +112,7 @@ export function ExpenseModal({ events, initialEvent, onClose, onSaved }: Expense
             <input disabled={isSaving} onChange={(event) => setDate(event.target.value)} type="date" value={date} />
           </label>
           <label className="field">
-            <span>Categoria</span>
+            <span>Categoría</span>
             <select disabled={isSaving} onChange={(event) => setCategory(event.target.value as ExpenseCategory)} value={category}>
               {categories.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -122,7 +122,7 @@ export function ExpenseModal({ events, initialEvent, onClose, onSaved }: Expense
             </select>
           </label>
           <label className="field">
-            <span>Descripcion *</span>
+            <span>Descripción *</span>
             <input disabled={isSaving} onChange={(event) => setDescription(event.target.value)} value={description} />
           </label>
           <label className="field">
@@ -155,7 +155,7 @@ export function ExpenseModal({ events, initialEvent, onClose, onSaved }: Expense
         ) : null}
         <label className="field">
           <span>Foto de factura o comprobante</span>
-          <input accept="image/png,image/jpeg,image/webp" disabled={isSaving} onChange={(event) => setReceiptFile(event.target.files?.[0] ?? null)} type="file" />
+          <input accept="image/png,image/jpeg,image/webp,application/pdf" disabled={isSaving} onChange={(event) => setReceiptFile(event.target.files?.[0] ?? null)} type="file" />
         </label>
         {previewUrl ? (
           <div className="product-image-preview">

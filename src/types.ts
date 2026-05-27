@@ -242,14 +242,18 @@ export interface ExpenseRecord {
   eventId?: string
   eventName?: string
   receiptUrl?: string
+  receiptPath?: string
   notes?: string
   status?: 'active' | 'void'
   createdAt?: Date | null
   createdBy?: string | null
+  createdByUid?: string | null
   createdByName?: string
   createdByRole?: UserRole | string
   updatedAt?: Date | null
   updatedBy?: string | null
+  updatedByUid?: string | null
+  updatedByName?: string
 }
 
 export interface FinancialClosureRecord {

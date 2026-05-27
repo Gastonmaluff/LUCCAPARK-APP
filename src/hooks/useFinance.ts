@@ -66,14 +66,18 @@ const mapExpense = (id: string, data: Record<string, unknown>): ExpenseRecord =>
   eventId: String(data.eventId ?? ''),
   eventName: String(data.eventName ?? ''),
   receiptUrl: String(data.receiptUrl ?? ''),
+  receiptPath: String(data.receiptPath ?? ''),
   notes: String(data.notes ?? ''),
   status: (data.status as ExpenseRecord['status']) ?? 'active',
   createdAt: dateFromTimestamp(data.createdAt),
   createdBy: data.createdBy ? String(data.createdBy) : null,
+  createdByUid: data.createdByUid ? String(data.createdByUid) : null,
   createdByName: String(data.createdByName ?? ''),
   createdByRole: String(data.createdByRole ?? ''),
   updatedAt: dateFromTimestamp(data.updatedAt),
   updatedBy: data.updatedBy ? String(data.updatedBy) : null,
+  updatedByUid: data.updatedByUid ? String(data.updatedByUid) : null,
+  updatedByName: String(data.updatedByName ?? ''),
 })
 
 const mapClosure = (id: string, data: Record<string, unknown>): FinancialClosureRecord => {

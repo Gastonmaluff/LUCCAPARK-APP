@@ -19,26 +19,27 @@ export interface SaveExpenseInput {
   eventName?: string
   receiptFile?: File | null
   receiptUrl?: string
+  receiptPath?: string
   notes?: string
 }
 
-const allowedReceiptTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
-const maxReceiptSize = 5 * 1024 * 1024
+const allowedReceiptTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf'])
+const maxReceiptSize = 8 * 1024 * 1024
 
-const uploadExpenseReceipt = async (expenseId: string, file: File) => {
+const uploadExpenseReceipt = async (file: File) => {
   const user = auth.currentUser
   if (!user) {
-    throw new Error('Necesitas iniciar sesion para subir comprobantes.')
+    throw new Error('Necesitás iniciar sesión para subir comprobantes.')
   }
   if (!allowedReceiptTypes.has(file.type)) {
-    throw new Error('Selecciona una imagen PNG, JPG o WEBP.')
+    throw new Error('Selecciona una imagen PNG, JPG, WEBP o un PDF.')
   }
   if (file.size > maxReceiptSize) {
-    throw new Error('El comprobante supera el limite de 5 MB.')
+    throw new Error('El comprobante supera el límite de 8 MB.')
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '-')
-  const storagePath = `expense-receipts/${expenseId}/${Date.now()}-${safeName}`
+  const storagePath = `expense-receipts/${user.uid}/${Date.now()}-${safeName}`
   const storageRef = ref(storage, storagePath)
   try {
     console.info('[Gastos Storage] Upload start', {
@@ -49,7 +50,10 @@ const uploadExpenseReceipt = async (expenseId: string, file: File) => {
       uid: user.uid,
     })
     await uploadBytes(storageRef, file, { contentType: file.type })
-    return await getDownloadURL(storageRef)
+    return {
+      path: storagePath,
+      url: await getDownloadURL(storageRef),
+    }
   } catch (error) {
     console.error('[Gastos Storage] upload failed', { error, path: storagePath, uid: user.uid })
     throw error
@@ -75,7 +79,9 @@ export const saveExpense = async (input: SaveExpenseInput) => {
   await ensureReceptionSession()
   const userAudit = await getCurrentUserAudit()
   const expenseRef = input.id ? getDocumentRef('expenses', input.id) : doc(getCollectionRef('expenses'))
-  const receiptUrl = input.receiptFile ? await uploadExpenseReceipt(expenseRef.id, input.receiptFile) : input.receiptUrl ?? ''
+  const uploadedReceipt = input.receiptFile ? await uploadExpenseReceipt(input.receiptFile) : null
+  const receiptUrl = uploadedReceipt?.url ?? input.receiptUrl ?? ''
+  const receiptPath = uploadedReceipt?.path ?? input.receiptPath ?? ''
   const spentAt = new Date(`${input.date}T12:00:00`)
 
   await setDoc(
@@ -93,11 +99,22 @@ export const saveExpense = async (input: SaveExpenseInput) => {
       eventId: input.type === 'event' ? input.eventId ?? '' : '',
       eventName: input.type === 'event' ? normalizeWhitespace(input.eventName ?? '') : '',
       receiptUrl,
+      receiptPath,
       notes: normalizeWhitespace(input.notes ?? ''),
       status: 'active',
       updatedAt: serverTimestamp(),
       updatedBy: userAudit.uid,
-      ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: userAudit.uid, createdByName: userAudit.name, createdByRole: userAudit.role }),
+      updatedByUid: userAudit.uid,
+      updatedByName: userAudit.name,
+      ...(input.id
+        ? {}
+        : {
+            createdAt: serverTimestamp(),
+            createdBy: userAudit.uid,
+            createdByUid: userAudit.uid,
+            createdByName: userAudit.name,
+            createdByRole: userAudit.role,
+          }),
     },
     { merge: true },
   )
