@@ -2,6 +2,8 @@ import { Timestamp, onSnapshot } from 'firebase/firestore'
 import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
+import { buildLegacyEventDepositPayment, getEventPaidAmount, getEventPendingAmount } from '../utils/eventFinance'
+import { parseCurrencyInput } from '../utils/money'
 import { getVisitBillingSummary } from '../utils/visitBilling'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentMethod, PaymentRecord } from '../types'
 
@@ -30,7 +32,6 @@ const todayKey = () => {
 
 const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord => ({
   id,
-  totalPaid: Number(data.totalPaid ?? data.amount ?? 0),
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
   cardType: (data.cardType as PaymentRecord['cardType']) ?? '',
   paidAt: dateFromTimestamp(data.paidAt) ?? dateFromTimestamp(data.createdAt),
@@ -46,9 +47,10 @@ const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord =>
   canteenOrderId: String(data.canteenOrderId ?? ''),
   canteenOrderIds: Array.isArray(data.canteenOrderIds) ? data.canteenOrderIds.map(String) : [],
   eventId: String(data.eventId ?? ''),
-  parkAmountPaid: Number(data.parkAmountPaid ?? 0),
-  canteenAmountPaid: Number(data.canteenAmountPaid ?? 0),
-  eventAmountPaid: Number(data.eventAmountPaid ?? 0),
+  totalPaid: parseCurrencyInput(data.totalPaid ?? data.amount ?? 0),
+  parkAmountPaid: parseCurrencyInput(data.parkAmountPaid ?? 0),
+  canteenAmountPaid: parseCurrencyInput(data.canteenAmountPaid ?? 0),
+  eventAmountPaid: parseCurrencyInput(data.eventAmountPaid ?? 0),
   createdBy: data.createdBy ? String(data.createdBy) : null,
   createdByName: String(data.createdByName ?? ''),
 })
@@ -59,7 +61,7 @@ const mapExpense = (id: string, data: Record<string, unknown>): ExpenseRecord =>
   spentAt: dateFromTimestamp(data.spentAt) ?? dateFromTimestamp(data.createdAt),
   category: (data.category as ExpenseRecord['category']) ?? 'other',
   description: String(data.description ?? ''),
-  amount: Number(data.amount ?? 0),
+  amount: parseCurrencyInput(data.amount ?? 0),
   paymentMethod: (data.paymentMethod as Exclude<PaymentMethod, ''>) ?? 'cash',
   cardType: (data.cardType as ExpenseRecord['cardType']) ?? '',
   type: (data.type as ExpenseRecord['type']) ?? 'general',
@@ -89,10 +91,10 @@ const mapClosure = (id: string, data: Record<string, unknown>): FinancialClosure
     dateTo: String(data.dateTo ?? ''),
     generatedAt: dateFromTimestamp(data.generatedAt) ?? dateFromTimestamp(data.createdAt),
     generatedBy: data.generatedBy ? String(data.generatedBy) : null,
-    totalCollected: Number(data.totalCollected ?? snapshotTotals.totalCollected ?? 0),
-    totalExpenses: Number(data.totalExpenses ?? snapshotTotals.totalExpenses ?? 0),
-    netResult: Number(data.netResult ?? snapshotTotals.netResult ?? 0),
-    pendingAmount: Number(data.pendingAmount ?? snapshotTotals.pendingAmount ?? 0),
+    totalCollected: parseCurrencyInput(data.totalCollected ?? snapshotTotals.totalCollected ?? 0),
+    totalExpenses: parseCurrencyInput(data.totalExpenses ?? snapshotTotals.totalExpenses ?? 0),
+    netResult: parseCurrencyInput(data.netResult ?? snapshotTotals.netResult ?? 0),
+    pendingAmount: parseCurrencyInput(data.pendingAmount ?? snapshotTotals.pendingAmount ?? 0),
     pdfUrl: String(data.pdfUrl ?? ''),
     totalsSnapshot: snapshot,
   }
@@ -109,7 +111,7 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   accountName: String(data.accountName ?? ''),
   customerName: String(data.customerName ?? ''),
   items: Array.isArray(data.items) ? (data.items as CanteenOrder['items']) : [],
-  total: Number(data.total ?? 0),
+  total: parseCurrencyInput(data.total ?? 0),
   status: (data.status as CanteenOrder['status']) ?? 'open',
   paymentStatus: (data.paymentStatus as CanteenOrder['paymentStatus']) ?? 'pending',
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
@@ -123,18 +125,18 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   childName: String(data.childName ?? ''),
   customerId: String(data.customerId ?? ''),
   customerName: String(data.customerName ?? ''),
-  childrenCount: Number(data.childrenCount ?? 1),
+  childrenCount: parseCurrencyInput(data.childrenCount ?? 1),
   planId: (data.planId as ActiveVisit['planId']) ?? 'one-hour',
   planName: String(data.planName ?? 'Parque'),
-  durationMinutes: data.durationMinutes === null ? null : Number(data.durationMinutes ?? 0),
+  durationMinutes: data.durationMinutes === null ? null : parseCurrencyInput(data.durationMinutes ?? 0),
   isUnlimited: Boolean(data.isUnlimited),
   startedAt: dateFromTimestamp(data.startedAt) ?? new Date(),
   expectedEndAt: dateFromTimestamp(data.expectedEndAt),
   paymentStatus: (data.paymentStatus as ActiveVisit['paymentStatus']) ?? 'pending',
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
-  amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : Number(data.amountCharged),
-  parkChargeAmount: data.parkChargeAmount === null || data.parkChargeAmount === undefined ? null : Number(data.parkChargeAmount),
-  defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
+  amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : parseCurrencyInput(data.amountCharged),
+  parkChargeAmount: data.parkChargeAmount === null || data.parkChargeAmount === undefined ? null : parseCurrencyInput(data.parkChargeAmount),
+  defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : parseCurrencyInput(data.defaultAmount),
   status: 'active',
 })
 
@@ -147,15 +149,17 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
   date: String(data.date ?? ''),
   startTime: String(data.startTime ?? ''),
   endTime: String(data.endTime ?? ''),
-  contractedChildrenCount: Number(data.contractedChildrenCount ?? 0),
-  registeredGuestsCount: Number(data.registeredGuestsCount ?? 0),
+  contractedChildrenCount: parseCurrencyInput(data.contractedChildrenCount ?? 0),
+  registeredGuestsCount: parseCurrencyInput(data.registeredGuestsCount ?? 0),
   status: (data.status as LuccaEvent['status']) ?? 'reserved',
   eventType: (data.eventType as LuccaEvent['eventType']) ?? 'birthday',
-  totalAmount: data.totalAmount === null || data.totalAmount === undefined ? null : Number(data.totalAmount),
-  depositAmount: data.depositAmount === null || data.depositAmount === undefined ? null : Number(data.depositAmount),
-  pendingAmount: data.pendingAmount === null || data.pendingAmount === undefined ? null : Number(data.pendingAmount),
-  eventPaidAmount: data.eventPaidAmount === null || data.eventPaidAmount === undefined ? null : Number(data.eventPaidAmount),
+  totalAmount: data.totalAmount === null || data.totalAmount === undefined ? null : parseCurrencyInput(data.totalAmount),
+  depositAmount: data.depositAmount === null || data.depositAmount === undefined ? null : parseCurrencyInput(data.depositAmount),
+  pendingAmount: data.pendingAmount === null || data.pendingAmount === undefined ? null : parseCurrencyInput(data.pendingAmount),
+  eventPaidAmount: data.eventPaidAmount === null || data.eventPaidAmount === undefined ? null : parseCurrencyInput(data.eventPaidAmount),
   financialStatus: String(data.financialStatus ?? ''),
+  createdBy: data.createdBy ? String(data.createdBy) : null,
+  createdByName: String(data.createdByName ?? ''),
   tvModeEnabled: data.tvModeEnabled !== false,
   showGuestCounterOnTv: data.showGuestCounterOnTv !== false,
   showEventNameOnTv: data.showEventNameOnTv !== false,
@@ -213,7 +217,7 @@ export function useFinanceData(range: DateRange) {
         id: `legacy-visit-${visit.id}`,
         source: 'legacy',
         concepts: 'park',
-        totalPaid: Number(visit.amountCharged ?? visit.defaultAmount ?? 0),
+        totalPaid: parseCurrencyInput(visit.amountCharged ?? visit.defaultAmount ?? 0),
         paymentMethod: visit.paymentMethod ?? '',
         paidAt: visit.startedAt,
         visitId: visit.id,
@@ -236,7 +240,15 @@ export function useFinanceData(range: DateRange) {
         customerName: order.customerName,
         description: `Cantina - ${order.accountName}`,
       }))
-    const allPayments = [...paymentItems, ...legacyVisitPayments, ...legacyCanteenPayments]
+    const legacyEventPayments = events.items
+      .filter((event) => {
+        const hasEventPayment = paymentItems.some(
+          (payment) => payment.eventId === event.id && (payment.source === 'event_payment' || payment.concepts === 'event'),
+        )
+        return !hasEventPayment && getEventPaidAmount(event, paymentItems) > 0
+      })
+      .map((event): PaymentRecord => buildLegacyEventDepositPayment(event, getEventPaidAmount(event, paymentItems)))
+    const allPayments = [...paymentItems, ...legacyVisitPayments, ...legacyCanteenPayments, ...legacyEventPayments]
     const expenseItems = expenses.items.filter((expense) => expense.status !== 'void' && inRange(expense.spentAt ?? expense.createdAt, range))
     const canteenOrdersInRange = canteen.items.filter((order) => order.status === 'paid' && inRange(order.paidAt, range))
     const visitsInRange = visits.items.filter((visit) => inRange(visit.startedAt, range))
@@ -271,7 +283,7 @@ export function useFinanceData(range: DateRange) {
     const pendingEventItems = events.items.filter(
       (event) =>
         ['inquiry', 'reserved', 'confirmed', 'active'].includes(event.status) &&
-        (event.pendingAmount ?? 0) > 0 &&
+        getEventPendingAmount(event, allPayments) > 0 &&
         (event.status === 'active' || event.date >= currentDay || eventDateInRange(event.date, range)),
     )
 
@@ -302,7 +314,7 @@ export function useFinanceData(range: DateRange) {
     const pendingAmount =
       openCanteen.reduce((sum, order) => sum + order.total, 0) +
       pendingVisits.reduce((sum, visit) => sum + getVisitBillingSummary(visit, openCanteen).totalPendingAmount, 0) +
-      pendingEventItems.reduce((sum, event) => sum + (event.pendingAmount ?? 0), 0)
+      pendingEventItems.reduce((sum, event) => sum + getEventPendingAmount(event, allPayments), 0)
 
     return {
       closures: closures.items,

@@ -140,6 +140,7 @@ export interface ActiveVisit {
   createdAt?: Date | null
   updatedAt?: Date | null
   createdBy?: string | null
+  createdByName?: string
   updatedBy?: string | null
 }
 
@@ -330,6 +331,7 @@ export interface LuccaEvent {
   createdAt?: Date | null
   updatedAt?: Date | null
   createdBy?: string | null
+  createdByName?: string
   updatedBy?: string | null
 }
 

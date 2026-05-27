@@ -17,6 +17,7 @@ import { useUserProfile } from '../../hooks/useUserProfile'
 import { useUsers } from '../../hooks/useUsers'
 import { updateTaskStatus } from '../../services/taskService'
 import { canCancelEvent, canStartEvent, formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
+import { getEventFinancialLabel, getEventPaidAmount, getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
 import type { LuccaEvent } from '../../types'
 
@@ -62,19 +63,9 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const eventCanteenTotal = eventCanteenOrders.reduce((sum, order) => sum + order.total, 0)
   const eventPayments = finance.payments.filter((payment) => payment.eventId === event.id)
   const eventExpenses = finance.expenses.filter((expense) => expense.eventId === event.id)
-  const eventDirectCollected = eventPayments
-    .filter((payment) => payment.source === 'event_payment' || payment.concepts === 'event')
-    .reduce((sum, payment) => sum + payment.totalPaid, 0)
-  const eventCollectedTotal = Math.max(eventDirectCollected, event.eventPaidAmount ?? 0)
-  const eventPendingAmount = event.totalAmount ? Math.max(0, event.totalAmount - eventCollectedTotal) : event.pendingAmount ?? 0
-  const financialStatus =
-    event.totalAmount && eventPendingAmount <= 0
-      ? 'Pagado completo'
-      : eventCollectedTotal <= 0
-        ? 'Sin pagos'
-        : event.depositAmount && eventCollectedTotal <= event.depositAmount
-          ? 'Seña registrada'
-          : 'Pago parcial'
+  const eventCollectedTotal = getEventPaidAmount(event, eventPayments)
+  const eventPendingAmount = getEventPendingAmount(event, eventPayments)
+  const financialStatus = getEventFinancialLabel(event, eventPayments)
   const eventCanteenCollected = eventCanteenOrders.filter((order) => order.status === 'paid').reduce((sum, order) => sum + order.total, 0)
   const eventExpensesTotal = eventExpenses.reduce((sum, expense) => sum + expense.amount, 0)
   const eventEstimatedResult = eventCollectedTotal + eventCanteenCollected - eventExpensesTotal

@@ -20,6 +20,7 @@ import {
   isEventBlockingCalendar,
   isUpcomingEventStatus,
 } from '../../utils/eventCapacity'
+import { getEventFinancialLabel, getEventPaidAmount, getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
 import { updateEventStatus } from '../../services/eventService'
 import type { LuccaEvent } from '../../types'
@@ -28,30 +29,6 @@ type HistoryFilter = 'all' | 'finished' | 'cancelled'
 
 
 const weekdayLabels = ['Lun', 'Mar', 'Mi?', 'Jue', 'Vie', 'S?b', 'Dom']
-
-const getEventPaidAmount = (event: LuccaEvent) => {
-  if (typeof event.eventPaidAmount === 'number') return event.eventPaidAmount
-  const total = typeof event.totalAmount === 'number' ? event.totalAmount : 0
-  const pending = typeof event.pendingAmount === 'number' ? event.pendingAmount : total
-  return Math.max(0, total - pending)
-}
-
-const getEventPendingAmount = (event: LuccaEvent) => {
-  if (typeof event.pendingAmount === 'number') return event.pendingAmount
-  const total = typeof event.totalAmount === 'number' ? event.totalAmount : 0
-  return Math.max(0, total - getEventPaidAmount(event))
-}
-
-const getFinancialLabel = (event: LuccaEvent) => {
-  const total = typeof event.totalAmount === 'number' ? event.totalAmount : 0
-  const paid = getEventPaidAmount(event)
-  const pending = getEventPendingAmount(event)
-  if (total <= 0) return 'Sin monto definido'
-  if (pending <= 0) return 'Pagado completo'
-  if (paid <= 0) return 'Sin pagos'
-  if (paid <= (typeof event.depositAmount === 'number' ? event.depositAmount : 0)) return 'Se?a registrada'
-  return 'Pago parcial'
-}
 
 const formatDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number)
@@ -300,7 +277,7 @@ export function AdminReservationsPage() {
                     <div className="reservation-badge-row">
                       <EventStatusBadge status={event.status} />
                       <StatusPill tone={getEventPendingAmount(event) <= 0 && (event.totalAmount || 0) > 0 ? 'available' : getEventPaidAmount(event) > 0 ? 'warning' : 'info'}>
-                        {getFinancialLabel(event)}
+                        {getEventFinancialLabel(event)}
                       </StatusPill>
                     </div>
                     {event.totalAmount ? (
@@ -496,7 +473,7 @@ export function AdminReservationsPage() {
                     <div className="reservation-badge-row">
                       <EventStatusBadge status={event.status} />
                       <StatusPill tone={getEventPendingAmount(event) <= 0 && (event.totalAmount || 0) > 0 ? 'available' : getEventPaidAmount(event) > 0 ? 'warning' : 'info'}>
-                        {getFinancialLabel(event)}
+                        {getEventFinancialLabel(event)}
                       </StatusPill>
                     </div>
                     {event.totalAmount ? (

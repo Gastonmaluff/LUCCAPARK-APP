@@ -17,6 +17,7 @@ import { firebaseConfig, storage } from '../config/firebase'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { ensureReceptionSession } from './authSession'
 import { getCurrentUserAudit } from './userAudit'
+import { parseCurrencyInput } from '../utils/money'
 import { formatEventTitle, formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CreateEventGuestInput,
@@ -101,17 +102,11 @@ export const createEvent = async (input: CreateEventInput) => {
     status: input.status,
     eventType: input.eventType,
     totalAmount:
-      input.totalAmount === undefined || input.totalAmount === null || Number.isNaN(Number(input.totalAmount))
-        ? null
-        : Number(input.totalAmount),
+      input.totalAmount === undefined || input.totalAmount === null ? null : parseCurrencyInput(input.totalAmount),
     depositAmount:
-      input.depositAmount === undefined || input.depositAmount === null || Number.isNaN(Number(input.depositAmount))
-        ? null
-        : Number(input.depositAmount),
+      input.depositAmount === undefined || input.depositAmount === null ? null : parseCurrencyInput(input.depositAmount),
     pendingAmount:
-      input.pendingAmount === undefined || input.pendingAmount === null || Number.isNaN(Number(input.pendingAmount))
-        ? null
-        : Number(input.pendingAmount),
+      input.pendingAmount === undefined || input.pendingAmount === null ? null : parseCurrencyInput(input.pendingAmount),
     notes: optionalText(input.notes),
     tvModeEnabled: true,
     tvDisplayEnabled: false,
@@ -185,8 +180,8 @@ export const registerEventPayment = async ({
     }
 
     const eventData = eventSnapshot.data()
-    const totalAmount = Number(eventData.totalAmount ?? 0)
-    const previousPaid = Number(eventData.eventPaidAmount ?? 0)
+    const totalAmount = parseCurrencyInput(eventData.totalAmount ?? 0)
+    const previousPaid = parseCurrencyInput(eventData.eventPaidAmount ?? 0)
     const nextPaid = previousPaid + amount
     const nextPending = Math.max(0, totalAmount - nextPaid)
     const financialStatus =
@@ -220,7 +215,7 @@ export const registerEventPayment = async ({
     transaction.update(eventRef, {
       eventPaidAmount: nextPaid,
       financialStatus,
-      pendingAmount: totalAmount > 0 ? nextPending : Number(eventData.pendingAmount ?? 0),
+      pendingAmount: totalAmount > 0 ? nextPending : parseCurrencyInput(eventData.pendingAmount ?? 0),
       updatedAt: serverTimestamp(),
       updatedBy: userId,
     })

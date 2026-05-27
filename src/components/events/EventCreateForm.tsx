@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarPlus } from 'lucide-react'
 import { createEvent } from '../../services/eventService'
 import { getTodayDateKey } from '../../utils/eventCapacity'
-import { formatGuarani, toNumber } from '../../utils/money'
+import { formatGuarani, parseCurrencyInput } from '../../utils/money'
 import { formatEventTitle, formatParaguayanPhone, formatPersonName } from '../../utils/textFormat'
 import type { CreateEventInput, EventType, LuccaEvent } from '../../types'
 
@@ -68,7 +68,7 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
 
   const pendingAmount =
     form.totalAmount !== null && form.totalAmount !== undefined
-      ? Math.max(0, Number(form.totalAmount) - Number(form.depositAmount ?? 0))
+      ? Math.max(0, parseCurrencyInput(form.totalAmount) - parseCurrencyInput(form.depositAmount))
       : null
 
   const updateField = <Field extends keyof CreateEventInput>(field: Field, value: CreateEventInput[Field]) => {
@@ -213,7 +213,7 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
           <span>Monto total</span>
           <input
             min={0}
-            onChange={(event) => updateField('totalAmount', event.target.value === '' ? null : toNumber(event.target.value))}
+            onChange={(event) => updateField('totalAmount', event.target.value === '' ? null : parseCurrencyInput(event.target.value))}
             placeholder="Opcional"
             type="number"
             value={form.totalAmount ?? ''}
@@ -223,7 +223,7 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
           <span>Seña</span>
           <input
             min={0}
-            onChange={(event) => updateField('depositAmount', event.target.value === '' ? null : toNumber(event.target.value))}
+            onChange={(event) => updateField('depositAmount', event.target.value === '' ? null : parseCurrencyInput(event.target.value))}
             placeholder="Opcional"
             type="number"
             value={form.depositAmount ?? ''}

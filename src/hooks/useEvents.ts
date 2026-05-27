@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getCollectionRef } from '../services/firestoreCollections'
 import { ensureReceptionSession } from '../services/authSession'
 import { getTodayDateKey, isEventVisibleForReception } from '../utils/eventCapacity'
+import { parseCurrencyInput } from '../utils/money'
 import type { EventGuest, EventStatus, EventType, LuccaEvent } from '../types'
 
 const dateFromTimestamp = (value: unknown): Date | null => {
@@ -30,10 +31,10 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
   registeredGuestsCount: Number(data.registeredGuestsCount ?? 0),
   status: (data.status as EventStatus) ?? 'reserved',
   eventType: (data.eventType as EventType) ?? 'birthday',
-  totalAmount: data.totalAmount === null || data.totalAmount === undefined ? null : Number(data.totalAmount),
-  depositAmount: data.depositAmount === null || data.depositAmount === undefined ? null : Number(data.depositAmount),
-  pendingAmount: data.pendingAmount === null || data.pendingAmount === undefined ? null : Number(data.pendingAmount),
-  eventPaidAmount: data.eventPaidAmount === null || data.eventPaidAmount === undefined ? null : Number(data.eventPaidAmount),
+  totalAmount: data.totalAmount === null || data.totalAmount === undefined ? null : parseCurrencyInput(data.totalAmount),
+  depositAmount: data.depositAmount === null || data.depositAmount === undefined ? null : parseCurrencyInput(data.depositAmount),
+  pendingAmount: data.pendingAmount === null || data.pendingAmount === undefined ? null : parseCurrencyInput(data.pendingAmount),
+  eventPaidAmount: data.eventPaidAmount === null || data.eventPaidAmount === undefined ? null : parseCurrencyInput(data.eventPaidAmount),
   financialStatus: String(data.financialStatus ?? ''),
   notes: String(data.notes ?? ''),
   tvModeEnabled: data.tvModeEnabled !== false,
@@ -49,6 +50,7 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),
   createdBy: data.createdBy ? String(data.createdBy) : null,
+  createdByName: String(data.createdByName ?? ''),
   updatedBy: data.updatedBy ? String(data.updatedBy) : null,
 })
 

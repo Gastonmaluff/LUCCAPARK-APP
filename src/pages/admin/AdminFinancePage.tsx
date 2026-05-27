@@ -11,6 +11,7 @@ import { useUserProfile } from '../../hooks/useUserProfile'
 import { useUsers } from '../../hooks/useUsers'
 import { generateAndSaveFinancialClosure } from '../../services/financialClosureService'
 import { getLocalDateKey } from '../../utils/date'
+import { getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
 import type { ExpenseCategory, PaymentMethod, PaymentRecord } from '../../types'
 
@@ -334,7 +335,7 @@ export function AdminFinancePage() {
           {finance.pendingEventItems.map((event) => (
             <Link className="pending-card" key={event.id} to={`/admin/reservas?eventId=${event.id}`}>
               <span>{event.title} - Evento</span>
-              <strong>{formatGuarani(event.pendingAmount ?? 0)}</strong>
+              <strong>{formatGuarani(getEventPendingAmount(event, finance.payments))}</strong>
               <small>Ver evento</small>
             </Link>
           ))}

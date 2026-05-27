@@ -12,6 +12,7 @@ import { useEventDayContext } from '../../hooks/useEventDayContext'
 import { useEventGuests } from '../../hooks/useEvents'
 import { updateEventStatus } from '../../services/eventService'
 import { formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
+import { getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
 
 interface EventReceptionPanelProps {
@@ -47,6 +48,7 @@ export function EventReceptionPanel({
         .reduce((sum, order) => sum + order.total, 0)
     : 0
   const stats = selectedEvent ? getEventCapacityStats(selectedEvent, guests.length || selectedEvent.registeredGuestsCount) : null
+  const pendingAmount = selectedEvent ? getEventPendingAmount(selectedEvent) : 0
 
   const finishEvent = async () => {
     if (!selectedEvent || !window.confirm(`Finalizar el evento ${selectedEvent.title}?`)) {
@@ -105,7 +107,7 @@ export function EventReceptionPanel({
             </span>
             <span>
               <small>Saldo evento</small>
-              <strong>{formatGuarani(selectedEvent.pendingAmount ?? 0)}</strong>
+              <strong>{formatGuarani(pendingAmount)}</strong>
             </span>
           </div>
 

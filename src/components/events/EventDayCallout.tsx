@@ -2,6 +2,7 @@ import { CalendarDays, Clock, ExternalLink, PartyPopper, Play, Square, Users } f
 import { Link } from 'react-router-dom'
 import { StatusPill } from '../StatusPill'
 import { formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
+import { getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
 import type { LuccaEvent } from '../../types'
 
@@ -34,6 +35,7 @@ export function EventDayCallout({
 }: EventDayCalloutProps) {
   const stats = getEventCapacityStats(event, guestCount ?? event.registeredGuestsCount)
   const isActive = variant === 'active'
+  const pendingAmount = getEventPendingAmount(event)
 
   return (
     <article className={`event-day-callout ${isActive ? 'active' : 'today'}`}>
@@ -86,7 +88,7 @@ export function EventDayCallout({
         <span>
           <CalendarDays size={18} />
           <small>Saldo pendiente</small>
-          <strong>{formatGuarani(event.pendingAmount ?? 0)}</strong>
+          <strong>{formatGuarani(pendingAmount)}</strong>
         </span>
       </div>
 

@@ -5,6 +5,7 @@ import { auth, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
+import { getEventPaidAmount, getEventPendingAmount } from '../utils/eventFinance'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentRecord } from '../types'
 
 interface ClosurePdfInput {
@@ -584,8 +585,8 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
         { header: 'Fecha', render: (row) => formatDateKey(row.date), width: 54 },
         { header: 'Responsable', render: (row) => safe(row.customerName), width: 86 },
         { align: 'right', header: 'Contratado', render: (row) => money(row.totalAmount ?? 0), width: 70 },
-        { align: 'right', header: 'Cobrado', render: (row) => money(input.payments.filter((payment) => payment.eventId === row.id).reduce((sum, payment) => sum + (payment.eventAmountPaid || payment.totalPaid), 0)), width: 62 },
-        { align: 'right', header: 'Pendiente', render: (row) => money(row.pendingAmount ?? 0), width: 62 },
+        { align: 'right', header: 'Cobrado', render: (row) => money(getEventPaidAmount(row, input.payments)), width: 62 },
+        { align: 'right', header: 'Pendiente', render: (row) => money(getEventPendingAmount(row, input.payments)), width: 62 },
         { align: 'right', header: 'Cantina', render: (row) => money(canteenOrders.filter((order) => order.eventId === row.id).reduce((sum, order) => sum + order.total, 0)), width: 52 },
         { align: 'right', header: 'Gastos', render: (row) => money(input.expenses.filter((expense) => expense.eventId === row.id).reduce((sum, expense) => sum + expense.amount, 0)), width: 52 },
       ], chunk, { fontSize: 6.8, rowHeight: 20 })
@@ -615,7 +616,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   const pendingRows = [
     ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - visita activa`, origin: 'Recepción', state: 'Pendiente de cobro', total: Number(visit.amountCharged ?? visit.defaultAmount ?? 0) })),
     ...pendingOrders.map((order) => ({ date: formatDate(order.createdAt), detail: safe(order.accountName), origin: 'Cantina', state: 'Pendiente de cobro', total: order.total })),
-    ...pendingEvents.map((event) => ({ date: formatDateKey(event.date), detail: safe(event.title || event.birthdayChildName), origin: 'Evento', state: 'Pendiente de cobro', total: event.pendingAmount ?? 0 })),
+    ...pendingEvents.map((event) => ({ date: formatDateKey(event.date), detail: safe(event.title || event.birthdayChildName), origin: 'Evento', state: 'Pendiente de cobro', total: getEventPendingAmount(event, input.payments) })),
     ...(input.methodTotals.missing ? [{ date: formatDateKey(input.dateTo), detail: 'Movimientos sin método registrado', origin: 'Finanzas', state: 'Pendiente de revisión', total: input.methodTotals.missing }] : []),
   ].slice(0, 4)
   drawDataTable(page4, fonts, 32, 420, [

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { PaymentMethodSelector } from '../payments/PaymentMethodSelector'
 import { registerEventPayment } from '../../services/eventService'
+import { getEventPaidAmount, getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
 import type { LuccaEvent, PaymentMethod, PaymentRecord } from '../../types'
 
@@ -31,11 +32,10 @@ const parseAmount = (value: string) => Number(value.replace(/\D/g, '') || 0)
 
 export function EventPaymentModal({ event, existingPayments = [], onClose, onDone }: EventPaymentModalProps) {
   const alreadyPaid = useMemo(() => {
-    const paymentsTotal = existingPayments.reduce((sum, payment) => sum + (payment.eventAmountPaid || payment.totalPaid || 0), 0)
-    return Math.max(paymentsTotal, event.eventPaidAmount ?? 0)
-  }, [event.eventPaidAmount, existingPayments])
+    return getEventPaidAmount(event, existingPayments)
+  }, [event, existingPayments])
   const totalAmount = event.totalAmount ?? 0
-  const pendingAmount = Math.max(0, totalAmount - alreadyPaid)
+  const pendingAmount = getEventPendingAmount(event, existingPayments)
   const [concept, setConcept] = useState<EventPaymentConcept>(pendingAmount > 0 && alreadyPaid > 0 ? 'balance' : 'deposit')
   const [amount, setAmount] = useState(pendingAmount > 0 ? pendingAmount.toLocaleString('es-PY') : '')
   const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''> | ''>('')
