@@ -14,6 +14,7 @@ export interface TodayVisitRecord {
   endedAt: Date | null
   planName: string
   planId: TimePlan['id']
+  durationMinutes?: number | null
   paymentStatus: PaymentStatus
   paymentMethod?: PaymentMethod
   amountCharged?: number | null
@@ -42,6 +43,7 @@ const mapVisit = (id: string, data: Record<string, unknown>): TodayVisitRecord =
   endedAt: dateFromTimestamp(data.endedAt),
   planName: String(data.planName ?? ''),
   planId: (data.planId as TimePlan['id']) ?? 'one-hour',
+  durationMinutes: data.durationMinutes === null || data.durationMinutes === undefined ? null : Number(data.durationMinutes),
   paymentStatus: (data.paymentStatus as PaymentStatus) ?? 'pending',
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
   amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : Number(data.amountCharged),

@@ -8,7 +8,7 @@ import type { AppUserProfile, UserRole } from '../types'
 const bootstrapOwnerUid = 'SXaYNYcKFXP8FZDCk3DP38EyP903'
 
 const roleLabel: Record<UserRole, string> = {
-  admin: 'Admin / Dueño',
+  admin: 'Dueño / Administrador',
   socio: 'Socio',
   encargado_eventos: 'Encargado de eventos',
   recepcion: 'Recepción',
@@ -77,8 +77,8 @@ export function useUserProfile() {
     return {
       canViewFinance: isActive && (role === 'admin' || role === 'socio'),
       canRegisterExpenses: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
-      canManageTasks: isActive && (role === 'admin' || role === 'socio'),
-      canAssignTasks: isActive && (role === 'admin' || role === 'socio'),
+      canManageTasks: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
+      canAssignTasks: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
       canManageUsers: isActive && role === 'admin',
       roleLabel: roleLabel[role],
     }

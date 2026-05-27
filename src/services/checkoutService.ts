@@ -1,7 +1,7 @@
 import { Timestamp, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
-import { auth } from '../config/firebase'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { ensureReceptionSession } from './authSession'
+import { getCurrentUserAudit } from './userAudit'
 import { getRealDurationMinutes } from '../utils/visitTime'
 import { getVisitBillingSummary } from '../utils/visitBilling'
 import type { ActiveVisit, CanteenOrder, PaymentMethod } from '../types'
@@ -14,8 +14,6 @@ interface ConsolidatedCheckoutInput {
   source: 'reception' | 'canteen'
   finishVisit?: boolean
 }
-
-const currentUserId = () => auth.currentUser?.uid ?? null
 
 export const checkoutVisitBalance = async ({
   cardType = '',
@@ -33,7 +31,8 @@ export const checkoutVisitBalance = async ({
   }
 
   const now = new Date()
-  const userId = currentUserId()
+  const userAudit = await getCurrentUserAudit()
+  const userId = userAudit.uid
   const batch = writeBatch(getDocumentRef('visits', visit.id).firestore)
 
   if (summary.pendingParkAmount > 0) {
@@ -110,6 +109,7 @@ export const checkoutVisitBalance = async ({
       paidAt: Timestamp.fromDate(now),
       createdAt: serverTimestamp(),
       createdBy: userId,
+      createdByName: userAudit.name,
     })
   }
 

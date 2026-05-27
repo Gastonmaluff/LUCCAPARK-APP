@@ -1,7 +1,7 @@
-import { serverTimestamp, setDoc } from 'firebase/firestore'
-import { auth } from '../config/firebase'
+import { getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { ensureReceptionSession } from './authSession'
 import { getDocumentRef } from './firestoreCollections'
+import { getCurrentUserAudit } from './userAudit'
 import type { UserRole } from '../types'
 
 interface SaveUserProfileInput {
@@ -16,9 +16,12 @@ export const saveUserProfile = async (input: SaveUserProfileInput) => {
   await ensureReceptionSession()
   const uid = input.uid.trim()
   if (!uid) throw new Error('Carga el UID real del usuario.')
+  const userAudit = await getCurrentUserAudit()
+  const userRef = getDocumentRef('users', uid)
+  const existingProfile = await getDoc(userRef).catch(() => null)
 
   await setDoc(
-    getDocumentRef('users', uid),
+    userRef,
     {
       displayName: input.displayName.trim() || input.email.trim() || 'Usuario',
       email: input.email.trim(),
@@ -26,7 +29,13 @@ export const saveUserProfile = async (input: SaveUserProfileInput) => {
       role: input.role,
       uid,
       updatedAt: serverTimestamp(),
-      updatedBy: auth.currentUser?.uid ?? null,
+      updatedBy: userAudit.uid,
+      updatedByName: userAudit.name,
+      ...(existingProfile?.exists() ? {} : {
+        createdAt: serverTimestamp(),
+        createdByUid: userAudit.uid,
+        createdByName: userAudit.name,
+      }),
     },
     { merge: true },
   )

@@ -1,7 +1,7 @@
-import { Timestamp, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
-import { auth } from '../config/firebase'
+import { Timestamp, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { getCurrentUserAudit } from './userAudit'
 import { normalizeWhitespace } from '../utils/textFormat'
 import type { LuccaTask } from '../types'
 
@@ -19,20 +19,6 @@ export interface SaveTaskInput {
   eventId?: string
   eventName?: string
   notes?: string
-}
-
-const getCurrentUserAudit = async () => {
-  const user = auth.currentUser
-  if (!user) {
-    return { uid: null, name: '' }
-  }
-
-  const profileSnapshot = await getDoc(getDocumentRef('users', user.uid)).catch(() => null)
-  const profile = profileSnapshot?.data()
-  return {
-    uid: user.uid,
-    name: String(profile?.displayName ?? user.displayName ?? user.email ?? 'Usuario no identificado'),
-  }
 }
 
 export const saveTask = async (input: SaveTaskInput) => {
@@ -74,6 +60,8 @@ export const updateTaskStatus = async (task: LuccaTask, status: LuccaTask['statu
     status,
     completedAt: status === 'completed' ? serverTimestamp() : null,
     completedBy: status === 'completed' ? userAudit.uid : null,
+    completedByUid: status === 'completed' ? userAudit.uid : null,
+    completedByName: status === 'completed' ? userAudit.name : '',
     updatedAt: serverTimestamp(),
     updatedBy: userAudit.uid,
   })

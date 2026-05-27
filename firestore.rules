@@ -56,7 +56,7 @@ service cloud.firestore {
     }
 
     function canManageTasks() {
-      return isAdmin() || isPartner();
+      return isAdmin() || isPartner() || isEventManager();
     }
 
     function canOperatePayments() {
@@ -76,7 +76,7 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || canViewFinance() || canManageTasks());
       allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -152,6 +152,8 @@ service cloud.firestore {
             'status',
             'completedAt',
             'completedBy',
+            'completedByUid',
+            'completedByName',
             'updatedAt',
             'updatedBy'
           ])

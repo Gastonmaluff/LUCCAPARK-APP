@@ -1444,6 +1444,7 @@ img {
 }
 
 .today-visits-summary {
+  align-items: center;
   display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -2521,6 +2522,45 @@ img {
   padding: 16px;
 }
 
+.reservation-premium-card {
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr) minmax(156px, 0.45fr);
+  padding: 18px;
+}
+
+.reservation-identity,
+.reservation-status-zone {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reservation-identity strong {
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+
+.reservation-identity p,
+.reservation-identity small {
+  color: var(--muted);
+  font-weight: 750;
+  margin: 0;
+}
+
+.reservation-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reservation-no-amount {
+  background: #f8fafc;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-weight: 800;
+  padding: 14px;
+}
+
 .reservation-row.status-reserved,
 .reservation-row.status-inquiry {
   border-left-color: var(--yellow);
@@ -3077,7 +3117,14 @@ img {
 }
 
 .today-visit-row {
-  grid-template-columns: minmax(0, 1fr) repeat(5, auto);
+  background: #fff;
+  grid-template-columns: minmax(180px, 1fr) repeat(5, minmax(92px, auto));
+}
+
+.today-visit-row > span {
+  color: var(--ink);
+  display: grid;
+  gap: 2px;
 }
 
 .consumption-row small,
@@ -4236,12 +4283,22 @@ img {
   font-weight: 720;
 }
 
-.today-visits-panel .collapsible-header {
+.today-visits-header {
+  align-items: center;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: 0 12px 34px rgba(15, 23, 42, 0.06);
-  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 18px 20px;
+  text-align: left;
+  width: 100%;
+}
+
+.today-visits-body {
+  padding-top: 14px;
 }
 
 .reservation-financial-strip {
@@ -4295,6 +4352,11 @@ img {
   display: grid;
   gap: 8px;
   min-width: 150px;
+}
+
+.reservation-actions .button {
+  justify-content: center;
+  width: 100%;
 }
 
 .event-payment-modal {
@@ -4496,8 +4558,8 @@ img {
 
 .user-permission-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  grid-template-columns: minmax(320px, 1.1fr) minmax(280px, 0.9fr);
 }
 
 .user-permission-grid article {
@@ -4533,6 +4595,65 @@ img {
 .user-row-button.active {
   border-color: rgba(255, 90, 19, 0.42);
   box-shadow: 0 10px 26px rgba(255, 90, 19, 0.08);
+}
+
+.user-help-box {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.user-help-box summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 840;
+}
+
+.user-help-box ol {
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 20px;
+}
+
+.user-profile-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.user-profile-card strong,
+.user-profile-card small {
+  display: block;
+}
+
+.user-profile-card small {
+  color: var(--muted);
+  font-weight: 720;
+}
+
+.technical-id {
+  word-break: break-all;
+}
+
+.user-card-meta,
+.user-card-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.user-card-actions {
+  grid-column: 1 / -1;
 }
 
 .user-editor {
@@ -4637,6 +4758,9 @@ img {
   .canteen-account-grid,
   .picker-grid,
   .reservation-row,
+  .reservation-premium-card,
+  .today-visit-row,
+  .user-permission-grid,
   .selected-day-panel,
   .event-mode-grid,
   .reservations-grid,

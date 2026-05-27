@@ -16,6 +16,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseConfig, storage } from '../config/firebase'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { ensureReceptionSession } from './authSession'
+import { getCurrentUserAudit } from './userAudit'
 import { formatEventTitle, formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CreateEventGuestInput,
@@ -83,7 +84,8 @@ export const createEvent = async (input: CreateEventInput) => {
   const customerName = formatPersonName(input.customerName)
   const customerPhone = phoneDigits(input.customerPhone ?? '')
   const eventRef = doc(getCollectionRef('events'))
-  const userId = currentUserId()
+  const userAudit = await getCurrentUserAudit()
+  const userId = userAudit.uid
 
   await setDoc(eventRef, {
     id: eventRef.id,
@@ -124,6 +126,7 @@ export const createEvent = async (input: CreateEventInput) => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: userId,
+    createdByName: userAudit.name,
     updatedBy: userId,
   })
 
@@ -166,7 +169,8 @@ export const registerEventPayment = async ({
   const eventRef = getDocumentRef('events', eventId)
   const paymentRef = doc(getCollectionRef('payments'))
   const now = new Date()
-  const userId = currentUserId()
+  const userAudit = await getCurrentUserAudit()
+  const userId = userAudit.uid
   const conceptLabel = {
     balance: 'Saldo final',
     deposit: 'Seña',
@@ -210,6 +214,7 @@ export const registerEventPayment = async ({
       paidAt: Timestamp.fromDate(now),
       createdAt: serverTimestamp(),
       createdBy: userId,
+      createdByName: userAudit.name,
     })
 
     transaction.update(eventRef, {

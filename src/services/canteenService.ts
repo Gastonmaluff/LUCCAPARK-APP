@@ -13,6 +13,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseConfig, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { getCurrentUserAudit } from './userAudit'
 import { formatPersonName, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CanteenOrder,
@@ -152,6 +153,7 @@ export const setCanteenProductActive = async (productId: string, isActive: boole
 
 export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
   await ensureReceptionSession()
+  const userAudit = await getCurrentUserAudit()
 
   const items = normalizeItems(input.items)
   const orderRef = doc(getCollectionRef('canteenOrders'))
@@ -184,8 +186,9 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     paidAt: input.chargeNow ? Timestamp.fromDate(now) : null,
-    createdBy: currentUserId(),
-    updatedBy: currentUserId(),
+    createdBy: userAudit.uid,
+    createdByName: userAudit.name,
+    updatedBy: userAudit.uid,
   })
   applyStockDelta(batch, items, -1)
   await batch.commit()
@@ -263,7 +266,8 @@ export const chargeCanteenOrder = async (
   await ensureReceptionSession()
 
   const now = new Date()
-  const userId = currentUserId()
+  const userAudit = await getCurrentUserAudit()
+  const userId = userAudit.uid
   const batch = writeBatch(getDocumentRef('canteenOrders', order.id).firestore)
   const paymentRef = doc(getCollectionRef('payments'))
 
@@ -297,6 +301,7 @@ export const chargeCanteenOrder = async (
     paidAt: Timestamp.fromDate(now),
     createdAt: serverTimestamp(),
     createdBy: userId,
+    createdByName: userAudit.name,
   })
 
   await batch.commit()

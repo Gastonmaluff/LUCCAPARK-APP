@@ -258,6 +258,7 @@ export interface FinancialClosureRecord {
   dateTo: string
   generatedAt?: Date | null
   generatedBy?: string | null
+  generatedByName?: string
   totalCollected: number
   totalExpenses: number
   netResult: number
@@ -287,6 +288,8 @@ export interface LuccaTask {
   notes?: string
   completedAt?: Date | null
   completedBy?: string | null
+  completedByUid?: string | null
+  completedByName?: string
   updatedAt?: Date | null
   updatedBy?: string | null
 }

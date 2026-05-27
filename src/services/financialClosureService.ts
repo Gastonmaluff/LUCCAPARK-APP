@@ -4,6 +4,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { auth, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef } from './firestoreCollections'
+import { getCurrentUserAudit } from './userAudit'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentRecord } from '../types'
 
 interface ClosurePdfInput {
@@ -667,7 +668,8 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
 
 export const generateAndSaveFinancialClosure = async (input: ClosurePdfInput): Promise<FinancialClosureRecord> => {
   await ensureReceptionSession()
-  const userId = auth.currentUser?.uid ?? null
+  const userAudit = await getCurrentUserAudit()
+  const userId = userAudit.uid
   const closureRef = doc(getCollectionRef('financialClosures'))
   const now = new Date()
   const pdfBytes = await buildPremiumPdf(input, now)
@@ -682,6 +684,7 @@ export const generateAndSaveFinancialClosure = async (input: ClosurePdfInput): P
     dateTo: input.dateTo,
     generatedAt: Timestamp.fromDate(now),
     generatedBy: userId,
+    generatedByName: userAudit.name,
     totalCollected: input.totals.totalCollected,
     totalExpenses: input.totals.totalExpenses,
     netResult: input.totals.netResult,

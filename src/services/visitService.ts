@@ -16,6 +16,7 @@ import { auth } from '../config/firebase'
 import { getTimePlanById } from '../config/timePlans'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { getCurrentUserAudit } from './userAudit'
 import { chargeLocalVisit, createLocalNormalVisit, finishLocalVisit } from './localVisitStore'
 import { getVisitStorageMode } from './visitStorageMode'
 import type { ActiveVisit, ChargeVisitInput, CreateVisitInput } from '../types'
@@ -76,7 +77,8 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
   const plan = getTimePlanById(input.planId)
   const startedAt = input.startedAt
   const expectedEndAt = getExpectedEndAt(startedAt, plan.durationMinutes, plan.isUnlimited)
-  const userId = currentUserId()
+  const userAudit = await getCurrentUserAudit()
+  const userId = userAudit.uid
 
   const existingCustomer = await findCustomerByPhone(customerPhone)
   const customerRef = existingCustomer
@@ -165,6 +167,7 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: userId,
+    createdByName: userAudit.name,
     updatedBy: userId,
   }
 
@@ -189,6 +192,7 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
       paidAt: Timestamp.fromDate(startedAt),
       createdAt: serverTimestamp(),
       createdBy: userId,
+      createdByName: userAudit.name,
     })
   }
   await batch.commit()

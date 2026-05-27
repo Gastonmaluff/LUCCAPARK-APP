@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
+import { Clock, Eye, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { appConfig } from '../../config/app'
@@ -25,13 +25,14 @@ export function AdminSettingsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isEditingUser, setIsEditingUser] = useState(false)
+  const [detailUid, setDetailUid] = useState<string | null>(null)
 
   const saveUser = async () => {
     setMessage(null)
     setIsSaving(true)
     try {
       await saveUserProfile(form)
-      setMessage('Usuario guardado correctamente.')
+      setMessage('Funcionario vinculado correctamente. La sesión del administrador sigue activa.')
       setForm(emptyForm)
       setIsEditingUser(false)
     } catch (error) {
@@ -136,31 +137,59 @@ export function AdminSettingsPage() {
             </button>
           </div>
           <div className="form-alert info">
-            Para crear un acceso real, primero creá el usuario en Firebase Authentication. Luego vinculalo acá con su UID real. Crear este perfil no crea una contraseña ni una cuenta Auth nueva.
+            Para habilitar un nuevo acceso, primero creá la cuenta en Firebase Authentication y luego vinculala aquí usando su UID. Este registro define el rol y los permisos dentro de Lucca Park.
           </div>
+          <details className="user-help-box">
+            <summary>¿Cómo crear un usuario?</summary>
+            <ol>
+              <li>Crear la cuenta en Firebase Authentication.</li>
+              <li>Copiar el UID.</li>
+              <li>Volver aquí y presionar Agregar usuario.</li>
+              <li>Cargar UID, nombre, email y rol.</li>
+              <li>Guardar. El funcionario podrá iniciar sesión desde su dispositivo.</li>
+            </ol>
+          </details>
           {message ? <div className={message.includes('No se') ? 'form-alert error' : 'form-alert success'}>{message}</div> : null}
           {usersResult.error ? <div className="form-alert error">No se pudieron cargar usuarios: {usersResult.error}</div> : null}
           <div className="user-permission-grid">
             <div className="module-list">
               {usersResult.isLoading ? <div className="empty-state">Cargando usuarios...</div> : null}
+              {!usersResult.isLoading && usersResult.users.length === 0 ? <div className="empty-state">Todavía no hay funcionarios vinculados.</div> : null}
               {usersResult.users.map((user) => (
-                <button
-                  className="module-row user-row-button"
-                  key={user.uid}
-                  onClick={() => {
-                    setForm({ displayName: user.displayName, email: user.email, isActive: user.isActive, role: user.role, uid: user.uid })
-                    setIsEditingUser(true)
-                  }}
-                  type="button"
-                >
-                  <span>
+                <article className="user-profile-card" key={user.uid}>
+                  <div>
                     <strong>{user.displayName}</strong>
                     <small>{user.email || 'Sin email cargado'}</small>
-                    <small>UID: {user.uid}</small>
-                  </span>
-                  <StatusPill tone={user.isActive ? 'available' : 'blocked'}>{user.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
-                  <StatusPill tone="info">{roleOptions.find((role) => role.value === user.role)?.label ?? user.role}</StatusPill>
-                </button>
+                    {detailUid === user.uid ? <small className="technical-id">UID: {user.uid}</small> : null}
+                  </div>
+                  <div className="user-card-meta">
+                    <StatusPill tone={user.isActive ? 'available' : 'blocked'}>{user.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
+                    <StatusPill tone="info">{roleOptions.find((role) => role.value === user.role)?.label ?? user.role}</StatusPill>
+                  </div>
+                  <div className="user-card-actions">
+                    <button
+                      className="button ghost small-button"
+                      onClick={() => {
+                        setForm({ displayName: user.displayName, email: user.email, isActive: user.isActive, role: user.role, uid: user.uid })
+                        setIsEditingUser(true)
+                      }}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+                    <button className="button ghost small-button" onClick={() => setDetailUid((current) => (current === user.uid ? null : user.uid))} type="button">
+                      <Eye size={14} />
+                      Ver detalle
+                    </button>
+                    <button
+                      className="button secondary small-button"
+                      onClick={() => saveUserProfile({ displayName: user.displayName, email: user.email, isActive: !user.isActive, role: user.role, uid: user.uid })}
+                      type="button"
+                    >
+                      {user.isActive ? 'Desactivar' : 'Activar'}
+                    </button>
+                  </div>
+                </article>
               ))}
             </div>
             <div className="user-editor">
@@ -186,7 +215,7 @@ export function AdminSettingsPage() {
                     </select>
                   </label>
                   <details className="advanced-user-box" open={!form.uid}>
-                    <summary>Configuración avanzada</summary>
+                    <summary>Configuración técnica</summary>
                     <label className="field">
                       <span>UID real</span>
                       <input onChange={(event) => setForm((current) => ({ ...current, uid: event.target.value }))} value={form.uid} />

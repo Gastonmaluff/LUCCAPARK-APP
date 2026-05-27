@@ -67,8 +67,8 @@ export function AppMobilePage() {
         <header className="mobile-app-header">
           <BrandLogo className="compact" />
           <div>
-            <p className="eyebrow">Hola</p>
-            <h1>{profile?.displayName ?? 'Usuario'}</h1>
+            <p className="eyebrow">Panel personal</p>
+            <h1>Hola, {profile?.displayName?.split(' ')[0] ?? 'Usuario'}</h1>
             <span>{permissions.roleLabel} · {new Date().toLocaleDateString('es-PY')}</span>
           </div>
           <button className="icon-button" onClick={() => signOut(auth)} type="button" aria-label="Cerrar sesión">
@@ -93,8 +93,8 @@ export function AppMobilePage() {
                 <strong>{task.title}</strong>
                 {task.description ? <small>{task.description}</small> : null}
                 <small>
-                  {task.priority} {task.dueAt ? `· ${task.dueAt.toLocaleString('es-PY')}` : ''}
-                  {task.eventName ? ` · ${task.eventName}` : ''}
+                  Prioridad: {task.priority} {task.dueAt ? `· Vence: ${task.dueAt.toLocaleString('es-PY')}` : ''}
+                  {task.eventName ? ` · Evento: ${task.eventName}` : ''}
                 </small>
                 <small>{task.assignedByName || task.createdByName ? `Asignada por: ${task.assignedByName || task.createdByName}` : 'Asignación anterior sin usuario identificado'}</small>
                 <div className="module-actions">

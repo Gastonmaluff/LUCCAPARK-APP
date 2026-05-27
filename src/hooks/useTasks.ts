@@ -31,6 +31,8 @@ const mapTask = (id: string, data: Record<string, unknown>): LuccaTask => ({
   notes: String(data.notes ?? ''),
   completedAt: dateFromTimestamp(data.completedAt),
   completedBy: data.completedBy ? String(data.completedBy) : null,
+  completedByUid: data.completedByUid ? String(data.completedByUid) : data.completedBy ? String(data.completedBy) : null,
+  completedByName: String(data.completedByName ?? ''),
   updatedAt: dateFromTimestamp(data.updatedAt),
   updatedBy: data.updatedBy ? String(data.updatedBy) : null,
 })

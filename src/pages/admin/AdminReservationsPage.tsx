@@ -27,7 +27,7 @@ import type { LuccaEvent } from '../../types'
 type HistoryFilter = 'all' | 'finished' | 'cancelled'
 
 
-const weekdayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const weekdayLabels = ['Lun', 'Mar', 'Mi?', 'Jue', 'Vie', 'S?b', 'Dom']
 
 const getEventPaidAmount = (event: LuccaEvent) => {
   if (typeof event.eventPaidAmount === 'number') return event.eventPaidAmount
@@ -49,7 +49,7 @@ const getFinancialLabel = (event: LuccaEvent) => {
   if (total <= 0) return 'Sin monto definido'
   if (pending <= 0) return 'Pagado completo'
   if (paid <= 0) return 'Sin pagos'
-  if (paid <= (typeof event.depositAmount === 'number' ? event.depositAmount : 0)) return 'Seña registrada'
+  if (paid <= (typeof event.depositAmount === 'number' ? event.depositAmount : 0)) return 'Se?a registrada'
   return 'Pago parcial'
 }
 
@@ -226,7 +226,7 @@ export function AdminReservationsPage() {
       <AdminModuleHeader
         eyebrow="Eventos"
         title="Reservas"
-        description="Gestioná reservas, eventos privados y disponibilidad del parque."
+        description="Gestion? reservas, eventos privados y disponibilidad del parque."
         action={
           <button className="button primary" onClick={() => openCreateForm()} type="button">
             <CalendarPlus size={18} />
@@ -288,28 +288,33 @@ export function AdminReservationsPage() {
                 .reduce((sum, order) => sum + order.total, 0)
 
               return (
-                <article className={`reservation-row status-${event.status}`} key={event.id}>
-                  <div className="reservation-main">
-                    <strong>{event.title}</strong>
-                    <p>
-                      {event.customerName} · {formatDate(event.date)} · {formatEventTimeRange(event)}
-                    </p>
+                <article className={`reservation-row reservation-premium-card status-${event.status}`} key={event.id}>
+                  <div className="reservation-identity">
+                    <strong>{event.title || event.birthdayChildName}</strong>
+                    <p>{event.customerName} · {formatDate(event.date)} · {formatEventTimeRange(event)}</p>
                     <small>
-                      Cupo: {stats.contractedChildrenCount} niños · Ingresaron: {stats.registeredGuestsCount} · Cantina:{' '}
-                      {formatGuarani(eventCanteenTotal)}
+                      Cupo: {stats.contractedChildrenCount} niños · Ingresaron: {stats.registeredGuestsCount} · Cantina: {formatGuarani(eventCanteenTotal)}
                     </small>
                   </div>
-                  <div className="reservation-finance-summary">
-                    <span><small>Total contratado</small><strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto definido'}</strong></span>
-                    <span><small>Cobrado</small><strong>{formatGuarani(getEventPaidAmount(event))}</strong></span>
-                    <span><small>Pendiente</small><strong>{formatGuarani(getEventPendingAmount(event))}</strong></span>
+                  <div className="reservation-status-zone">
+                    <div className="reservation-badge-row">
+                      <EventStatusBadge status={event.status} />
+                      <StatusPill tone={getEventPendingAmount(event) <= 0 && (event.totalAmount || 0) > 0 ? 'available' : getEventPaidAmount(event) > 0 ? 'warning' : 'info'}>
+                        {getFinancialLabel(event)}
+                      </StatusPill>
+                    </div>
+                    {event.totalAmount ? (
+                      <div className="reservation-finance-summary">
+                        <span><small>Total contratado</small><strong>{formatGuarani(event.totalAmount)}</strong></span>
+                        <span><small>Cobrado</small><strong>{formatGuarani(getEventPaidAmount(event))}</strong></span>
+                        <span><small>Pendiente</small><strong>{formatGuarani(getEventPendingAmount(event))}</strong></span>
+                      </div>
+                    ) : (
+                      <div className="reservation-no-amount">Monto aún no configurado</div>
+                    )}
                   </div>
                   <div className="reservation-actions">
-                    <StatusPill tone={getEventPendingAmount(event) <= 0 && (event.totalAmount || 0) > 0 ? 'available' : getEventPaidAmount(event) > 0 ? 'warning' : 'info'}>
-                      {getFinancialLabel(event)}
-                    </StatusPill>
-                    <EventStatusBadge status={event.status} />
-                    <button className="button ghost" onClick={() => setPaymentEvent(event)} type="button">
+                    <button className="button primary" onClick={() => setPaymentEvent(event)} type="button">
                       Registrar cobro
                     </button>
                     <button className="button ghost" onClick={() => setSelectedEventId(event.id)} type="button">
@@ -389,14 +394,14 @@ export function AdminReservationsPage() {
 
           <div className="selected-day-panel">
             <div>
-              <p className="eyebrow">Día seleccionado</p>
+              <p className="eyebrow">D?a seleccionado</p>
               <h3>{formatDate(selectedDayKey)}</h3>
             </div>
             {selectedDayEvents.length === 0 ? (
               <div className="selected-day-actions">
                 <StatusPill tone="available">Disponible</StatusPill>
                 <button className="button primary" onClick={() => openCreateForm(selectedDayKey)} type="button">
-                  Agregar reserva a este día
+                  Agregar reserva a este d?a
                 </button>
               </div>
             ) : (
@@ -406,7 +411,7 @@ export function AdminReservationsPage() {
                     <div>
                       <strong>{event.title}</strong>
                       <p className="muted">
-                        {event.customerName} · {formatEventTimeRange(event)} · cupo {event.contractedChildrenCount}
+                        {event.customerName} ? {formatEventTimeRange(event)} ? cupo {event.contractedChildrenCount}
                       </p>
                     </div>
                     <EventStatusBadge status={event.status} />
@@ -475,28 +480,49 @@ export function AdminReservationsPage() {
             <div className="reservation-list">
               {historyEvents.map((event) => {
                 const stats = getEventCapacityStats(event)
+                const eventCanteenTotal = canteenOrders
+                  .filter((order) => order.eventId === event.id && order.status !== 'cancelled')
+                  .reduce((sum, order) => sum + order.total, 0)
                 return (
-                  <article className={`reservation-row status-${event.status}`} key={event.id}>
-                    <div className="reservation-main">
-                      <strong>{event.title}</strong>
-                      <p>
-                        {event.customerName} · {formatDate(event.date)} · {formatEventTimeRange(event)}
-                      </p>
-                      <small>
-                        Cupo: {stats.contractedChildrenCount} ninos · Ingresaron: {stats.registeredGuestsCount}
-                      </small>
+                  <article className={`reservation-row reservation-premium-card status-${event.status}`} key={event.id}>
+                  <div className="reservation-identity">
+                    <strong>{event.title || event.birthdayChildName}</strong>
+                    <p>{event.customerName} · {formatDate(event.date)} · {formatEventTimeRange(event)}</p>
+                    <small>
+                      Cupo: {stats.contractedChildrenCount} niños · Ingresaron: {stats.registeredGuestsCount} · Cantina: {formatGuarani(eventCanteenTotal)}
+                    </small>
+                  </div>
+                  <div className="reservation-status-zone">
+                    <div className="reservation-badge-row">
+                      <EventStatusBadge status={event.status} />
+                      <StatusPill tone={getEventPendingAmount(event) <= 0 && (event.totalAmount || 0) > 0 ? 'available' : getEventPaidAmount(event) > 0 ? 'warning' : 'info'}>
+                        {getFinancialLabel(event)}
+                      </StatusPill>
                     </div>
-                    <div className="reservation-money">
-                      <span>Total</span>
-                      <strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong>
-                    </div>
-                    <EventStatusBadge status={event.status} />
-                    <div className="module-actions">
-                      <button className="button ghost" onClick={() => setSelectedEventId(event.id)} type="button">
-                        Ver detalle
+                    {event.totalAmount ? (
+                      <div className="reservation-finance-summary">
+                        <span><small>Total contratado</small><strong>{formatGuarani(event.totalAmount)}</strong></span>
+                        <span><small>Cobrado</small><strong>{formatGuarani(getEventPaidAmount(event))}</strong></span>
+                        <span><small>Pendiente</small><strong>{formatGuarani(getEventPendingAmount(event))}</strong></span>
+                      </div>
+                    ) : (
+                      <div className="reservation-no-amount">Monto aún no configurado</div>
+                    )}
+                  </div>
+                  <div className="reservation-actions">
+                    <button className="button primary" onClick={() => setPaymentEvent(event)} type="button">
+                      Registrar cobro
+                    </button>
+                    <button className="button ghost" onClick={() => setSelectedEventId(event.id)} type="button">
+                      Ver detalle
+                    </button>
+                    {canStartEvent(event) ? (
+                      <button className="button secondary" disabled={updatingEventId === event.id} onClick={() => startEvent(event)} type="button">
+                        Empezar evento
                       </button>
-                    </div>
-                  </article>
+                    ) : null}
+                  </div>
+                </article>
                 )
               })}
             </div>
