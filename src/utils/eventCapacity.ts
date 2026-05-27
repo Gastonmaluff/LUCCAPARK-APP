@@ -38,7 +38,8 @@ export const formatEventTimeRange = (event: Pick<LuccaEvent, 'startTime' | 'endT
 export const isUpcomingEventStatus = (status: LuccaEvent['status']) =>
   ['inquiry', 'reserved', 'confirmed'].includes(status)
 
-export const canStartEvent = (event: Pick<LuccaEvent, 'status'>) => isUpcomingEventStatus(event.status)
+export const canStartEvent = (event: Pick<LuccaEvent, 'status' | 'date'>) =>
+  isUpcomingEventStatus(event.status) && event.date === getTodayDateKey()
 
 export const canCancelEvent = (event: Pick<LuccaEvent, 'status'>) => isUpcomingEventStatus(event.status)
 

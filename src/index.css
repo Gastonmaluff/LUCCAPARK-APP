@@ -4179,14 +4179,17 @@ img {
 }
 
 .metric-breakdown span,
-.metric-breakdown small {
+.metric-breakdown small,
+.metric-breakdown em {
   color: var(--muted);
-  font-weight: 760;
+  font-style: normal;
+  font-weight: 560;
 }
 
 .metric-breakdown strong {
   color: var(--ink);
   font-size: 0.98rem;
+  font-weight: 720;
 }
 
 .metric-highlight-number {
@@ -4262,6 +4265,36 @@ img {
   color: var(--ink);
   display: block;
   font-size: 0.95rem;
+}
+
+.reservation-finance-summary {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 10px;
+}
+
+.reservation-finance-summary small {
+  color: var(--muted);
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.reservation-finance-summary strong {
+  color: var(--ink);
+  display: block;
+  font-size: 0.96rem;
+}
+
+.reservation-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  min-width: 150px;
 }
 
 .event-payment-modal {
@@ -4393,6 +4426,43 @@ img {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.finance-expense-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.finance-expense-main {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.finance-expense-main strong {
+  color: var(--ink);
+}
+
+.finance-expense-main small {
+  color: var(--muted);
+  display: block;
+  font-weight: 650;
+  margin-top: 4px;
+}
+
+.finance-expense-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.small-button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .finance-expense-meta,
 .finance-closure-meta {
   color: var(--muted);
@@ -4468,6 +4538,29 @@ img {
 .user-editor {
   display: grid;
   gap: 14px;
+}
+
+.advanced-user-box {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.advanced-user-box summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 820;
+  margin-bottom: 10px;
+}
+
+.role-detail-list span {
+  display: grid;
+  gap: 2px;
+}
+
+.role-detail-list small {
+  color: var(--muted);
 }
 
 .clients-full-panel {
@@ -4851,8 +4944,10 @@ img {
   .event-payment-summary,
   .event-payment-concepts,
   .reservation-financial-strip,
+  .reservation-finance-summary,
   .finance-method-row,
   .finance-expense-row,
+  .finance-expense-main,
   .finance-closure-row,
   .birthday-card-wide {
     grid-template-columns: 1fr;

@@ -16,7 +16,7 @@ interface EventPaymentModalProps {
 
 const conceptLabel: Record<EventPaymentConcept, string> = {
   balance: 'Saldo final',
-  deposit: 'Sena',
+  deposit: 'Seña',
   other: 'Otro',
   partial: 'Pago parcial',
 }

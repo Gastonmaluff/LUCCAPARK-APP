@@ -169,7 +169,7 @@ export const registerEventPayment = async ({
   const userId = currentUserId()
   const conceptLabel = {
     balance: 'Saldo final',
-    deposit: 'Sena',
+    deposit: 'Seña',
     other: 'Otro cobro',
     partial: 'Pago parcial',
   }[concept]

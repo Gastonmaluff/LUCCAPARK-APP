@@ -13,6 +13,8 @@ import { useCanteenOrders } from '../../hooks/useCanteen'
 import { useFinanceData } from '../../hooks/useFinance'
 import { useEventGuests } from '../../hooks/useEvents'
 import { useTasks } from '../../hooks/useTasks'
+import { useUserProfile } from '../../hooks/useUserProfile'
+import { useUsers } from '../../hooks/useUsers'
 import { updateTaskStatus } from '../../services/taskService'
 import { canCancelEvent, canStartEvent, formatEventTimeRange, getEventCapacityStats } from '../../utils/eventCapacity'
 import { formatGuarani } from '../../utils/money'
@@ -37,6 +39,8 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const { orders: canteenOrders } = useCanteenOrders()
   const finance = useFinanceData({ from: '2000-01-01', to: '2099-12-31' })
   const { tasks } = useTasks()
+  const { profile } = useUserProfile()
+  const usersResult = useUsers()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [isTvModalOpen, setIsTvModalOpen] = useState(false)
@@ -69,7 +73,7 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
       : eventCollectedTotal <= 0
         ? 'Sin pagos'
         : event.depositAmount && eventCollectedTotal <= event.depositAmount
-          ? 'Sena registrada'
+          ? 'Seña registrada'
           : 'Pago parcial'
   const eventCanteenCollected = eventCanteenOrders.filter((order) => order.status === 'paid').reduce((sum, order) => sum + order.total, 0)
   const eventExpensesTotal = eventExpenses.reduce((sum, expense) => sum + expense.amount, 0)
@@ -151,7 +155,7 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         <div className="event-finance-summary">
           <span><small>Paquete contratado</small><strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong></span>
           <span><small>Total cobrado</small><strong>{formatGuarani(eventCollectedTotal)}</strong></span>
-          <span><small>Sena registrada</small><strong>{formatGuarani(Math.min(eventCollectedTotal, event.depositAmount ?? eventCollectedTotal))}</strong></span>
+          <span><small>Seña registrada</small><strong>{formatGuarani(Math.min(eventCollectedTotal, event.depositAmount ?? eventCollectedTotal))}</strong></span>
           <span><small>Saldo pendiente</small><strong>{formatGuarani(eventPendingAmount)}</strong></span>
           <span><small>Cantina cobrada</small><strong>{formatGuarani(eventCanteenCollected)}</strong></span>
           <span><small>Gastos asociados</small><strong>{formatGuarani(eventExpensesTotal)}</strong></span>
@@ -266,7 +270,7 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
       {isTvModalOpen ? <EventTvImageModal event={event} onClose={() => setIsTvModalOpen(false)} /> : null}
       {isExpenseOpen ? <ExpenseModal events={[event]} initialEvent={event} onClose={() => setIsExpenseOpen(false)} /> : null}
       {isPaymentOpen ? <EventPaymentModal event={event} existingPayments={eventPayments} onClose={() => setIsPaymentOpen(false)} onDone={() => setMessage('Cobro registrado.')} /> : null}
-      {isTaskOpen ? <TaskModal events={[event]} initialEvent={event} onClose={() => setIsTaskOpen(false)} /> : null}
+      {isTaskOpen ? <TaskModal currentUserUid={profile?.uid} events={[event]} initialEvent={event} onClose={() => setIsTaskOpen(false)} users={usersResult.users} /> : null}
     </article>
   )
 }

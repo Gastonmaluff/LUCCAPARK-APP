@@ -216,6 +216,7 @@ export interface PaymentRecord {
   canteenAmountPaid?: number
   eventAmountPaid?: number
   createdBy?: string | null
+  createdByName?: string
 }
 
 export type ExpenseCategory =
@@ -245,6 +246,8 @@ export interface ExpenseRecord {
   status?: 'active' | 'void'
   createdAt?: Date | null
   createdBy?: string | null
+  createdByName?: string
+  createdByRole?: UserRole | string
   updatedAt?: Date | null
   updatedBy?: string | null
 }
@@ -268,7 +271,11 @@ export interface LuccaTask {
   title: string
   description?: string
   assignedTo?: string
+  assignedToUid?: string
   assignedToName?: string
+  assignedToEmail?: string
+  assignedByUid?: string | null
+  assignedByName?: string
   createdBy?: string | null
   createdByName?: string
   createdAt?: Date | null

@@ -19,10 +19,10 @@ import type { LuccaEvent } from '../../types'
 const eventStatusLabel: Record<string, string> = {
   active: 'En curso',
   cancelled: 'Cancelada',
-  confirmed: 'Proxima / Reservada',
+  confirmed: 'Próxima / Reservada',
   finished: 'Finalizada',
-  inquiry: 'Proxima / Reservada',
-  reserved: 'Proxima / Reservada',
+  inquiry: 'Próxima / Reservada',
+  reserved: 'Próxima / Reservada',
 }
 
 const formatEventDate = (dateKey: string) => {
@@ -89,7 +89,7 @@ export function AdminDashboardPage() {
       <AdminModuleHeader
         eyebrow="Panel administrativo"
         title="Control"
-        description="Resumen ejecutivo del dia: ingresos, ninos, cantina y proximo evento."
+        description="Resumen ejecutivo del día."
       />
 
       {featuredEvent ? (
@@ -116,20 +116,20 @@ export function AdminDashboardPage() {
           value={formatGuarani(totalCollected)}
           detail={
             <div className="metric-breakdown">
-              <span><b>Parque - {normalChildrenToday} ninos</b><strong>{formatGuarani(visitsCollected)}</strong></span>
-              <span><b>Cantina - {paidCanteenToday.length} cuentas</b><strong>{formatGuarani(canteenCollected)}</strong></span>
+              <span><em>Parque · {normalChildrenToday} niños</em><strong>{formatGuarani(visitsCollected)}</strong></span>
+              <span><em>Cantina · {paidCanteenToday.length} cuentas</em><strong>{formatGuarani(canteenCollected)}</strong></span>
             </div>
           }
           icon={<Coins />}
           color="var(--orange)"
         />
         <MetricCard
-          label="Ninos que ingresaron hoy"
+          label="Niños que ingresaron hoy"
           value={String(childrenToday)}
           detail={
             <div className="metric-breakdown compact">
-              <span>Visitas normales: <strong>{allVisitIdsToday.size}</strong></span>
-              <span>Invitados de evento: <strong>{eventGuestsToday.length}</strong></span>
+              <span><em>Visitas normales</em><strong>{allVisitIdsToday.size}</strong></span>
+              <span><em>Invitados de evento</em><strong>{eventGuestsToday.length}</strong></span>
             </div>
           }
           icon={<Users />}
@@ -143,9 +143,9 @@ export function AdminDashboardPage() {
           color="var(--turquoise)"
         />
         <MetricCard
-          label="Proximo evento"
+          label="Próximo evento"
           value={nextEvent ? nextEvent.title : 'Sin eventos'}
-          detail={nextEvent ? `${formatEventDate(nextEvent.date)} - ${nextEvent.startTime}-${nextEvent.endTime}` : 'No hay eventos proximos registrados.'}
+          detail={nextEvent ? `${formatEventDate(nextEvent.date)} · ${nextEvent.startTime}-${nextEvent.endTime}` : 'No hay eventos próximos registrados.'}
           icon={<Gift />}
           color="var(--yellow)"
         />
@@ -156,18 +156,18 @@ export function AdminDashboardPage() {
           <div className="panel-header">
             <h2 className="panel-title">
               <CalendarDays color="var(--turquoise)" />
-              Proximos eventos
+              Próximos eventos
             </h2>
-            <StatusPill tone="info">{upcomingEvents.length} proximos</StatusPill>
+            <StatusPill tone="info">{upcomingEvents.length} próximos</StatusPill>
           </div>
-          {upcomingEvents.length === 0 ? <div className="empty-state">No hay eventos proximos registrados.</div> : null}
+          {upcomingEvents.length === 0 ? <div className="empty-state">No hay eventos próximos registrados.</div> : null}
           <div className="module-list">
             {upcomingEvents.slice(0, 6).map((event) => (
               <div className="module-row control-event-row" key={event.id}>
                 <div>
                   <strong>{event.title}</strong>
                   <p className="muted">
-                    {event.customerName} - {formatEventDate(event.date)} - {event.startTime}-{event.endTime} - cupo {event.contractedChildrenCount}
+                    {event.customerName} · {formatEventDate(event.date)} · {event.startTime}-{event.endTime} · cupo {event.contractedChildrenCount}
                   </p>
                 </div>
                 <StatusPill tone="warning">{eventStatusLabel[event.status] ?? event.status}</StatusPill>

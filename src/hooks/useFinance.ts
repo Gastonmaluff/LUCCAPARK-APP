@@ -50,6 +50,7 @@ const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord =>
   canteenAmountPaid: Number(data.canteenAmountPaid ?? 0),
   eventAmountPaid: Number(data.eventAmountPaid ?? 0),
   createdBy: data.createdBy ? String(data.createdBy) : null,
+  createdByName: String(data.createdByName ?? ''),
 })
 
 const mapExpense = (id: string, data: Record<string, unknown>): ExpenseRecord => ({
@@ -69,6 +70,8 @@ const mapExpense = (id: string, data: Record<string, unknown>): ExpenseRecord =>
   status: (data.status as ExpenseRecord['status']) ?? 'active',
   createdAt: dateFromTimestamp(data.createdAt),
   createdBy: data.createdBy ? String(data.createdBy) : null,
+  createdByName: String(data.createdByName ?? ''),
+  createdByRole: String(data.createdByRole ?? ''),
   updatedAt: dateFromTimestamp(data.updatedAt),
   updatedBy: data.updatedBy ? String(data.updatedBy) : null,
 })

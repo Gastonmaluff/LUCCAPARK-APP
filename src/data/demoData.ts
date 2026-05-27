@@ -31,7 +31,7 @@ export const demoPackages: PackagePlan[] = [
     duration: '4 horas de salon privado',
     children: 'Pensado para eventos grandes',
     tone: 'orange',
-    features: ['Acceso a juegos', 'Banner para TV', 'Senal y saldo preparados'],
+    features: ['Acceso a juegos', 'Banner para TV', 'Señal y saldo preparados'],
   },
   {
     name: 'Super Lucca',

@@ -416,7 +416,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     ['TOTAL', input.totals.totalCollected],
   ]
   drawDataTable(page1, fonts, 32, 405, [
-    { header: 'Metodo de pago', render: (row) => row[0] as string, width: 265 },
+    { header: 'Método de pago', render: (row) => row[0] as string, width: 265 },
     { align: 'right', header: 'Monto cobrado', render: (row) => money(row[1] as number), width: 266 },
   ], methodRows, { rowHeight: 17, fontSize: 8.5 })
 
@@ -473,7 +473,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { header: 'Modulo', render: (row) => row.module, width: 60 },
       { header: 'Concepto', render: (row) => row.concept, width: 112 },
       { header: 'Cliente / evento', render: (row) => row.client, width: 106 },
-      { header: 'Metodo de pago', render: (row) => row.method, width: 88 },
+      { header: 'Método de pago', render: (row) => row.method, width: 88 },
       { align: 'right', header: 'Monto', render: (row) => money(row.total), width: 74 },
     ], incomeChunks[index] ?? [], { emptyText: 'No se registraron ingresos cobrados en este periodo.', fontSize: 7.6, rowHeight: 18 })
     y -= incomeHeight + 22
@@ -489,7 +489,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { header: 'Categoria', render: (row) => row.category, width: 86 },
       { header: 'Descripcion', render: (row) => row.description, width: 134 },
       { header: 'Relacion', render: (row) => row.relation, width: 118 },
-      { header: 'Metodo', render: (row) => row.method, width: 74 },
+      { header: 'Método', render: (row) => row.method, width: 74 },
       { align: 'right', header: 'Monto', render: (row) => money(row.amount), width: 54 },
     ], expenseChunks[index] ?? [], { emptyText: 'No se registraron gastos en este periodo.', fontSize: 7.4, rowHeight: 18 })
     y -= expenseHeight + 20
@@ -613,7 +613,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     ['Cobros de recepcion registrados', parkMovements > 0],
     ['Cobros de cantina registrados', canteenMovements > 0],
     ['Gastos registrados y clasificados', input.expenses.length > 0],
-    ['Metodos de pago completos', (input.methodTotals.missing ?? 0) === 0],
+    ['Métodos de pago completos', (input.methodTotals.missing ?? 0) === 0],
     ['Pendientes identificados', true],
     ['PDF de cierre generado', true],
   ].forEach(([label, ok], index) => {

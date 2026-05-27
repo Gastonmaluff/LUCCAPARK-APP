@@ -11,7 +11,7 @@ const roleLabel: Record<UserRole, string> = {
   admin: 'Admin / Dueño',
   socio: 'Socio',
   encargado_eventos: 'Encargado de eventos',
-  recepcion: 'Recepcion',
+  recepcion: 'Recepción',
   cantina: 'Cantina',
 }
 

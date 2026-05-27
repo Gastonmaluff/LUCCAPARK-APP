@@ -4,14 +4,15 @@ import { Link } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { ExpenseModal } from '../../components/finance/ExpenseModal'
 import { MetricCard } from '../../components/MetricCard'
-import { paymentLabel } from '../../components/payments/PaymentMethodSelector'
+import { paymentLabel } from '../../components/payments/paymentOptions'
 import { StatusPill } from '../../components/StatusPill'
 import { useFinanceData, type DateRange } from '../../hooks/useFinance'
 import { useUserProfile } from '../../hooks/useUserProfile'
+import { useUsers } from '../../hooks/useUsers'
 import { generateAndSaveFinancialClosure } from '../../services/financialClosureService'
 import { getLocalDateKey } from '../../utils/date'
 import { formatGuarani } from '../../utils/money'
-import type { PaymentMethod, PaymentRecord } from '../../types'
+import type { ExpenseCategory, PaymentMethod, PaymentRecord } from '../../types'
 
 type PeriodPreset = 'today' | 'yesterday' | 'week' | 'month' | 'custom'
 
@@ -38,7 +39,7 @@ const rangeForPreset = (preset: PeriodPreset): DateRange => {
 }
 
 const sourceLabel = (payment: PaymentRecord) => {
-  if (payment.source === 'reception_entry') return 'Recepcion'
+  if (payment.source === 'reception_entry') return 'Recepción'
   if (payment.source === 'reception_exit') return 'Parque'
   if (payment.source === 'canteen' || payment.concepts === 'canteen') return 'Cantina'
   if (payment.source === 'event_payment' || payment.concepts === 'event') return 'Evento'
@@ -53,14 +54,31 @@ const sourceTone = (payment: PaymentRecord): 'available' | 'info' | 'warning' =>
 }
 
 const methodText = (payment: PaymentRecord) => {
-  if (payment.paymentMethod === 'card' && payment.cardType === 'debit') return 'Tarjeta debito'
-  if (payment.paymentMethod === 'card' && payment.cardType === 'credit') return 'Tarjeta credito'
+  if (payment.paymentMethod === 'card' && payment.cardType === 'debit') return 'Tarjeta débito'
+  if (payment.paymentMethod === 'card' && payment.cardType === 'credit') return 'Tarjeta crédito'
   if (payment.paymentMethod) return paymentLabel[payment.paymentMethod as Exclude<PaymentMethod, ''>] ?? payment.paymentMethod
-  return 'Sin metodo registrado'
+  return 'Sin método registrado'
 }
 
 const paymentDetail = (payment: PaymentRecord) => payment.description || (payment.concepts === 'canteen' ? 'Consumo de cantina' : payment.concepts === 'event' ? 'Cobro de evento' : 'Cobro')
 const paymentPerson = (payment: PaymentRecord) => payment.childName || payment.eventName || payment.customerName || payment.accountType || 'Cuenta manual'
+const categoryLabel: Record<ExpenseCategory, string> = {
+  canteen_purchase: 'Cantina / compra de productos',
+  cleaning: 'Limpieza',
+  decoration: 'Decoración',
+  maintenance: 'Mantenimiento',
+  operations: 'Compra operativa',
+  other: 'Otro',
+  services: 'Servicios',
+  wages: 'Sueldos / jornales',
+}
+
+const expenseTypeLabel = (type: string) => (type === 'event' ? 'Gasto de evento' : 'Operativa general')
+const expenseMethodLabel = (method: string, cardType?: string) => {
+  if (method === 'card' && cardType === 'debit') return 'Tarjeta débito'
+  if (method === 'card' && cardType === 'credit') return 'Tarjeta crédito'
+  return paymentLabel[method as Exclude<PaymentMethod, ''>] ?? 'Sin método'
+}
 
 export function AdminFinancePage() {
   const [preset, setPreset] = useState<PeriodPreset>('today')
@@ -73,6 +91,7 @@ export function AdminFinancePage() {
   const [message, setMessage] = useState<string | null>(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const { permissions, profile } = useUserProfile()
+  const usersResult = useUsers(permissions.canViewFinance)
   const range = preset === 'custom' ? customRange : rangeForPreset(preset)
   const finance = useFinanceData(range)
 
@@ -81,13 +100,15 @@ export function AdminFinancePage() {
     ['cash', 'Efectivo', finance.methodTotals.cash],
     ['transfer', 'Transferencia', finance.methodTotals.transfer],
     ['qr', 'QR', finance.methodTotals.qr],
-    ['debit', 'Tarjeta de debito', finance.methodTotals.debit],
-    ['credit', 'Tarjeta de credito', finance.methodTotals.credit],
+    ['debit', 'Tarjeta de débito', finance.methodTotals.debit],
+    ['credit', 'Tarjeta de crédito', finance.methodTotals.credit],
     ['other', 'Otro', finance.methodTotals.other],
-    ['missing', 'Sin metodo registrado', finance.methodTotals.missing],
+    ['missing', 'Sin método registrado', finance.methodTotals.missing],
   ] as const
   const methodTotalCheck = methodRows.reduce((sum, [, , value]) => sum + Number(value), 0)
   const eventOptions = useMemo(() => finance.events.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`)), [finance.events])
+  const userNameByUid = useMemo(() => new Map(usersResult.users.map((user) => [user.uid, user.displayName])), [usersResult.users])
+  const displayUserName = (uid?: string | null, storedName?: string) => storedName || (uid ? userNameByUid.get(uid) : '') || 'Usuario no identificado'
   const selectedMethodLabel = methodRows.find(([key]) => key === selectedMethodKey)?.[1] ?? ''
   const selectedMethodPayments = selectedMethodKey
     ? finance.payments.filter((payment) => {
@@ -141,7 +162,7 @@ export function AdminFinancePage() {
       <AdminModuleHeader
         eyebrow="Caja"
         title="Finanzas y cierres"
-        description={`Control financiero del negocio. Periodo: ${periodText}`}
+        description={`Control financiero del negocio. Período: ${periodText}`}
         action={
           <button className="button primary" disabled={finance.isLoading || isGeneratingPdf} onClick={generateClosure} type="button">
             <FileText size={18} />
@@ -185,7 +206,7 @@ export function AdminFinancePage() {
         <MetricCard color="var(--orange)" detail={`${finance.payments.length} movimientos`} icon={<Banknote />} label="Total cobrado" value={formatGuarani(finance.totals.totalCollected)} />
         <MetricCard color="var(--green)" detail="Entradas y visitas" icon={<WalletCards />} label="Parque" value={formatGuarani(finance.totals.parkCollected)} />
         <MetricCard color="var(--turquoise)" detail="Cuentas cobradas" icon={<Receipt />} label="Cantina" value={formatGuarani(finance.totals.canteenCollected)} />
-        <MetricCard color="var(--yellow)" detail="Senas, saldos y paquetes" icon={<CalendarCheck />} label="Eventos" value={formatGuarani(finance.totals.eventCollected)} />
+        <MetricCard color="var(--yellow)" detail="Señas, saldos y paquetes" icon={<CalendarCheck />} label="Eventos" value={formatGuarani(finance.totals.eventCollected)} />
         <MetricCard color="var(--red)" detail={finance.totals.pendingAmount > 0 ? 'Pendientes reales vigentes' : 'Sin cuentas pendientes'} icon={<WalletCards />} label="Pendiente de cobro" value={formatGuarani(finance.totals.pendingAmount)} />
         <MetricCard color="var(--orange)" detail={`${finance.expenses.length} egresos`} icon={<Receipt />} label="Gastos" value={formatGuarani(finance.totals.totalExpenses)} />
         <MetricCard color="var(--green)" detail="Total cobrado - gastos" icon={<Banknote />} label="Resultado neto" value={formatGuarani(finance.totals.netResult)} />
@@ -195,8 +216,8 @@ export function AdminFinancePage() {
         <article className="panel finance-collapsible-panel">
           <div className="panel-header">
             <button className="finance-panel-toggle" onClick={() => setIsMethodsOpen((current) => !current)} type="button">
-              <span>Cobros por metodo de pago</span>
-              <small>{isMethodsOpen ? 'Ocultar detalle' : 'Ver movimientos por metodo'}</small>
+              <span>Cobros por método de pago</span>
+              <small>{isMethodsOpen ? 'Ocultar detalle' : 'Ver movimientos por método'}</small>
             </button>
             <StatusPill tone={Math.abs(methodTotalCheck - finance.totals.totalCollected) < 1 ? 'available' : 'warning'}>{formatGuarani(methodTotalCheck)}</StatusPill>
           </div>
@@ -236,17 +257,28 @@ export function AdminFinancePage() {
             <div className="module-list">
               {finance.expenses.length === 0 ? <div className="empty-state">No hay gastos registrados en el periodo.</div> : null}
               {finance.expenses.map((expense) => (
-                <div className="module-row finance-expense-row" key={expense.id}>
-                  <span>
-                    <strong>{expense.description}</strong>
-                    <small>
-                      {expense.category} - {expense.type === 'event' ? 'Gasto de evento' : 'Operativa general'}
-                      {expense.eventName ? ` - Evento: ${expense.eventName}` : ''}
-                    </small>
-                    <small>{expense.paymentMethod} - Registrado por {expense.createdBy || 'Sin usuario'} - {expense.spentAt?.toLocaleString('es-PY') ?? expense.date}</small>
-                  </span>
-                  <strong>{formatGuarani(expense.amount)}</strong>
-                  {expense.receiptUrl ? <a className="button ghost" href={expense.receiptUrl} rel="noreferrer" target="_blank">Ver comprobante</a> : <StatusPill tone="info">Sin comprobante</StatusPill>}
+                <div className="finance-expense-card" key={expense.id}>
+                  <div className="finance-expense-main">
+                    <div>
+                      <strong>{expense.description}</strong>
+                      <small>{categoryLabel[expense.category] ?? expense.category} · {expenseTypeLabel(expense.type)}</small>
+                      {expense.eventName ? <small>Evento: {expense.eventName}</small> : null}
+                      <small>
+                        {expenseMethodLabel(expense.paymentMethod, expense.cardType)} · Registrado por {displayUserName(expense.createdBy, expense.createdByName)} ·{' '}
+                        {expense.spentAt?.toLocaleString('es-PY') ?? expense.date}
+                      </small>
+                    </div>
+                    <strong>{formatGuarani(expense.amount)}</strong>
+                  </div>
+                  <div className="finance-expense-actions">
+                    {expense.receiptUrl ? (
+                      <a className="button ghost small-button" href={expense.receiptUrl} rel="noreferrer" target="_blank">
+                        Ver comprobante
+                      </a>
+                    ) : (
+                      <StatusPill tone="info">Sin comprobante</StatusPill>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -350,7 +382,7 @@ export function AdminFinancePage() {
                   <StatusPill tone={sourceTone(payment)}>{sourceLabel(payment)}</StatusPill>
                   <span>
                     <strong>{paymentDetail(payment)}</strong>
-                    <small>{paymentPerson(payment)} - Registrado por {payment.createdBy || 'Sin usuario'}</small>
+                    <small>{paymentPerson(payment)} · Registrado por {displayUserName(payment.createdBy, payment.createdByName)}</small>
                   </span>
                   <strong>{formatGuarani(payment.totalPaid)}</strong>
                 </div>
@@ -373,9 +405,9 @@ export function AdminFinancePage() {
             <div className="checkout-detail-list">
               <div className="checkout-line"><span>Origen</span><strong>{sourceLabel(selectedPayment)}</strong></div>
               <div className="checkout-line"><span>Cliente / evento</span><strong>{paymentPerson(selectedPayment)}</strong></div>
-              <div className="checkout-line"><span>Metodo</span><strong>{methodText(selectedPayment)}</strong></div>
+              <div className="checkout-line"><span>Método</span><strong>{methodText(selectedPayment)}</strong></div>
               <div className="checkout-line"><span>Fecha</span><strong>{selectedPayment.paidAt?.toLocaleString('es-PY') ?? 'Sin fecha'}</strong></div>
-              <div className="checkout-line"><span>Usuario</span><strong>{selectedPayment.createdBy || 'Sin registrar'}</strong></div>
+              <div className="checkout-line"><span>Usuario</span><strong>{displayUserName(selectedPayment.createdBy, selectedPayment.createdByName)}</strong></div>
             </div>
             <div className="checkout-total-bar">
               <span>Total cobrado</span>

@@ -1,4 +1,4 @@
-import { Timestamp, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { auth, firebaseConfig, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
@@ -56,9 +56,24 @@ const uploadExpenseReceipt = async (expenseId: string, file: File) => {
   }
 }
 
+const getCurrentUserAudit = async () => {
+  const user = auth.currentUser
+  if (!user) {
+    return { uid: null, name: '', role: '' }
+  }
+
+  const profileSnapshot = await getDoc(getDocumentRef('users', user.uid)).catch(() => null)
+  const profile = profileSnapshot?.data()
+  return {
+    uid: user.uid,
+    name: String(profile?.displayName ?? user.displayName ?? user.email ?? 'Usuario no identificado'),
+    role: String(profile?.role ?? ''),
+  }
+}
+
 export const saveExpense = async (input: SaveExpenseInput) => {
   await ensureReceptionSession()
-  const userId = auth.currentUser?.uid ?? null
+  const userAudit = await getCurrentUserAudit()
   const expenseRef = input.id ? getDocumentRef('expenses', input.id) : doc(getCollectionRef('expenses'))
   const receiptUrl = input.receiptFile ? await uploadExpenseReceipt(expenseRef.id, input.receiptFile) : input.receiptUrl ?? ''
   const spentAt = new Date(`${input.date}T12:00:00`)
@@ -81,8 +96,8 @@ export const saveExpense = async (input: SaveExpenseInput) => {
       notes: normalizeWhitespace(input.notes ?? ''),
       status: 'active',
       updatedAt: serverTimestamp(),
-      updatedBy: userId,
-      ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: userId }),
+      updatedBy: userAudit.uid,
+      ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: userAudit.uid, createdByName: userAudit.name, createdByRole: userAudit.role }),
     },
     { merge: true },
   )

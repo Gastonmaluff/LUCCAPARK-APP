@@ -728,8 +728,8 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               <strong>{formatGuarani(closedOrderDetail.total)}</strong>
             </div>
             <div className="closed-order-meta">
-              <span>Metodo: {closedOrderDetail.paymentMethod ? paymentLabel[closedOrderDetail.paymentMethod as Exclude<PaymentMethod, ''>] : 'Cobrado'}</span>
-              {closedOrderDetail.cardType ? <span>Tarjeta: {closedOrderDetail.cardType === 'debit' ? 'Debito' : 'Credito'}</span> : null}
+              <span>Método: {closedOrderDetail.paymentMethod ? paymentLabel[closedOrderDetail.paymentMethod as Exclude<PaymentMethod, ''>] : 'Cobrado'}</span>
+              {closedOrderDetail.cardType ? <span>Tarjeta: {closedOrderDetail.cardType === 'debit' ? 'Débito' : 'Crédito'}</span> : null}
               {closedOrderDetail.updatedBy ? <span>Usuario: {closedOrderDetail.updatedBy}</span> : null}
             </div>
           </section>

@@ -15,7 +15,11 @@ const mapTask = (id: string, data: Record<string, unknown>): LuccaTask => ({
   title: String(data.title ?? ''),
   description: String(data.description ?? ''),
   assignedTo: String(data.assignedTo ?? ''),
+  assignedToUid: String(data.assignedToUid ?? data.assignedTo ?? ''),
   assignedToName: String(data.assignedToName ?? ''),
+  assignedToEmail: String(data.assignedToEmail ?? ''),
+  assignedByUid: data.assignedByUid ? String(data.assignedByUid) : null,
+  assignedByName: String(data.assignedByName ?? ''),
   createdBy: data.createdBy ? String(data.createdBy) : null,
   createdByName: String(data.createdByName ?? ''),
   createdAt: dateFromTimestamp(data.createdAt),
@@ -90,7 +94,7 @@ export function useAssignedTasks(assignedTo?: string | null) {
     ensureReceptionSession().then(() => {
       if (!mounted) return
       unsubscribe = onSnapshot(
-        query(getCollectionRef('tasks'), where('assignedTo', '==', assignedTo)),
+        query(getCollectionRef('tasks'), where('assignedToUid', '==', assignedTo)),
         (snapshot) => {
           setTasks(snapshot.docs.map((item) => mapTask(item.id, item.data())).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)))
           setIsLoading(false)

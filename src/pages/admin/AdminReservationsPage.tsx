@@ -26,16 +26,32 @@ import type { LuccaEvent } from '../../types'
 
 type HistoryFilter = 'all' | 'finished' | 'cancelled'
 
-const unusedStatusFilters = [
-  { label: 'Próximas', value: 'upcoming' },
-  { label: 'En curso', value: 'active' },
-  { label: 'Finalizadas', value: 'finished' },
-  { label: 'Canceladas', value: 'cancelled' },
-  { label: 'Todas', value: 'all' },
-]
-void unusedStatusFilters
 
 const weekdayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+const getEventPaidAmount = (event: LuccaEvent) => {
+  if (typeof event.eventPaidAmount === 'number') return event.eventPaidAmount
+  const total = typeof event.totalAmount === 'number' ? event.totalAmount : 0
+  const pending = typeof event.pendingAmount === 'number' ? event.pendingAmount : total
+  return Math.max(0, total - pending)
+}
+
+const getEventPendingAmount = (event: LuccaEvent) => {
+  if (typeof event.pendingAmount === 'number') return event.pendingAmount
+  const total = typeof event.totalAmount === 'number' ? event.totalAmount : 0
+  return Math.max(0, total - getEventPaidAmount(event))
+}
+
+const getFinancialLabel = (event: LuccaEvent) => {
+  const total = typeof event.totalAmount === 'number' ? event.totalAmount : 0
+  const paid = getEventPaidAmount(event)
+  const pending = getEventPendingAmount(event)
+  if (total <= 0) return 'Sin monto definido'
+  if (pending <= 0) return 'Pagado completo'
+  if (paid <= 0) return 'Sin pagos'
+  if (paid <= (typeof event.depositAmount === 'number' ? event.depositAmount : 0)) return 'Seña registrada'
+  return 'Pago parcial'
+}
 
 const formatDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number)
@@ -124,7 +140,7 @@ export function AdminReservationsPage() {
       }),
     [events, todayKey],
   )
-  const selectedEvent = selectedEventId ? events.find((event) => event.id === selectedEventId) ?? null : null
+  const selectedEvent = selectedEventId ? events.find((event) => event.id === selectedEventId) || null : null
 
   const upcomingReservations = useMemo(
     () =>
@@ -240,10 +256,10 @@ export function AdminReservationsPage() {
           <div className="panel-header">
             <h2 className="panel-title">
               <CalendarDays color="var(--turquoise)" />
-              Proximas reservas
+              Próximas reservas
             </h2>
             <div className="module-actions">
-              <StatusPill tone="info">{upcomingReservations.length} proximas</StatusPill>
+              <StatusPill tone="info">{upcomingReservations.length} próximas</StatusPill>
               <button className="button ghost" onClick={() => setShowHistory(true)} type="button">
                 <History size={17} />
                 Ver historial
@@ -262,7 +278,7 @@ export function AdminReservationsPage() {
 
           {isLoading ? <div className="empty-state">Cargando reservas...</div> : null}
           {error ? <div className="form-alert error">No se pudieron cargar eventos: {error}</div> : null}
-          {!isLoading && !error && upcomingReservations.length === 0 ? <div className="empty-state">No hay proximas reservas para mostrar.</div> : null}
+          {!isLoading && !error && upcomingReservations.length === 0 ? <div className="empty-state">No hay próximas reservas para mostrar.</div> : null}
 
           <div className="reservation-list">
             {upcomingReservations.map((event) => {
@@ -283,22 +299,16 @@ export function AdminReservationsPage() {
                       {formatGuarani(eventCanteenTotal)}
                     </small>
                   </div>
-                  <div className="reservation-money">
-                    <span>Total</span>
-                    <strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto'}</strong>
-                    <small>
-                      Seña {formatGuarani(event.depositAmount ?? 0)} · Saldo {formatGuarani(event.pendingAmount ?? 0)}
-                    </small>
+                  <div className="reservation-finance-summary">
+                    <span><small>Total contratado</small><strong>{event.totalAmount ? formatGuarani(event.totalAmount) : 'Sin monto definido'}</strong></span>
+                    <span><small>Cobrado</small><strong>{formatGuarani(getEventPaidAmount(event))}</strong></span>
+                    <span><small>Pendiente</small><strong>{formatGuarani(getEventPendingAmount(event))}</strong></span>
                   </div>
-                  <div className="reservation-financial-strip">
-                    <span>Cobrado <strong>{formatGuarani(event.eventPaidAmount ?? 0)}</strong></span>
-                    <span>Saldo <strong>{formatGuarani(event.pendingAmount ?? Math.max(0, (event.totalAmount ?? 0) - (event.eventPaidAmount ?? 0)))}</strong></span>
-                    <StatusPill tone={(event.pendingAmount ?? 0) <= 0 && (event.totalAmount ?? 0) > 0 ? 'available' : (event.eventPaidAmount ?? 0) > 0 ? 'warning' : 'info'}>
-                      {(event.pendingAmount ?? 0) <= 0 && (event.totalAmount ?? 0) > 0 ? 'Pagado completo' : (event.eventPaidAmount ?? 0) > 0 ? 'Saldo pendiente' : 'Sin pagos'}
+                  <div className="reservation-actions">
+                    <StatusPill tone={getEventPendingAmount(event) <= 0 && (event.totalAmount || 0) > 0 ? 'available' : getEventPaidAmount(event) > 0 ? 'warning' : 'info'}>
+                      {getFinancialLabel(event)}
                     </StatusPill>
-                  </div>
-                  <EventStatusBadge status={event.status} />
-                  <div className="module-actions">
+                    <EventStatusBadge status={event.status} />
                     <button className="button ghost" onClick={() => setPaymentEvent(event)} type="button">
                       Registrar cobro
                     </button>

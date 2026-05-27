@@ -7,10 +7,11 @@ import { TaskModal } from '../../components/tasks/TaskModal'
 import { useEventDayContext } from '../../hooks/useEventDayContext'
 import { useTasks } from '../../hooks/useTasks'
 import { useUserProfile } from '../../hooks/useUserProfile'
+import { useUsers } from '../../hooks/useUsers'
 import { updateTaskStatus } from '../../services/taskService'
 import type { LuccaTask } from '../../types'
 
-type TaskFilter = 'mine' | 'all' | 'pending' | 'in_progress' | 'completed' | 'events'
+type TaskFilter = 'mine' | 'assigned_by_me' | 'all' | 'pending' | 'in_progress' | 'completed' | 'events'
 
 const priorityLabel: Record<LuccaTask['priority'], string> = { high: 'Alta', low: 'Baja', medium: 'Media' }
 const statusLabel: Record<LuccaTask['status'], string> = { completed: 'Completada', in_progress: 'En proceso', pending: 'Pendiente' }
@@ -19,6 +20,7 @@ export function AdminTasksPage() {
   const { events } = useEventDayContext()
   const { permissions, profile } = useUserProfile()
   const { error, isLoading, summary, tasks } = useTasks()
+  const usersResult = useUsers(permissions.canAssignTasks)
   const [filter, setFilter] = useState<TaskFilter>('all')
   const [editingTask, setEditingTask] = useState<LuccaTask | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -26,7 +28,10 @@ export function AdminTasksPage() {
   const filteredTasks = useMemo(
     () =>
       tasks.filter((task) => {
-        if (filter === 'mine') return task.assignedTo === profile?.uid || task.assignedTo === profile?.email || task.assignedToName === profile?.displayName
+        if (filter === 'mine') {
+          return task.assignedToUid === profile?.uid || task.assignedTo === profile?.uid || task.assignedTo === profile?.email || task.assignedToName === profile?.displayName
+        }
+        if (filter === 'assigned_by_me') return task.assignedByUid === profile?.uid || task.createdBy === profile?.uid
         if (filter === 'events') return Boolean(task.eventId)
         if (filter === 'all') return true
         return task.status === filter
@@ -37,9 +42,9 @@ export function AdminTasksPage() {
   return (
     <>
       <AdminModuleHeader
-        eyebrow="Operacion"
+        eyebrow="Operación"
         title="Tareas"
-        description="Asignacion y seguimiento de tareas operativas y de eventos."
+        description="Asignación y seguimiento de tareas operativas y de eventos."
         action={
           <button className="button primary" disabled={!permissions.canManageTasks} onClick={() => setIsModalOpen(true)} type="button">
             <Plus size={18} />
@@ -63,6 +68,7 @@ export function AdminTasksPage() {
         <div className="reservation-filter-row secondary">
           {([
             ['mine', 'Mis tareas'],
+            ['assigned_by_me', 'Asignadas por mí'],
             ['all', 'Todas'],
             ['pending', 'Pendientes'],
             ['in_progress', 'En proceso'],
@@ -74,6 +80,7 @@ export function AdminTasksPage() {
             </button>
           ))}
         </div>
+        {usersResult.error ? <div className="form-alert error">No se pudieron cargar usuarios: {usersResult.error}</div> : null}
         {error ? <div className="form-alert error">No se pudieron cargar tareas: {error}</div> : null}
         {isLoading ? <div className="empty-state">Cargando tareas...</div> : null}
         <div className="module-list task-list">
@@ -82,26 +89,34 @@ export function AdminTasksPage() {
             <div className={`module-row task-row priority-${task.priority}`} key={task.id}>
               <span>
                 <strong>{task.title}</strong>
-                <small>
-                  Asignada a: {task.assignedToName || task.assignedTo || 'Sin asignar'}
-                  {task.eventName ? ` · Evento: ${task.eventName}` : ''}
-                  {task.dueAt ? ` · Vence: ${task.dueAt.toLocaleString('es-PY')}` : ''}
-                </small>
+                <small>Prioridad: {priorityLabel[task.priority]}{task.dueAt ? ` · Vence: ${task.dueAt.toLocaleString('es-PY')}` : ''}</small>
+                <small>Asignada a: {task.assignedToName || task.assignedTo || 'Asignación anterior sin usuario vinculado'}</small>
+                <small>Asignada por: {task.assignedByName || task.createdByName || 'Usuario no identificado'}{task.eventName ? ` · Evento: ${task.eventName}` : ''}</small>
               </span>
               <StatusPill tone={task.priority === 'high' ? 'danger' : task.priority === 'medium' ? 'warning' : 'info'}>{priorityLabel[task.priority]}</StatusPill>
               <StatusPill tone={task.status === 'completed' ? 'available' : task.status === 'in_progress' ? 'info' : 'warning'}>{statusLabel[task.status]}</StatusPill>
               <div className="module-actions">
-                <button className="button ghost" onClick={() => setEditingTask(task)} type="button">Editar</button>
-                {task.status === 'pending' ? <button className="button secondary" onClick={() => updateTaskStatus(task, 'in_progress')} type="button">En proceso</button> : null}
-                {task.status !== 'completed' ? <button className="button primary" onClick={() => updateTaskStatus(task, 'completed')} type="button">Completar</button> : null}
+                <button className="button ghost" onClick={() => setEditingTask(task)} type="button">
+                  Editar
+                </button>
+                {task.status === 'pending' ? (
+                  <button className="button secondary" onClick={() => updateTaskStatus(task, 'in_progress')} type="button">
+                    En proceso
+                  </button>
+                ) : null}
+                {task.status !== 'completed' ? (
+                  <button className="button primary" onClick={() => updateTaskStatus(task, 'completed')} type="button">
+                    Completar
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
       </article>
 
-      {isModalOpen ? <TaskModal events={events} onClose={() => setIsModalOpen(false)} /> : null}
-      {editingTask ? <TaskModal events={events} onClose={() => setEditingTask(null)} task={editingTask} /> : null}
+      {isModalOpen ? <TaskModal currentUserUid={profile?.uid} events={events} onClose={() => setIsModalOpen(false)} users={usersResult.users} /> : null}
+      {editingTask ? <TaskModal currentUserUid={profile?.uid} events={events} onClose={() => setEditingTask(null)} task={editingTask} users={usersResult.users} /> : null}
     </>
   )
 }

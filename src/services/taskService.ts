@@ -1,4 +1,4 @@
-import { Timestamp, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { auth } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
@@ -10,7 +10,9 @@ export interface SaveTaskInput {
   title: string
   description?: string
   assignedTo?: string
+  assignedToUid?: string
   assignedToName?: string
+  assignedToEmail?: string
   dueAt?: string
   priority: LuccaTask['priority']
   status?: LuccaTask['status']
@@ -19,18 +21,37 @@ export interface SaveTaskInput {
   notes?: string
 }
 
+const getCurrentUserAudit = async () => {
+  const user = auth.currentUser
+  if (!user) {
+    return { uid: null, name: '' }
+  }
+
+  const profileSnapshot = await getDoc(getDocumentRef('users', user.uid)).catch(() => null)
+  const profile = profileSnapshot?.data()
+  return {
+    uid: user.uid,
+    name: String(profile?.displayName ?? user.displayName ?? user.email ?? 'Usuario no identificado'),
+  }
+}
+
 export const saveTask = async (input: SaveTaskInput) => {
   await ensureReceptionSession()
-  const user = auth.currentUser
+  const userAudit = await getCurrentUserAudit()
   const taskRef = input.id ? getDocumentRef('tasks', input.id) : doc(getCollectionRef('tasks'))
+  const assignedUid = normalizeWhitespace(input.assignedToUid ?? input.assignedTo ?? '')
   await setDoc(
     taskRef,
     {
       id: taskRef.id,
       title: normalizeWhitespace(input.title),
       description: normalizeWhitespace(input.description ?? ''),
-      assignedTo: normalizeWhitespace(input.assignedTo ?? user?.uid ?? ''),
-      assignedToName: normalizeWhitespace(input.assignedToName ?? user?.displayName ?? user?.email ?? 'Usuario'),
+      assignedTo: assignedUid,
+      assignedToUid: assignedUid,
+      assignedToName: normalizeWhitespace(input.assignedToName ?? ''),
+      assignedToEmail: normalizeWhitespace(input.assignedToEmail ?? ''),
+      assignedByUid: userAudit.uid,
+      assignedByName: userAudit.name,
       dueAt: input.dueAt ? Timestamp.fromDate(new Date(input.dueAt)) : null,
       priority: input.priority,
       status: input.status ?? 'pending',
@@ -38,8 +59,8 @@ export const saveTask = async (input: SaveTaskInput) => {
       eventName: normalizeWhitespace(input.eventName ?? ''),
       notes: normalizeWhitespace(input.notes ?? ''),
       updatedAt: serverTimestamp(),
-      updatedBy: user?.uid ?? null,
-      ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: user?.uid ?? null, createdByName: user?.displayName ?? user?.email ?? '' }),
+      updatedBy: userAudit.uid,
+      ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: userAudit.uid, createdByName: userAudit.name }),
     },
     { merge: true },
   )
@@ -48,12 +69,12 @@ export const saveTask = async (input: SaveTaskInput) => {
 
 export const updateTaskStatus = async (task: LuccaTask, status: LuccaTask['status']) => {
   await ensureReceptionSession()
-  const userId = auth.currentUser?.uid ?? null
+  const userAudit = await getCurrentUserAudit()
   await updateDoc(getDocumentRef('tasks', task.id), {
     status,
     completedAt: status === 'completed' ? serverTimestamp() : null,
-    completedBy: status === 'completed' ? userId : null,
+    completedBy: status === 'completed' ? userAudit.uid : null,
     updatedAt: serverTimestamp(),
-    updatedBy: userId,
+    updatedBy: userAudit.uid,
   })
 }
