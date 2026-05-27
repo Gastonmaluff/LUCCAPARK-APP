@@ -76,7 +76,7 @@ export function useUserProfile() {
     const isActive = profile?.isActive === true
     return {
       canViewFinance: isActive && (role === 'admin' || role === 'socio'),
-      canRegisterExpenses: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos' || role === 'recepcion' || role === 'cantina'),
+      canRegisterExpenses: isActive,
       canManageTasks: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
       canAssignTasks: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
       canManageUsers: isActive && role === 'admin',

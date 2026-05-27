@@ -58,7 +58,7 @@ service firebase.storage {
     }
 
     function canManageExpenseReceipts() {
-      return isAdmin() || isPartner() || isEventManager() || isReception() || isCanteen();
+      return isAdmin() || isActiveUser();
     }
 
     function canUploadOwnExpenseReceipt(userId) {
