@@ -15,17 +15,8 @@ service firebase.storage {
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
     }
 
-    function hasProfileFor(userId) {
-      return signedIn()
-        && firestore.exists(/databases/(default)/documents/users/$(userId));
-    }
-
     function userProfile() {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
-    }
-
-    function userProfileFor(userId) {
-      return firestore.get(/databases/(default)/documents/users/$(userId));
     }
 
     function role() {
@@ -35,11 +26,6 @@ service firebase.storage {
     function isActiveUser() {
       return isBootstrapOwner()
         || (hasProfile() && userProfile().data.isActive != false);
-    }
-
-    function isActiveProfileFor(userId) {
-      return hasProfileFor(userId)
-        && userProfileFor(userId).data.isActive != false;
     }
 
     function isAdmin() {
@@ -69,13 +55,12 @@ service firebase.storage {
 
     function canUploadOwnExpenseReceipt(userId) {
       return signedIn()
-        && request.auth.uid == userId
-        && isActiveProfileFor(userId);
+        && request.auth.uid == userId;
     }
 
     function canReadExpenseReceipt(userId) {
       return signedIn()
-        && (isAdmin() || isPartner() || (request.auth.uid == userId && isActiveProfileFor(userId)));
+        && (isAdmin() || isPartner() || request.auth.uid == userId);
     }
 
     function canManageFinancialClosures() {
