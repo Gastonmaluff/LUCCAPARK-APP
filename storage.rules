@@ -6,71 +6,10 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isBootstrapOwner() {
-      return signedIn() && request.auth.uid == 'SXaYNYcKFXP8FZDCk3DP38EyP903';
-    }
-
-    function hasProfile() {
-      return signedIn()
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
-    }
-
-    function userProfile() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
-    }
-
-    function role() {
-      return hasProfile() ? userProfile().data.role : '';
-    }
-
-    function isActiveUser() {
-      return isBootstrapOwner()
-        || (hasProfile() && userProfile().data.isActive != false);
-    }
-
-    function isAdmin() {
-      return isBootstrapOwner()
-        || (isActiveUser() && role() in ['admin', 'owner', 'dueno', 'dueño']);
-    }
-
-    function isPartner() {
-      return isActiveUser() && role() in ['socio', 'partner'];
-    }
-
-    function isEventManager() {
-      return isActiveUser() && role() in ['encargado_eventos', 'event_manager'];
-    }
-
-    function isCanteen() {
-      return isActiveUser() && role() in ['cantina', 'canteen'];
-    }
-
-    function canManageProductImages() {
-      return isAdmin() || isPartner() || isCanteen();
-    }
-
-    function canManageEventTvImages() {
-      return isAdmin() || isPartner() || isEventManager();
-    }
-
-    function canUploadOwnExpenseReceipt(userId) {
-      return signedIn()
-        && request.auth.uid == userId;
-    }
-
-    function canReadExpenseReceipt(userId) {
-      return signedIn()
-        && (isAdmin() || isPartner() || request.auth.uid == userId);
-    }
-
-    function canManageFinancialClosures() {
-      return isAdmin() || isPartner();
-    }
-
-    function validProductImage() {
+    function validImage(maxMb) {
       return request.resource != null
         && request.resource.contentType.matches('image/.*')
-        && request.resource.size < 5 * 1024 * 1024;
+        && request.resource.size <= maxMb * 1024 * 1024;
     }
 
     function validExpenseReceipt() {
@@ -82,30 +21,35 @@ service firebase.storage {
         && request.resource.size <= 8 * 1024 * 1024;
     }
 
+    function validClosurePdf() {
+      return request.resource != null
+        && request.resource.contentType == 'application/pdf'
+        && request.resource.size <= 10 * 1024 * 1024;
+    }
+
+    match /expense-receipts/{userId}/{fileName} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && validExpenseReceipt();
+      allow update, delete: if false;
+    }
+
+    match /financial-closures/{closureId}/{fileName} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validClosurePdf();
+      allow update, delete: if false;
+    }
+
     match /canteen-products/{allPaths=**} {
       allow read: if true;
-      allow create, update: if canManageProductImages() && validProductImage();
-      allow delete: if canManageProductImages();
+      allow create, update: if signedIn() && validImage(5);
+      allow delete: if false;
     }
 
     match /event-tv-images/{allPaths=**} {
       allow read: if true;
-      allow create, update: if canManageEventTvImages() && validProductImage();
-      allow delete: if canManageEventTvImages();
-    }
-
-    match /expense-receipts/{userId}/{fileName} {
-      allow read: if canReadExpenseReceipt(userId);
-      allow create: if canUploadOwnExpenseReceipt(userId) && validExpenseReceipt();
-      allow update, delete: if false;
-    }
-
-    match /financial-closures/{allPaths=**} {
-      allow read: if canManageFinancialClosures();
-      allow create, update: if canManageFinancialClosures()
-        && request.resource != null
-        && request.resource.contentType == 'application/pdf'
-        && request.resource.size < 10 * 1024 * 1024;
+      allow create, update: if signedIn() && validImage(8);
       allow delete: if false;
     }
 
