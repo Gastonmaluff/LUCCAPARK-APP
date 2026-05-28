@@ -104,7 +104,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
     const birthDate = birthDateResult.iso
 
     if (!childName || !customerName || !form.planId || !form.paymentStatus) {
-      setError('Completa nombre del nino, responsable, plan y estado de pago.')
+      setError('Completá nombre del niño, responsable, plan y estado de pago.')
       return
     }
 
@@ -159,11 +159,11 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
   const confirmPaidEntry = async () => {
     if (!pendingPaidEntry) return
     if (!entryPaymentMethod) {
-      setError('Selecciona un metodo de pago para confirmar el ingreso.')
+      setError('Seleccioná un método de pago para confirmar el ingreso.')
       return
     }
     if (entryPaymentMethod === 'card' && !entryCardType) {
-      setError('Selecciona si la tarjeta es debito o credito.')
+      setError('Seleccioná si la tarjeta es débito o crédito.')
       return
     }
 
@@ -193,7 +193,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       {success ? <div className="form-alert success">{success}</div> : null}
 
       <label className="field">
-        <span>Nombre del nino *</span>
+        <span>Nombre del niño *</span>
         <input
           onBlur={() => normalizeNameField('childName')}
           onChange={(event) => setField('childName', event.target.value)}
@@ -273,7 +273,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
 
       <div className="form-inline">
         <label className="field">
-          <span>Cantidad de ninos</span>
+          <span>Cantidad de niños</span>
           <input
             min={1}
             onChange={(event) => setField('childrenCount', event.target.value)}
@@ -326,7 +326,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
 
       {!compact ? (
         <label className="field">
-          <span>Observaciones del nino</span>
+          <span>Observaciones del niño</span>
           <textarea
             onChange={(event) => setField('childNotes', event.target.value)}
             placeholder="Alergias, cuidados, cumpleanos..."

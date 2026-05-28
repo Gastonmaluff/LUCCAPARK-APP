@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Banknote, CalendarCheck, FileText, Plus, Receipt, WalletCards } from 'lucide-react'
+import { Banknote, CalendarCheck, ChevronDown, ChevronRight, CreditCard, FileText, Plus, Receipt, WalletCards } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { ExpenseModal } from '../../components/finance/ExpenseModal'
@@ -87,6 +87,9 @@ export function AdminFinancePage() {
   const [isExpenseOpen, setIsExpenseOpen] = useState(false)
   const [isMethodsOpen, setIsMethodsOpen] = useState(false)
   const [isExpensesOpen, setIsExpensesOpen] = useState(true)
+  const [isPaymentsOpen, setIsPaymentsOpen] = useState(true)
+  const [isPendingOpen, setIsPendingOpen] = useState(true)
+  const [isClosuresOpen, setIsClosuresOpen] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null)
   const [selectedMethodKey, setSelectedMethodKey] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -208,22 +211,26 @@ export function AdminFinancePage() {
         <MetricCard color="var(--green)" detail="Entradas y visitas" icon={<WalletCards />} label="Parque" value={formatGuarani(finance.totals.parkCollected)} />
         <MetricCard color="var(--turquoise)" detail="Cuentas cobradas" icon={<Receipt />} label="Cantina" value={formatGuarani(finance.totals.canteenCollected)} />
         <MetricCard color="var(--yellow)" detail="Señas, saldos y paquetes" icon={<CalendarCheck />} label="Eventos" value={formatGuarani(finance.totals.eventCollected)} />
-        <MetricCard color="var(--red)" detail={finance.totals.pendingAmount > 0 ? 'Pendientes reales vigentes' : 'Sin cuentas pendientes'} icon={<WalletCards />} label="Pendiente de cobro" value={formatGuarani(finance.totals.pendingAmount)} />
+        <MetricCard color="var(--red)" detail={finance.totals.pendingAmount > 0 ? 'Saldos abiertos vigentes' : 'Sin cuentas pendientes'} icon={<WalletCards />} label="Saldos pendientes actuales" value={formatGuarani(finance.totals.pendingAmount)} />
         <MetricCard color="var(--orange)" detail={`${finance.expenses.length} egresos`} icon={<Receipt />} label="Gastos" value={formatGuarani(finance.totals.totalExpenses)} />
         <MetricCard color="var(--green)" detail="Total cobrado - gastos" icon={<Banknote />} label="Resultado neto" value={formatGuarani(finance.totals.netResult)} />
       </div>
 
       <div className="finance-section-stack">
         <article className="panel finance-collapsible-panel">
-          <div className="panel-header">
-            <button className="finance-panel-toggle" onClick={() => setIsMethodsOpen((current) => !current)} type="button">
-              <span>Cobros por método de pago</span>
-              <small>{isMethodsOpen ? 'Ocultar detalle' : 'Ver movimientos por método'}</small>
-            </button>
-            <StatusPill tone={Math.abs(methodTotalCheck - finance.totals.totalCollected) < 1 ? 'available' : 'warning'}>{formatGuarani(methodTotalCheck)}</StatusPill>
-          </div>
+          <button className="finance-collapsible-header" onClick={() => setIsMethodsOpen((current) => !current)} type="button">
+            <span className="finance-collapsible-title">
+              {isMethodsOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+              <CreditCard color="var(--orange)" size={20} />
+              <strong>Cobros por método de pago</strong>
+            </span>
+            <strong>{formatGuarani(methodTotalCheck)}</strong>
+          </button>
           {isMethodsOpen ? (
-            <div className="module-list">
+            <div className="module-list finance-collapsible-body">
+              {Math.abs(methodTotalCheck - finance.totals.totalCollected) >= 1 ? (
+                <div className="form-alert warning">La suma por métodos no coincide con el total cobrado del período.</div>
+              ) : null}
               {methodRows.map(([key, label, total]) => (
                 <div className="module-row finance-method-row" key={key}>
                   <span>{label}</span>
@@ -241,22 +248,23 @@ export function AdminFinancePage() {
         </article>
 
         <article className="panel finance-collapsible-panel">
-          <div className="panel-header">
-            <button className="finance-panel-toggle" onClick={() => setIsExpensesOpen((current) => !current)} type="button">
-              <span>Gastos registrados</span>
-              <small>{isExpensesOpen ? 'Ocultar detalle' : 'Ver detalle'}</small>
-            </button>
-            <div className="module-actions">
-              <StatusPill tone="warning">{formatGuarani(finance.totals.totalExpenses)}</StatusPill>
-              <button className="button primary" disabled={!permissions.canRegisterExpenses} onClick={() => setIsExpenseOpen(true)} type="button">
-                <Plus size={17} />
-                Registrar gasto
-              </button>
-            </div>
-          </div>
+          <button className="finance-collapsible-header" onClick={() => setIsExpensesOpen((current) => !current)} type="button">
+            <span className="finance-collapsible-title">
+              {isExpensesOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+              <Receipt color="var(--red)" size={20} />
+              <strong>Gastos registrados</strong>
+            </span>
+            <strong>{formatGuarani(finance.totals.totalExpenses)}</strong>
+          </button>
           {isExpensesOpen ? (
-            <div className="module-list">
-              {finance.expenses.length === 0 ? <div className="empty-state">No hay gastos registrados en el periodo.</div> : null}
+            <div className="module-list finance-collapsible-body">
+              <div className="finance-section-action-row">
+                <button className="button primary" disabled={!permissions.canRegisterExpenses} onClick={() => setIsExpenseOpen(true)} type="button">
+                  <Plus size={17} />
+                  Registrar gasto
+                </button>
+              </div>
+              {finance.expenses.length === 0 ? <div className="empty-state">No hay gastos registrados en el período.</div> : null}
               {finance.expenses.map((expense) => (
                 <div className="finance-expense-card" key={expense.id}>
                   <div className="finance-expense-main">
@@ -287,15 +295,19 @@ export function AdminFinancePage() {
         </article>
       </div>
 
-      <article className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">Movimientos cobrados</h2>
-          <StatusPill tone="info">{finance.payments.length} movimientos</StatusPill>
-        </div>
-        <div className="module-list">
-          {finance.payments.length === 0 ? <div className="empty-state">No hay cobros registrados en el periodo.</div> : null}
+      <article className="panel finance-collapsible-panel">
+        <button className="finance-collapsible-header" onClick={() => setIsPaymentsOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isPaymentsOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <Banknote color="var(--green)" size={20} />
+            <strong>Movimientos cobrados</strong>
+          </span>
+          <strong>{finance.payments.length} movimientos · {formatGuarani(finance.totals.totalCollected)}</strong>
+        </button>
+        {isPaymentsOpen ? <div className="module-list finance-collapsible-body">
+          {finance.payments.length === 0 ? <div className="empty-state">No hay cobros registrados en el período.</div> : null}
           {finance.payments.map((payment) => (
-            <article className="finance-movement-card" key={payment.id}>
+            <article className={`finance-movement-card origin-${sourceTone(payment)}`} key={payment.id}>
               <div className="finance-movement-top">
                 <div className="finance-movement-title">
                   <strong>{paymentDetail(payment)}</strong>
@@ -318,16 +330,20 @@ export function AdminFinancePage() {
               </div>
             </article>
           ))}
-        </div>
+        </div> : null}
       </article>
 
-      <article className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">Pendientes de cobro</h2>
-          <StatusPill tone={finance.totals.pendingAmount > 0 ? 'warning' : 'available'}>{formatGuarani(finance.totals.pendingAmount)}</StatusPill>
-        </div>
-        {finance.totals.pendingAmount <= 0 ? <div className="empty-state">No existen cuentas pendientes actualmente.</div> : null}
-        <div className="pending-grid">
+      <article className="panel finance-collapsible-panel">
+        <button className="finance-collapsible-header" onClick={() => setIsPendingOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isPendingOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <WalletCards color="var(--yellow)" size={20} />
+            <strong>Saldos pendientes actuales</strong>
+          </span>
+          <strong>{formatGuarani(finance.totals.pendingAmount)}</strong>
+        </button>
+        {isPendingOpen ? <div className="pending-grid finance-collapsible-body">
+          {finance.totals.pendingAmount <= 0 ? <div className="empty-state">No existen cuentas pendientes actualmente.</div> : null}
           {finance.pendingVisits.map((visit) => (
             <Link className="pending-card" key={visit.id} to="/admin/recepcion">
               <span>{visit.childName} - Visita activa</span>
@@ -345,20 +361,24 @@ export function AdminFinancePage() {
           {finance.pendingEventItems.map((event) => (
             <Link className="pending-card" key={event.id} to={`/admin/reservas?eventId=${event.id}`}>
               <span>{event.title} - Evento</span>
-              <strong>{formatGuarani(getEventPendingAmount(event, finance.payments))}</strong>
+              <strong>{formatGuarani(finance.pendingEventAmounts[event.id] ?? getEventPendingAmount(event, finance.payments))}</strong>
               <small>Ver evento</small>
             </Link>
           ))}
-        </div>
+        </div> : null}
       </article>
 
-      <article className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">Cierres generados</h2>
-          <StatusPill tone="info">{finance.closures.length} cierres</StatusPill>
-        </div>
-        <div className="module-list">
-          {finance.closures.length === 0 ? <div className="empty-state">Todavia no hay cierres generados.</div> : null}
+      <article className="panel finance-collapsible-panel">
+        <button className="finance-collapsible-header" onClick={() => setIsClosuresOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isClosuresOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <FileText color="var(--orange)" size={20} />
+            <strong>Cierres generados</strong>
+          </span>
+          <strong>{finance.closures.length} cierres</strong>
+        </button>
+        {isClosuresOpen ? <div className="module-list finance-collapsible-body">
+          {finance.closures.length === 0 ? <div className="empty-state">Todavía no hay cierres generados.</div> : null}
           {finance.closures.map((closure) => (
             <article className="finance-closure-card" key={closure.id}>
               <div className="finance-closure-main">
@@ -395,7 +415,7 @@ export function AdminFinancePage() {
               </div>
             </article>
           ))}
-        </div>
+        </div> : null}
       </article>
 
       {isExpenseOpen ? <ExpenseModal events={eventOptions} onClose={() => setIsExpenseOpen(false)} /> : null}
@@ -405,7 +425,7 @@ export function AdminFinancePage() {
           <section className="modal-card closed-order-detail-modal" role="dialog" aria-modal="true">
             <div className="modal-header">
               <div>
-                <p className="eyebrow">Movimientos por metodo</p>
+                <p className="eyebrow">Movimientos por método</p>
                 <h2>Cobros realizados por {selectedMethodLabel}</h2>
               </div>
               <button className="button ghost" onClick={() => setSelectedMethodKey(null)} type="button">Cerrar</button>

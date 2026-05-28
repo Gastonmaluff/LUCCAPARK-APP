@@ -181,6 +181,7 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
       visitId: visitRef.id,
       source: 'reception_entry',
       concepts: 'park',
+      status: 'paid',
       description: `Entrada ${plan.name} - ${childName}`,
       childName,
       customerName,

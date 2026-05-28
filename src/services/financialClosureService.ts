@@ -509,7 +509,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   )
 
   page1.drawLine({ start: { x: marginX, y: page1Y - 12 }, end: { x: pageWidth - marginX, y: page1Y - 12 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page1, fonts, 'I', 'Ingresos por área', page1Y - 36)
+  drawSectionTitle(page1, fonts, 'I', 'Ingresos por área', page1Y - 42)
   page1Y = drawSummaryGrid(
     page1,
     fonts,
@@ -519,7 +519,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { label: 'Eventos', note: `${eventMovements} movimientos`, value: money(input.totals.eventCollected) },
     ],
     32,
-    page1Y - 70,
+    page1Y - 84,
     532,
     3,
     { gapX: 10, gapY: 8, height: 42, valueSize: 12.2, compact: true },
@@ -544,7 +544,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
 
   page1Y = page1Y - 64 - methodHeight
   page1.drawLine({ start: { x: marginX, y: page1Y - 12 }, end: { x: pageWidth - marginX, y: page1Y - 12 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page1, fonts, 'K', 'Indicadores clave del período', page1Y - 36)
+  drawSectionTitle(page1, fonts, 'K', 'Indicadores clave del período', page1Y - 42)
   const ticketPark = parkMovements > 0 ? money(input.totals.parkCollected / parkMovements) : '-'
   const ticketCanteen = canteenMovements > 0 ? money(input.totals.canteenCollected / canteenMovements) : '-'
   page1Y = drawSummaryGrid(
@@ -557,15 +557,15 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { label: 'Ticket promedio cantina', value: ticketCanteen },
     ],
     32,
-    page1Y - 70,
+    page1Y - 84,
     532,
     4,
     { gapX: 8, gapY: 8, height: 42, valueSize: 12.2, compact: true },
   )
 
   page1.drawLine({ start: { x: marginX, y: page1Y - 12 }, end: { x: pageWidth - marginX, y: page1Y - 12 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page1, fonts, '!', 'Alertas y observaciones', page1Y - 36)
-  drawBullets(page1, fonts, buildObservations(input), 42, 61, 500, { fontSize: 7.7, lineHeight: 8.7, maxLines: 1 })
+  drawSectionTitle(page1, fonts, '!', 'Alertas y observaciones', page1Y - 42)
+  drawBullets(page1, fonts, buildObservations(input), 42, 70, 500, { fontSize: 7.5, lineHeight: 8.2, maxLines: 1 })
 
   const incomeRows = input.payments.map((payment) => ({
     client: paymentClient(payment),
@@ -785,10 +785,10 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   drawSectionTitle(page4, fonts, 'F', 'Validación y firmas', 88)
   ;['Elaboró', 'Revisó', 'Aprobó'].forEach((label, index) => {
     const x = 32 + index * 182
-    drawRoundedBox(page4, x, 42, 168, 42, { fill: rgb(1, 1, 1), border: lineGray })
-    drawText(page4, label, x + 84, 70, fonts.regular, 8.4, { align: 'center' })
-    page4.drawLine({ start: { x: x + 22, y: 55 }, end: { x: x + 146, y: 55 }, color: black, thickness: 0.7 })
-    drawText(page4, 'Nombre y firma', x + 84, 46, fonts.regular, 7.8, { align: 'center' })
+    drawRoundedBox(page4, x, 40, 168, 34, { fill: rgb(1, 1, 1), border: lineGray })
+    drawText(page4, label, x + 84, 58, fonts.regular, 8.2, { align: 'center' })
+    page4.drawLine({ start: { x: x + 22, y: 49 }, end: { x: x + 146, y: 49 }, color: black, thickness: 0.7 })
+    drawText(page4, 'Nombre y firma', x + 84, 42, fonts.regular, 7.6, { align: 'center' })
   })
 
   drawHeaderFooter(ctx, input, generatedAt)

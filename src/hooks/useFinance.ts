@@ -2,7 +2,7 @@ import { Timestamp, onSnapshot } from 'firebase/firestore'
 import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
-import { buildLegacyEventDepositPayment, getEventPaidAmount, getEventPendingAmount } from '../utils/eventFinance'
+import { getEventPendingAmount } from '../utils/eventFinance'
 import { parseCurrencyInput } from '../utils/money'
 import { getVisitBillingSummary } from '../utils/visitBilling'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentMethod, PaymentRecord } from '../types'
@@ -36,6 +36,7 @@ const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord =>
   cardType: (data.cardType as PaymentRecord['cardType']) ?? '',
   paidAt: dateFromTimestamp(data.paidAt) ?? dateFromTimestamp(data.createdAt),
   createdAt: dateFromTimestamp(data.createdAt),
+  status: String(data.status ?? 'paid'),
   source: String(data.source ?? 'legacy'),
   concepts: String(data.concepts ?? ''),
   description: String(data.description ?? ''),
@@ -169,6 +170,15 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
   hideSensitiveInfoOnTv: Boolean(data.hideSensitiveInfoOnTv),
 })
 
+const paymentIsValid = (payment: PaymentRecord) =>
+  payment.totalPaid > 0 && !['void', 'voided', 'cancelled', 'refunded'].includes(String(payment.status ?? '').toLowerCase())
+
+const eventPaymentPredicate = (payment: PaymentRecord, eventId: string) =>
+  payment.eventId === eventId && (payment.source === 'event_payment' || payment.concepts === 'event')
+
+const sumEventPayments = (eventId: string, payments: PaymentRecord[]) =>
+  payments.filter((payment) => eventPaymentPredicate(payment, eventId)).reduce((sum, payment) => sum + payment.totalPaid, 0)
+
 function useCollection<T>(name: Parameters<typeof getCollectionRef>[0], mapper: (id: string, data: Record<string, unknown>) => T) {
   const [items, setItems] = useState<T[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -211,7 +221,8 @@ export function useFinanceData(range: DateRange) {
   const events = useCollection('events', mapEvent)
 
   return useMemo(() => {
-    const paymentItems = payments.items.filter((payment) => payment.totalPaid > 0 && inRange(payment.paidAt ?? payment.createdAt, range))
+    const validPayments = payments.items.filter(paymentIsValid)
+    const paymentItems = validPayments.filter((payment) => inRange(payment.paidAt ?? payment.createdAt, range))
     const paymentVisitIds = new Set(paymentItems.map((payment) => payment.visitId).filter(Boolean))
     const paymentOrderIds = new Set(paymentItems.flatMap((payment) => [payment.canteenOrderId, ...(payment.canteenOrderIds ?? [])]).filter(Boolean))
     const legacyVisitPayments = visits.items
@@ -243,15 +254,7 @@ export function useFinanceData(range: DateRange) {
         customerName: order.customerName,
         description: `Cantina - ${order.accountName}`,
       }))
-    const legacyEventPayments = events.items
-      .filter((event) => {
-        const hasEventPayment = paymentItems.some(
-          (payment) => payment.eventId === event.id && (payment.source === 'event_payment' || payment.concepts === 'event'),
-        )
-        return !hasEventPayment && getEventPaidAmount(event, paymentItems) > 0
-      })
-      .map((event): PaymentRecord => buildLegacyEventDepositPayment(event, getEventPaidAmount(event, paymentItems)))
-    const allPayments = [...paymentItems, ...legacyVisitPayments, ...legacyCanteenPayments, ...legacyEventPayments]
+    const allPayments = [...paymentItems, ...legacyVisitPayments, ...legacyCanteenPayments]
     const expenseItems = expenses.items.filter((expense) => expense.status !== 'void' && inRange(expense.spentAt ?? expense.createdAt, range))
     const canteenOrdersInRange = canteen.items.filter((order) => order.status === 'paid' && inRange(order.paidAt, range))
     const visitsInRange = visits.items.filter((visit) => inRange(visit.startedAt, range))
@@ -286,8 +289,14 @@ export function useFinanceData(range: DateRange) {
     const pendingEventItems = events.items.filter(
       (event) =>
         ['inquiry', 'reserved', 'confirmed', 'active'].includes(event.status) &&
-        getEventPendingAmount(event, allPayments) > 0 &&
+        getEventPendingAmount({ ...event, depositAmount: 0, eventPaidAmount: sumEventPayments(event.id, validPayments) }, validPayments) > 0 &&
         (event.status === 'active' || event.date >= currentDay || eventDateInRange(event.date, range)),
+    )
+    const pendingEventAmounts = Object.fromEntries(
+      pendingEventItems.map((event) => [
+        event.id,
+        getEventPendingAmount({ ...event, depositAmount: 0, eventPaidAmount: sumEventPayments(event.id, validPayments) }, validPayments),
+      ]),
     )
 
     const methodTotals = {
@@ -311,13 +320,20 @@ export function useFinanceData(range: DateRange) {
 
     const parkCollected = allPayments.reduce((sum, payment) => sum + (payment.parkAmountPaid || (payment.concepts === 'park' ? payment.totalPaid : 0)), 0)
     const canteenCollected = allPayments.reduce((sum, payment) => sum + (payment.canteenAmountPaid || (payment.concepts === 'canteen' ? payment.totalPaid : 0)), 0)
-    const eventCollected = allPayments.reduce((sum, payment) => sum + (payment.eventAmountPaid || (payment.source === 'event_payment' ? payment.totalPaid : 0)), 0)
+    const eventCollected = allPayments.reduce(
+      (sum, payment) => sum + (payment.eventAmountPaid || (payment.source === 'event_payment' || payment.concepts === 'event' ? payment.totalPaid : 0)),
+      0,
+    )
     const totalCollected = allPayments.reduce((sum, payment) => sum + payment.totalPaid, 0)
     const totalExpenses = expenseItems.reduce((sum, expense) => sum + expense.amount, 0)
     const pendingAmount =
       openCanteen.reduce((sum, order) => sum + order.total, 0) +
       pendingVisits.reduce((sum, visit) => sum + getVisitBillingSummary(visit, openCanteen).totalPendingAmount, 0) +
-      pendingEventItems.reduce((sum, event) => sum + getEventPendingAmount(event, allPayments), 0)
+      pendingEventItems.reduce(
+        (sum, event) =>
+          sum + (pendingEventAmounts[event.id] ?? 0),
+        0,
+      )
 
     return {
       closures: closures.items,
@@ -332,6 +348,7 @@ export function useFinanceData(range: DateRange) {
       openCanteen,
       payments: allPayments.sort((a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0)),
       pendingEventItems,
+      pendingEventAmounts,
       pendingVisits,
       range,
       totals: {

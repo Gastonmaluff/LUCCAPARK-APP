@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock, Eye, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, Clock, Eye, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { appConfig } from '../../config/app'
@@ -26,6 +26,7 @@ export function AdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isEditingUser, setIsEditingUser] = useState(false)
   const [detailUid, setDetailUid] = useState<string | null>(null)
+  const [isUsersOpen, setIsUsersOpen] = useState(false)
 
   const saveUser = async () => {
     setMessage(null)
@@ -116,29 +117,32 @@ export function AdminSettingsPage() {
 
       {permissions.canManageUsers ? (
         <article className="panel users-permissions-panel">
-          <div className="panel-header">
-            <div>
-              <h2 className="panel-title">
-                <Users color="var(--orange)" />
-                Usuarios y permisos
-              </h2>
-              <p className="muted">Administrá quién puede acceder al sistema y qué puede realizar.</p>
-            </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setForm(emptyForm)
-                setIsEditingUser(true)
-              }}
-              type="button"
-            >
-              <Plus size={17} />
-              Agregar usuario
-            </button>
-          </div>
-          <div className="form-alert info">
-            Para habilitar un nuevo acceso, primero creá la cuenta en Firebase Authentication y luego vinculala aquí usando su UID. Este registro define el rol y los permisos dentro de Lucca Park.
-          </div>
+          <button className="finance-collapsible-header" onClick={() => setIsUsersOpen((current) => !current)} type="button">
+            <span className="finance-collapsible-title">
+              {isUsersOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+              <Users color="var(--orange)" size={20} />
+              <span>
+                <strong>Usuarios y permisos</strong>
+                <small>Administrá quién puede acceder al sistema y qué puede realizar.</small>
+              </span>
+            </span>
+            <strong>{usersResult.users.filter((user) => user.isActive).length} activos</strong>
+          </button>
+          {isUsersOpen ? (
+            <div className="settings-users-body">
+              <div className="finance-section-action-row">
+                <button
+                  className="button primary"
+                  onClick={() => {
+                    setForm(emptyForm)
+                    setIsEditingUser(true)
+                  }}
+                  type="button"
+                >
+                  <Plus size={17} />
+                  Agregar usuario
+                </button>
+              </div>
           <details className="user-help-box">
             <summary>¿Cómo crear un usuario?</summary>
             <ol>
@@ -241,6 +245,8 @@ export function AdminSettingsPage() {
               ) : null}
             </div>
           </div>
+            </div>
+          ) : null}
         </article>
       ) : null}
     </>

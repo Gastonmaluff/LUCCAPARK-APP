@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CalendarHeart, Gift, MessageCircle, Phone, Search, Star, UserRound, Users, X } from 'lucide-react'
+import { CalendarHeart, ChevronDown, ChevronRight, Gift, MessageCircle, Phone, Search, Star, UserRound, Users, X } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { MetricCard } from '../../components/MetricCard'
 import { StatusPill } from '../../components/StatusPill'
@@ -11,6 +11,7 @@ import { lowerSearchKey } from '../../utils/textFormat'
 import type { CanteenOrder, ChildProfile, EventGuest, LuccaEvent } from '../../types'
 
 type ClientFilter = 'all' | 'birthday' | 'thisMonth' | 'visit' | 'event' | 'frequent'
+type ClientSort = 'birthdaySoon' | 'birthdayFar' | 'visits' | 'recent' | 'alpha'
 
 const filters: Array<{ id: ClientFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
@@ -128,6 +129,8 @@ export function AdminClientsPage() {
   const { canteenOrders, children, error, eventGuests, events, isLoading, visits } = useClientsData()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ClientFilter>('all')
+  const [sortBy, setSortBy] = useState<ClientSort>('birthdaySoon')
+  const [isChildrenOpen, setIsChildrenOpen] = useState(true)
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [now] = useState(() => new Date())
@@ -151,19 +154,29 @@ export function AdminClientsPage() {
 
   const filteredChildren = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('es-PY')
-    return children.filter((child) => {
-      const birthday = nextBirthdayInfo(child.birthDate, now)
-      const matchesSearch = !normalizedSearch || childSearchText(child).includes(normalizedSearch)
-      const matchesFilter =
-        filter === 'all' ||
-        (filter === 'birthday' && Boolean(birthday && birthday.daysUntil <= 30)) ||
-        (filter === 'thisMonth' && Boolean(child.lastVisitAt && getLocalDateKey(child.lastVisitAt).startsWith(currentMonth))) ||
-        (filter === 'visit' && child.visitCount > 0 && child.eventGuestCount === 0 && (child.eventReservationCount ?? 0) === 0) ||
-        (filter === 'event' && (child.eventGuestCount > 0 || (child.eventReservationCount ?? 0) > 0)) ||
-        (filter === 'frequent' && getTotalActivity(child) >= 3)
-      return matchesSearch && matchesFilter
-    })
-  }, [children, currentMonth, filter, now, search])
+    return [...children]
+      .filter((child) => {
+        const birthday = nextBirthdayInfo(child.birthDate, now)
+        const matchesSearch = !normalizedSearch || childSearchText(child).includes(normalizedSearch)
+        const matchesFilter =
+          filter === 'all' ||
+          (filter === 'birthday' && Boolean(birthday && birthday.daysUntil <= 30)) ||
+          (filter === 'thisMonth' && Boolean(child.lastVisitAt && getLocalDateKey(child.lastVisitAt).startsWith(currentMonth))) ||
+          (filter === 'visit' && child.visitCount > 0 && child.eventGuestCount === 0 && (child.eventReservationCount ?? 0) === 0) ||
+          (filter === 'event' && (child.eventGuestCount > 0 || (child.eventReservationCount ?? 0) > 0)) ||
+          (filter === 'frequent' && getTotalActivity(child) >= 3)
+        return matchesSearch && matchesFilter
+      })
+      .sort((a, b) => {
+        const birthdayA = nextBirthdayInfo(a.birthDate, now)
+        const birthdayB = nextBirthdayInfo(b.birthDate, now)
+        if (sortBy === 'birthdaySoon') return (birthdayA?.daysUntil ?? 9999) - (birthdayB?.daysUntil ?? 9999)
+        if (sortBy === 'birthdayFar') return (birthdayB?.daysUntil ?? -1) - (birthdayA?.daysUntil ?? -1)
+        if (sortBy === 'visits') return getTotalActivity(b) - getTotalActivity(a)
+        if (sortBy === 'recent') return (b.lastVisitAt?.getTime() ?? b.updatedAt?.getTime() ?? 0) - (a.lastVisitAt?.getTime() ?? a.updatedAt?.getTime() ?? 0)
+        return a.name.localeCompare(b.name, 'es-PY')
+      })
+  }, [children, currentMonth, filter, now, search, sortBy])
 
   const selectedChild = children.find((child) => child.id === selectedChildId) ?? null
   const selectedVisits = selectedChild ? getChildVisits(selectedChild, visits) : []
@@ -250,57 +263,91 @@ export function AdminClientsPage() {
       </section>
 
       <section className="panel clients-list-panel clients-full-panel">
-        <div className="panel-header clients-toolbar">
-          <h2 className="panel-title">
-            <UserRound color="var(--orange)" />
-            Niños registrados
-          </h2>
-          <StatusPill tone="info">{filteredChildren.length} resultados</StatusPill>
-        </div>
-
-        <label className="field search-field">
-          <span>
-            <Search size={16} /> Buscar
+        <button className="finance-collapsible-header" onClick={() => setIsChildrenOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isChildrenOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <UserRound color="var(--orange)" size={20} />
+            <strong>Niños registrados</strong>
           </span>
-          <input onChange={(event) => setSearch(event.target.value)} placeholder="Nombre, responsable o teléfono" value={search} />
-        </label>
+          <strong>{filteredChildren.length} resultados</strong>
+        </button>
 
-        <div className="client-filter-row" role="tablist" aria-label="Filtros de clientes">
-          {filters.map((item) => (
-            <button className={filter === item.id ? 'active' : ''} key={item.id} onClick={() => setFilter(item.id)} type="button">
-              {item.label}
-            </button>
-          ))}
-        </div>
+        {isChildrenOpen ? (
+          <div className="client-collapsible-body">
+            <div className="clients-controls-grid">
+              <label className="field search-field">
+                <span>
+                  <Search size={16} /> Buscar
+                </span>
+                <input onChange={(event) => setSearch(event.target.value)} placeholder="Nombre, responsable o teléfono" value={search} />
+              </label>
+              <label className="field">
+                <span>Ordenar por</span>
+                <select onChange={(event) => setSortBy(event.target.value as ClientSort)} value={sortBy}>
+                  <option value="birthdaySoon">Próximo cumpleaños primero</option>
+                  <option value="birthdayFar">Cumpleaños más lejano</option>
+                  <option value="visits">Más visitas</option>
+                  <option value="recent">Más recientes</option>
+                  <option value="alpha">Orden alfabético</option>
+                </select>
+              </label>
+            </div>
 
-        {isLoading ? <div className="empty-state">Cargando clientes...</div> : null}
-        {error ? <div className="form-alert error">No se pudieron cargar clientes: {error}</div> : null}
-        {!isLoading && !error && filteredChildren.length === 0 ? <div className="empty-state">No hay clientes para este filtro.</div> : null}
+            <div className="client-filter-row" role="tablist" aria-label="Filtros de clientes">
+              {filters.map((item) => (
+                <button className={filter === item.id ? 'active' : ''} key={item.id} onClick={() => setFilter(item.id)} type="button">
+                  {item.label}
+                </button>
+              ))}
+            </div>
 
-        <div className="client-table">
-          {filteredChildren.map((child) => {
-            const birthday = nextBirthdayInfo(child.birthDate, now)
-            const hasBirthdaySoon = Boolean(birthday && birthday.daysUntil <= 30)
-            return (
-              <button className="client-row client-row-enhanced" key={child.id} onClick={() => openProfile(child.id)} type="button">
-                <div className="client-row-main">
-                  <strong>{child.name}</strong>
-                  <small>{child.mainCustomerName || child.customerName || 'Responsable sin dato'}</small>
-                </div>
-                <div className="client-row-meta">
-                  <span>{child.mainCustomerPhone || child.customerPhone || 'Sin teléfono'}</span>
-                  <span>{birthday ? `${birthday.daysUntil} días` : 'Sin cumple'}</span>
-                  <span>{getTotalActivity(child)} registros</span>
-                </div>
-                <div className="client-row-badges">
-                  <StatusPill tone={getChildBadgeTone(child)}>{getChildBadgeLabel(child)}</StatusPill>
-                  {getTotalActivity(child) >= 3 ? <StatusPill tone="available">Frecuente</StatusPill> : null}
-                  {hasBirthdaySoon ? <StatusPill tone="warning">Cumpleaños próximo</StatusPill> : null}
-                </div>
-              </button>
-            )
-          })}
-        </div>
+            {isLoading ? <div className="empty-state">Cargando clientes...</div> : null}
+            {error ? <div className="form-alert error">No se pudieron cargar clientes: {error}</div> : null}
+            {!isLoading && !error && filteredChildren.length === 0 ? <div className="empty-state">No hay clientes para este filtro.</div> : null}
+
+            <div className="client-table">
+              {filteredChildren.map((child) => {
+                const birthday = nextBirthdayInfo(child.birthDate, now)
+                const birthdayText = birthday
+                  ? `Cumple: ${formatBirthday(birthday.date)} · Faltan ${birthday.daysUntil} días`
+                  : 'Cumpleaños: Sin fecha registrada'
+                const hasBirthdaySoon = Boolean(birthday && birthday.daysUntil <= 30)
+                const phone = child.mainCustomerPhone || child.customerPhone
+                const whatsappUrl = buildWhatsAppUrl(child)
+                return (
+                  <article className="client-row client-row-enhanced client-row-polished" key={child.id}>
+                    <button className="client-row-open" onClick={() => openProfile(child.id)} type="button">
+                      <div className="client-row-main">
+                        <strong>{child.name}</strong>
+                        <small>Responsable: {child.mainCustomerName || child.customerName || 'Sin dato'}</small>
+                      </div>
+                      <div className="client-row-meta">
+                        <span>Teléfono: {phone || 'Sin teléfono'}</span>
+                        <span>{birthdayText}</span>
+                        <span>Visitas/registros: {getTotalActivity(child)}</span>
+                      </div>
+                      <div className="client-row-badges">
+                        <StatusPill tone={getChildBadgeTone(child)}>{getChildBadgeLabel(child)}</StatusPill>
+                        {getTotalActivity(child) >= 3 ? <StatusPill tone="available">Frecuente</StatusPill> : null}
+                        {hasBirthdaySoon ? <StatusPill tone="warning">Cumpleaños próximo</StatusPill> : null}
+                      </div>
+                    </button>
+                    <div className="client-row-actions">
+                      <button className="button ghost small-button" onClick={() => openProfile(child.id)} type="button">
+                        Ver detalle
+                      </button>
+                      {whatsappUrl ? (
+                        <a className="button whatsapp small-button" href={whatsappUrl} rel="noreferrer" target="_blank">
+                          WhatsApp
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {selectedChild ? (
@@ -317,7 +364,7 @@ export function AdminClientsPage() {
                   </p>
                 </div>
                 <StatusPill tone={selectedBirthday && selectedBirthday.daysUntil <= 30 ? 'warning' : 'info'}>
-                  {selectedBirthday ? `Cumple en ${selectedBirthday.daysUntil} días` : 'Sin cumple'}
+                  {selectedBirthday ? `Cumple en ${selectedBirthday.daysUntil} días` : 'Cumpleaños: Sin fecha registrada'}
                 </StatusPill>
               </div>
               <button className="icon-button modal-close" onClick={closeProfile} type="button" aria-label="Cerrar perfil">

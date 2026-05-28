@@ -39,16 +39,16 @@ export function CanteenCheckoutModal({ onClose, onDone, order, relatedOrders, vi
 
   const confirmCharge = async () => {
     if (!paymentMethod) {
-      setError('Selecciona un metodo de pago para continuar.')
+      setError('Seleccioná un método de pago para continuar.')
       return
     }
 
     if (paymentMethod === 'card' && !cardType) {
-      setError('Selecciona si la tarjeta es debito o credito.')
+      setError('Seleccioná si la tarjeta es débito o crédito.')
       return
     }
 
-    if (finishVisit && visit && !window.confirm('Ademas del cobro, se va a finalizar la visita. Confirmas la salida?')) {
+    if (finishVisit && visit && !window.confirm('Además del cobro, se va a finalizar la visita. ¿Confirmás la salida?')) {
       return
     }
 
@@ -72,7 +72,7 @@ export function CanteenCheckoutModal({ onClose, onDone, order, relatedOrders, vi
       onClose()
     } catch (chargeError) {
       console.error('[Cantina] No se pudo registrar el cobro', chargeError)
-      setError('No se pudo registrar el cobro. Intenta nuevamente.')
+      setError('No se pudo registrar el cobro. Intentá nuevamente.')
     } finally {
       setIsSaving(false)
     }

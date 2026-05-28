@@ -34,12 +34,12 @@ export function ConsolidatedCheckoutModal({
 
   const confirmCheckout = async () => {
     if (!paymentMethod && summary.totalPendingAmount > 0) {
-      setError('Selecciona un metodo de pago.')
+      setError('Seleccioná un método de pago.')
       return
     }
 
     if (paymentMethod === 'card' && !cardType) {
-      setError('Selecciona si la tarjeta es debito o credito.')
+      setError('Seleccioná si la tarjeta es débito o crédito.')
       return
     }
 
@@ -48,7 +48,7 @@ export function ConsolidatedCheckoutModal({
       return
     }
 
-    if (allowFinishChoice && finishVisit && !window.confirm(`Cobrar y finalizar la visita de ${visit.childName}?`)) {
+    if (allowFinishChoice && finishVisit && !window.confirm(`¿Cobrar y finalizar la visita de ${visit.childName}?`)) {
       return
     }
 

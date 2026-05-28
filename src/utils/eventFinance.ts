@@ -50,7 +50,7 @@ export const getEventFinancialLabel = (
 }
 
 export const buildLegacyEventDepositPayment = (event: LuccaEvent, paymentTotal: number): PaymentRecord => {
-  const createdAt = event.updatedAt ?? event.createdAt ?? (event.date ? new Date(`${event.date}T12:00:00`) : new Date())
+  const createdAt = event.createdAt ?? (event.date ? new Date(`${event.date}T12:00:00`) : new Date())
   return {
     id: `legacy-event-deposit-${event.id}`,
     accountType: 'event',
@@ -65,7 +65,7 @@ export const buildLegacyEventDepositPayment = (event: LuccaEvent, paymentTotal: 
     eventId: event.id,
     eventName: event.title || event.birthdayChildName,
     paidAt: createdAt,
-    paymentMethod: 'other',
+    paymentMethod: '',
     source: 'event_payment',
     totalPaid: paymentTotal,
     eventAmountPaid: paymentTotal,

@@ -2,6 +2,7 @@ import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, History, Search,
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
+import { EventBudgetsSection } from '../../components/events/EventBudgetsSection'
 import { EventCreateForm } from '../../components/events/EventCreateForm'
 import { EventDayCallout } from '../../components/events/EventDayCallout'
 import { EventDetailPanel } from '../../components/events/EventDetailPanel'
@@ -402,6 +403,8 @@ export function AdminReservationsPage() {
           </div>
         </article>
       </div>
+
+      <EventBudgetsSection />
 
       {showCreateForm ? (
         <div className="modal-backdrop" role="presentation">

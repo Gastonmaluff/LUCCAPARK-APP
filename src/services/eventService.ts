@@ -288,6 +288,7 @@ export const registerEventPayment = async ({
       customerName: String(eventData.customerName ?? ''),
       source: 'event_payment',
       concepts: 'event',
+      status: 'paid',
       eventAmountPaid: amount,
       totalPaid: amount,
       paymentMethod,

@@ -27,13 +27,13 @@ interface EventDetailPanelProps {
 }
 
 const methodLabel = (method?: string, cardType?: string) => {
-  if (method === 'card' && cardType === 'debit') return 'Tarjeta debito'
-  if (method === 'card' && cardType === 'credit') return 'Tarjeta credito'
+  if (method === 'card' && cardType === 'debit') return 'Tarjeta débito'
+  if (method === 'card' && cardType === 'credit') return 'Tarjeta crédito'
   if (method === 'cash') return 'Efectivo'
   if (method === 'transfer') return 'Transferencia'
   if (method === 'qr') return 'QR'
   if (method === 'other') return 'Otro'
-  return 'Sin metodo'
+  return 'Sin método'
 }
 
 const expenseCategoryLabel: Record<string, string> = {

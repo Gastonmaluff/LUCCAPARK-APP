@@ -63,6 +63,14 @@ service cloud.firestore {
       return isAdmin() || isPartner() || isReception() || isCanteen();
     }
 
+    function canManageEventBudgets() {
+      return isAdmin() || isPartner() || isEventManager();
+    }
+
+    function canManageBudgetConfig() {
+      return isAdmin() || isPartner();
+    }
+
     function canOperateBase() {
       return signedIn();
     }
@@ -172,7 +180,23 @@ service cloud.firestore {
     }
 
     match /eventBudgets/{document=**} {
-      allow read, write: if canOperateBase();
+      allow read: if canOperateBase();
+      allow write: if canManageEventBudgets();
+    }
+
+    match /budgetGuestPackages/{document=**} {
+      allow read: if canOperateBase();
+      allow write: if canManageBudgetConfig();
+    }
+
+    match /budgetAddons/{document=**} {
+      allow read: if canOperateBase();
+      allow write: if canManageBudgetConfig();
+    }
+
+    match /budgetDecorations/{document=**} {
+      allow read: if canOperateBase();
+      allow write: if canManageBudgetConfig();
     }
 
     match /tvDisplaySettings/{document=**} {

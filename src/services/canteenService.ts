@@ -285,6 +285,7 @@ export const chargeCanteenOrder = async (
     id: paymentRef.id,
     source: 'canteen',
     concepts: 'canteen',
+    status: 'paid',
     totalPaid: order.total,
     canteenAmountPaid: order.total,
     parkAmountPaid: 0,

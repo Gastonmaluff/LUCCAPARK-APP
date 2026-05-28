@@ -8,7 +8,7 @@ import { useAuthUser } from '../hooks/useAuthUser'
 
 const readableAuthError = (message: string) => {
   if (message.includes('auth/invalid-credential') || message.includes('auth/wrong-password')) {
-    return 'Email o contrasena incorrectos.'
+    return 'Email o contraseña incorrectos.'
   }
 
   if (message.includes('auth/user-not-found')) {
@@ -19,7 +19,7 @@ const readableAuthError = (message: string) => {
     return 'Demasiados intentos. Probá de nuevo en unos minutos.'
   }
 
-  return 'No se pudo iniciar sesion. Revisá Firebase Auth y las credenciales.'
+  return 'No se pudo iniciar sesión. Revisá Firebase Auth y las credenciales.'
 }
 
 export function LoginPage() {
@@ -76,7 +76,7 @@ export function LoginPage() {
           </label>
           <label className="field">
             <span>
-              <Lock size={16} /> Contrasena
+              <Lock size={16} /> Contraseña
             </span>
             <input
               autoComplete="current-password"

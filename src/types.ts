@@ -206,6 +206,7 @@ export interface PaymentRecord {
   cardType?: 'debit' | 'credit' | ''
   paidAt?: Date | null
   createdAt?: Date | null
+  status?: 'paid' | 'valid' | 'active' | 'void' | 'voided' | 'cancelled' | 'refunded' | string
   source: 'reception_entry' | 'reception_exit' | 'canteen' | 'event_payment' | 'legacy' | string
   concepts?: 'park' | 'canteen' | 'event' | 'both' | string
   description?: string
@@ -524,4 +525,150 @@ export interface DailyClosing {
   notes?: string
   createdAt?: Date | null
   createdBy?: string | null
+}
+
+export type EventBudgetStatus = 'draft' | 'sent' | 'approved' | 'rejected' | 'converted'
+export type DecorationMode = 'selected' | 'alternatives'
+export type BudgetAddonCalculationType = 'fixed' | 'per_unit'
+
+export interface BudgetGuestPackage {
+  id: string
+  name: string
+  minGuests: number
+  maxGuests: number
+  basePrice: number
+  extraGuestPrice: number
+  isActive: boolean
+  createdAt?: Date | null
+  updatedAt?: Date | null
+  createdBy?: string | null
+  createdByName?: string
+}
+
+export interface BudgetAddon {
+  id: string
+  name: string
+  description?: string
+  unitPrice: number
+  calculationType: BudgetAddonCalculationType
+  isActive: boolean
+  createdAt?: Date | null
+  updatedAt?: Date | null
+  createdBy?: string | null
+  createdByName?: string
+}
+
+export interface BudgetDecoration {
+  id: string
+  name: string
+  level: number
+  description?: string
+  includes: string[]
+  price: number
+  isActive: boolean
+  createdAt?: Date | null
+  updatedAt?: Date | null
+  createdBy?: string | null
+  createdByName?: string
+}
+
+export interface BudgetPackageSnapshot {
+  id?: string
+  name: string
+  minGuests: number
+  maxGuests: number
+  basePrice: number
+  extraGuestPrice: number
+  appliedManually?: boolean
+  manualReason?: string
+}
+
+export interface BudgetAddonSnapshot {
+  id?: string
+  name: string
+  description?: string
+  unitPrice: number
+  calculationType: BudgetAddonCalculationType
+  quantity: number
+  subtotal: number
+}
+
+export interface BudgetDecorationSnapshot {
+  id?: string
+  name: string
+  level: number
+  description?: string
+  includes: string[]
+  price: number
+}
+
+export interface BudgetAlternativeTotal {
+  decoration: BudgetDecorationSnapshot
+  total: number
+}
+
+export interface EventBudget {
+  id: string
+  childName: string
+  responsibleName: string
+  responsiblePhone?: string
+  tentativeEventDate?: string
+  tentativeStartTime?: string
+  tentativeEndTime?: string
+  notes?: string
+  guestCount: number
+  packageSnapshot?: BudgetPackageSnapshot | null
+  extraGuestsCount: number
+  extraGuestUnitPrice: number
+  extraGuestsSubtotal: number
+  selectedAddons: BudgetAddonSnapshot[]
+  decorationMode: DecorationMode
+  selectedDecoration?: BudgetDecorationSnapshot | null
+  decorationAlternatives: BudgetDecorationSnapshot[]
+  baseSubtotal: number
+  finalTotal?: number | null
+  alternativeTotals: BudgetAlternativeTotal[]
+  status: EventBudgetStatus
+  createdByUid?: string | null
+  createdByName?: string
+  createdAt?: Date | null
+  updatedAt?: Date | null
+  sentAt?: Date | null
+  approvedAt?: Date | null
+  convertedReservationId?: string
+  pdfUrl?: string
+  pdfPath?: string
+}
+
+export interface UpsertBudgetGuestPackageInput {
+  id?: string
+  name: string
+  minGuests: number
+  maxGuests: number
+  basePrice: number
+  extraGuestPrice: number
+  isActive: boolean
+}
+
+export interface UpsertBudgetAddonInput {
+  id?: string
+  name: string
+  description?: string
+  unitPrice: number
+  calculationType: BudgetAddonCalculationType
+  isActive: boolean
+}
+
+export interface UpsertBudgetDecorationInput {
+  id?: string
+  name: string
+  level: number
+  description?: string
+  includes: string[]
+  price: number
+  isActive: boolean
+}
+
+export type UpsertEventBudgetInput = Omit<EventBudget, 'id' | 'createdAt' | 'updatedAt' | 'createdByUid' | 'createdByName'> & {
+  id?: string
 }

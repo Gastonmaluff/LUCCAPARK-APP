@@ -52,15 +52,15 @@ export function EventPaymentModal({ event, existingPayments = [], onClose, onDon
       setError('Ingresa un monto recibido mayor a cero.')
       return
     }
-    if (pendingAmount > 0 && numericAmount > pendingAmount && !window.confirm('El monto supera el saldo pendiente. Queres registrarlo igual?')) {
+    if (pendingAmount > 0 && numericAmount > pendingAmount && !window.confirm('El monto supera el saldo pendiente. ¿Querés registrarlo igual?')) {
       return
     }
     if (!paymentMethod) {
-      setError('Selecciona el metodo de pago.')
+      setError('Seleccioná el método de pago.')
       return
     }
     if (paymentMethod === 'card' && !cardType) {
-      setError('Selecciona si la tarjeta es debito o credito.')
+      setError('Seleccioná si la tarjeta es débito o crédito.')
       return
     }
 
@@ -132,7 +132,7 @@ export function EventPaymentModal({ event, existingPayments = [], onClose, onDon
         />
 
         <label className="field">
-          <span>Observacion opcional</span>
+          <span>Observación opcional</span>
           <textarea onChange={(inputEvent) => setNotes(inputEvent.target.value)} rows={3} value={notes} />
         </label>
 
