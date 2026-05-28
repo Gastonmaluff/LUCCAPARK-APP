@@ -519,7 +519,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { label: 'Eventos', note: `${eventMovements} movimientos`, value: money(input.totals.eventCollected) },
     ],
     32,
-    page1Y - 84,
+    page1Y - 100,
     532,
     3,
     { gapX: 10, gapY: 8, height: 42, valueSize: 12.2, compact: true },
