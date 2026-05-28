@@ -143,7 +143,7 @@ const expenseCategoryLabel = (category: ExpenseRecord['category']) =>
   ({
     canteen_purchase: 'Cantina / productos',
     cleaning: 'Limpieza',
-    decoration: 'DecoraciÃ³n',
+    decoration: 'Decoración',
     maintenance: 'Mantenimiento',
     operations: 'Compra operativa',
     other: 'Otro',
@@ -212,25 +212,6 @@ const drawSectionTitleAt = (page: PDFPage, fonts: Fonts, icon: string, title: st
 
 const drawSectionTitle = (page: PDFPage, fonts: Fonts, icon: string, title: string, y: number) => {
   drawSectionTitleAt(page, fonts, icon, title, marginX, y)
-}
-
-const drawMetricCard = (page: PDFPage, fonts: Fonts, x: number, y: number, width: number, height: number, label: string, value: string, icon: string, detail?: string) => {
-  drawRoundedBox(page, x, y, width, height, { fill: rgb(1, 1, 1), border: lineGray, borderWidth: 0.8 })
-  if (height < 64) {
-    page.drawCircle({ x: x + 28, y: y + height - 18, size: 14, color: lightGray })
-    drawText(page, icon, x + 28, y + height - 22, fonts.bold, 9.8, { align: 'center' })
-    drawFittedText(page, label, x + 50, y + height - 22, fonts.regular, 8.1, width - 58, { minSize: 6.6 })
-    drawFittedText(page, value, x + 14, y + 10, fonts.bold, 15, width - 28, { minSize: 9 })
-    return
-  }
-  page.drawCircle({ x: x + 25, y: y + height - 26, size: 16, color: lightGray })
-  drawText(page, icon, x + 25, y + height - 31, fonts.bold, 11, { align: 'center' })
-  drawFittedText(page, label, x + 48, y + height - 29, fonts.regular, 8.4, width - 56, { minSize: 6.7 })
-  drawFittedText(page, value, x + 14, detail ? y + 30 : y + 14, fonts.bold, detail ? 15.5 : 16.8, width - 28, { minSize: 9.5 })
-  if (detail) {
-    page.drawLine({ start: { x: x + 14, y: y + 24 }, end: { x: x + width - 14, y: y + 24 }, color: lineGray, thickness: 0.6 })
-    drawText(page, detail, x + width / 2, y + 10, fonts.regular, 8, { align: 'center', color: darkGray, maxWidth: width - 20 })
-  }
 }
 
 type SummaryRowInput = {
@@ -521,7 +502,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { label: 'Pendiente de cobro', value: money(input.pendingAmount) },
     ],
     32,
-    640,
+    620,
     532,
     4,
     { gapX: 8, gapY: 8, height: 42, valueSize: 12.4 },
@@ -609,14 +590,14 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   for (let index = 0; index < detailPagesCount; index += 1) {
     let page = newContentPage(ctx)
     let y = contentTop - 32
-    drawSectionTitle(page, fonts, 'I', index === 0 ? 'Detalle de ingresos cobrados' : 'Detalle de ingresos cobrados - continuaciÃ³n', y)
+    drawSectionTitle(page, fonts, 'I', index === 0 ? 'Detalle de ingresos cobrados' : 'Detalle de ingresos cobrados - continuación', y)
     y -= 28
     const incomeHeight = drawDataTable(page, fonts, 32, y, [
       { header: 'Fecha y hora', render: (row) => row.date, width: 92 },
-      { header: 'Modulo', render: (row) => row.module, width: 60 },
+      { header: 'Módulo', render: (row) => row.module, width: 60 },
       { header: 'Concepto', render: (row) => row.concept, width: 112 },
       { header: 'Cliente / evento', render: (row) => row.client, width: 106 },
-      { header: 'MÃ©todo de pago', render: (row) => row.method, width: 88 },
+      { header: 'Método de pago', render: (row) => row.method, width: 88 },
       { align: 'right', header: 'Monto', render: (row) => money(row.total), width: 74 },
     ], incomeChunks[index] ?? [], { emptyText: 'No se registraron ingresos cobrados en este periodo.', fontSize: 7.6, rowHeight: 18 })
     y -= incomeHeight + 22
@@ -629,14 +610,14 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       page = newContentPage(ctx)
       y = contentTop - 32
     }
-    drawSectionTitle(page, fonts, 'G', index === 0 ? 'Detalle de gastos registrados' : 'Detalle de gastos registrados - continuaciÃ³n', y)
+    drawSectionTitle(page, fonts, 'G', index === 0 ? 'Detalle de gastos registrados' : 'Detalle de gastos registrados - continuación', y)
     y -= 28
     const expenseHeight = drawDataTable(page, fonts, 32, y, [
       { header: 'Fecha', render: (row) => row.date, width: 66 },
-      { header: 'CategorÃ­a', render: (row) => row.category, width: 86 },
-      { header: 'DescripciÃ³n', render: (row) => row.description, width: 134 },
-      { header: 'RelaciÃ³n', render: (row) => row.relation, width: 118 },
-      { header: 'MÃ©todo', render: (row) => row.method, width: 74 },
+      { header: 'Categoría', render: (row) => row.category, width: 86 },
+      { header: 'Descripción', render: (row) => row.description, width: 134 },
+      { header: 'Relación', render: (row) => row.relation, width: 118 },
+      { header: 'Método', render: (row) => row.method, width: 74 },
       { align: 'right', header: 'Monto', render: (row) => money(row.amount), width: 54 },
     ], expenseChunks[index] ?? [], { emptyText: 'No se registraron gastos en este periodo.', fontSize: 7.4, rowHeight: 18 })
     y -= expenseHeight + 20
@@ -651,9 +632,9 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       drawSectionTitle(page, fonts, 'O', 'Observaciones de cierre', y)
       drawRoundedBox(page, 32, y - 74, 532, 58, { fill: rgb(1, 1, 1), border: lineGray })
       drawBullets(page, fonts, [
-        input.payments.length ? 'Se registraron cobros provenientes de los mÃ³dulos operativos.' : 'No se registraron cobros en el periodo.',
+        input.payments.length ? 'Se registraron cobros provenientes de los módulos operativos.' : 'No se registraron cobros en el periodo.',
         input.expenses.length ? `Se registraron ${input.expenses.length} gastos clasificados.` : 'No se registraron gastos en el periodo.',
-        (input.methodTotals.missing ?? 0) > 0 ? `Quedan ${money(input.methodTotals.missing ?? 0)} sin mÃ©todo registrado.` : 'Los cobros del periodo tienen mÃ©todo registrado.',
+        (input.methodTotals.missing ?? 0) > 0 ? `Quedan ${money(input.methodTotals.missing ?? 0)} sin método registrado.` : 'Los cobros del periodo tienen método registrado.',
       ], 44, y - 32, 500)
     }
   }
@@ -715,7 +696,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     const chunks = splitRows(activeEvents, 18, 24)
     chunks.forEach((chunk, index) => {
       const page = newContentPage(ctx)
-      drawSectionTitle(page, fonts, 'E', index ? 'Detalle financiero de eventos - continuaciÃ³n' : 'Detalle financiero de eventos', 674)
+      drawSectionTitle(page, fonts, 'E', index ? 'Detalle financiero de eventos - continuación' : 'Detalle financiero de eventos', 674)
       drawDataTable(page, fonts, 32, 646, [
         { header: 'Evento', render: (row) => safe(row.title || row.birthdayChildName), width: 94 },
         { header: 'Fecha', render: (row) => formatDateKey(row.date), width: 54 },
@@ -736,24 +717,24 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     const key = dateKey(date)
     const ingresos = input.payments.filter((payment) => dateKey(payment.paidAt ?? payment.createdAt ?? date) === key).reduce((sum, payment) => sum + payment.totalPaid, 0)
     const gastos = input.expenses.filter((expense) => dateKey(expense.spentAt ?? expense.createdAt ?? date) === key).reduce((sum, expense) => sum + expense.amount, 0)
-    return { gastos, ingresos, label: days > 10 ? `DÃ­a ${index + 1}` : formatDateKey(key), neto: ingresos - gastos }
+    return { gastos, ingresos, label: days > 10 ? `Día ${index + 1}` : formatDateKey(key), neto: ingresos - gastos }
   }).filter((row) => row.ingresos > 0 || row.gastos > 0).slice(0, 4)
-  drawSectionTitle(page4, fonts, 'E', days === 1 ? 'Resumen de la jornada' : days <= 10 ? 'EvoluciÃ³n diaria del periodo' : 'EvoluciÃ³n semanal del periodo', 674)
+  drawSectionTitle(page4, fonts, 'E', days === 1 ? 'Resumen de la jornada' : days <= 10 ? 'Evolución diaria del periodo' : 'Evolución semanal del periodo', 674)
   drawDataTable(page4, fonts, 32, 646, [
     { header: days > 10 ? 'Periodo' : 'Fecha', render: (row) => row.label, width: 78 },
     { align: 'right', header: 'Ingresos', render: (row) => money(row.ingresos), width: 78 },
     { align: 'right', header: 'Gastos', render: (row) => money(row.gastos), width: 78 },
     { align: 'right', header: 'Resultado neto', render: (row) => money(row.neto), width: 78 },
-  ], weekRows.length ? [...weekRows, { gastos: input.totals.totalExpenses, ingresos: input.totals.totalCollected, label: 'TOTAL', neto: input.totals.netResult }] : [], { emptyText: 'Periodo insuficiente o sin movimientos para evoluciÃ³n.', rowHeight: 23 })
+  ], weekRows.length ? [...weekRows, { gastos: input.totals.totalExpenses, ingresos: input.totals.totalCollected, label: 'TOTAL', neto: input.totals.netResult }] : [], { emptyText: 'Periodo insuficiente o sin movimientos para evolución.', rowHeight: 23 })
   drawBarList(page4, fonts, weekRows.map((row) => ({ label: row.label, percent: input.totals.totalCollected ? (row.ingresos / input.totals.totalCollected) * 100 : 0, value: row.ingresos })), 372, 646, 192, 145)
 
   page4.drawLine({ start: { x: marginX, y: 478 }, end: { x: pageWidth - marginX, y: 478 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page4, fonts, 'P', 'Cuentas pendientes y conciliaciÃ³n', 448)
+  drawSectionTitle(page4, fonts, 'P', 'Cuentas pendientes y conciliación', 448)
   const pendingRows = [
-    ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - visita activa`, origin: 'RecepciÃ³n', state: 'Pendiente de cobro', total: Number(visit.amountCharged ?? visit.defaultAmount ?? 0) })),
+    ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - visita activa`, origin: 'Recepción', state: 'Pendiente de cobro', total: Number(visit.amountCharged ?? visit.defaultAmount ?? 0) })),
     ...pendingOrders.map((order) => ({ date: formatDate(order.createdAt), detail: safe(order.accountName), origin: 'Cantina', state: 'Pendiente de cobro', total: order.total })),
     ...pendingEvents.map((event) => ({ date: formatDateKey(event.date), detail: safe(event.title || event.birthdayChildName), origin: 'Evento', state: 'Pendiente de cobro', total: getEventPendingAmount(event, input.payments) })),
-    ...(input.methodTotals.missing ? [{ date: formatDateKey(input.dateTo), detail: 'Movimientos sin mÃ©todo registrado', origin: 'Finanzas', state: 'Pendiente de revisiÃ³n', total: input.methodTotals.missing }] : []),
+    ...(input.methodTotals.missing ? [{ date: formatDateKey(input.dateTo), detail: 'Movimientos sin método registrado', origin: 'Finanzas', state: 'Pendiente de revisión', total: input.methodTotals.missing }] : []),
   ].slice(0, 4)
   drawDataTable(page4, fonts, 32, 420, [
     { header: 'Fecha', render: (row) => row.date, width: 72 },
@@ -762,18 +743,29 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     { header: 'Estado', render: (row) => row.state, width: 112 },
     { align: 'right', header: 'Monto', render: (row) => money(row.total), width: 86 },
   ], pendingRows, { emptyText: 'No existen cuentas pendientes al cierre del periodo.', rowHeight: 20 })
-  drawMetricCard(page4, fonts, 32, 248, 168, 55, 'Pendiente al cierre', money(input.pendingAmount), 'P')
-  drawMetricCard(page4, fonts, 214, 248, 168, 55, 'Movimientos a revisar', String((input.methodTotals.missing ?? 0) > 0 ? 1 : 0), '?')
-  drawMetricCard(page4, fonts, 396, 248, 168, 55, 'Cuentas abiertas', String(pendingOrders.length + pendingVisits.length), 'OK')
+  drawSummaryGrid(
+    page4,
+    fonts,
+    [
+      { label: 'Pendiente al cierre', value: money(input.pendingAmount) },
+      { label: 'Movimientos a revisar', value: String((input.methodTotals.missing ?? 0) > 0 ? 1 : 0) },
+      { label: 'Cuentas abiertas', value: String(pendingOrders.length + pendingVisits.length) },
+    ],
+    32,
+    248,
+    532,
+    3,
+    { gapX: 10, gapY: 8, height: 42, valueSize: 12.4, compact: true },
+  )
 
   page4.drawLine({ start: { x: marginX, y: 230 }, end: { x: pageWidth - marginX, y: 230 }, color: lineGray, thickness: 0.7 })
   drawSectionTitleAt(page4, fonts, 'C', 'Checklist de cierre', 32, 200, 254)
   drawRoundedBox(page4, 32, 96, 254, 88, { fill: rgb(1, 1, 1), border: lineGray })
   ;[
-    ['Cobros de recepciÃ³n registrados', parkMovements > 0],
+    ['Cobros de recepción registrados', parkMovements > 0],
     ['Cobros de cantina registrados', canteenMovements > 0],
     ['Gastos registrados y clasificados', input.expenses.length > 0],
-    ['MÃ©todos de pago completos', (input.methodTotals.missing ?? 0) === 0],
+    ['Métodos de pago completos', (input.methodTotals.missing ?? 0) === 0],
     ['Pendientes identificados', true],
     ['PDF de cierre generado', true],
   ].forEach(([label, ok], index) => {
@@ -785,13 +777,13 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   drawSectionTitleAt(page4, fonts, '*', 'Conclusiones finales', 310, 200, 254)
   drawRoundedBox(page4, 310, 96, 254, 88, { fill: rgb(1, 1, 1), border: lineGray })
   drawBullets(page4, fonts, [
-    input.totals.netResult >= 0 ? `El negocio cerrÃ³ el periodo con resultado neto positivo de ${money(input.totals.netResult)}.` : `El periodo cerrÃ³ con resultado neto negativo de ${money(Math.abs(input.totals.netResult))}.`,
+    input.totals.netResult >= 0 ? `El negocio cerró el periodo con resultado neto positivo de ${money(input.totals.netResult)}.` : `El periodo cerró con resultado neto negativo de ${money(Math.abs(input.totals.netResult))}.`,
     input.totals.parkCollected >= input.totals.canteenCollected ? 'El parque fue la principal fuente de ingresos del periodo.' : 'La cantina tuvo un peso relevante dentro de los ingresos del periodo.',
-    (input.methodTotals.missing ?? 0) > 0 ? 'Conviene revisar los cobros sin mÃ©todo registrado.' : 'Los mÃ©todos de pago del periodo quedaron identificados.',
+    (input.methodTotals.missing ?? 0) > 0 ? 'Conviene revisar los cobros sin método registrado.' : 'Los métodos de pago del periodo quedaron identificados.',
   ], 322, 166, 230)
 
-  drawSectionTitle(page4, fonts, 'F', 'ValidaciÃ³n y firmas', 88)
-  ;['ElaborÃ³', 'RevisÃ³', 'AprobÃ³'].forEach((label, index) => {
+  drawSectionTitle(page4, fonts, 'F', 'Validación y firmas', 88)
+  ;['Elaboró', 'Revisó', 'Aprobó'].forEach((label, index) => {
     const x = 32 + index * 182
     drawRoundedBox(page4, x, 42, 168, 42, { fill: rgb(1, 1, 1), border: lineGray })
     drawText(page4, label, x + 84, 70, fonts.regular, 8.4, { align: 'center' })
