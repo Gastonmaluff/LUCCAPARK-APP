@@ -99,6 +99,11 @@ export function EventDayCallout({
             {isActive ? 'Registrar invitado' : 'Ver recepcion'}
           </Link>
         ) : null}
+        {event.childId ? (
+          <Link className="button ghost" to={`/admin/clientes?childId=${event.childId}`}>
+            Ver perfil del niño
+          </Link>
+        ) : null}
         {detailTo ? (
           <Link className="button ghost" to={detailTo}>
             Ver detalle

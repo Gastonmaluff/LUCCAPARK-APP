@@ -171,7 +171,11 @@ export interface ChildProfile {
   notes?: string
   visitCount: number
   eventGuestCount: number
+  eventReservationCount?: number
   lastVisitAt?: Date | null
+  firstReservationAt?: Date | null
+  lastReservationAt?: Date | null
+  lastInteractionAt?: Date | null
   lastSource?: 'visit' | 'event' | ''
   marketingConsent: boolean
   marketingConsentAt?: Date | null
@@ -303,7 +307,10 @@ export interface LuccaEvent {
   id: string
   title: string
   birthdayChildName: string
+  childId?: string | null
+  childBirthDate?: string | null
   customerName: string
+  customerId?: string | null
   customerPhone?: string
   date: string
   startTime: string
@@ -338,6 +345,7 @@ export interface LuccaEvent {
 export interface CreateEventInput {
   title: string
   birthdayChildName: string
+  childBirthDate?: string
   customerName: string
   customerPhone?: string
   date: string

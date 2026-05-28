@@ -2,7 +2,7 @@ import { Timestamp, onSnapshot } from 'firebase/firestore'
 import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
-import type { CanteenOrder, ChildProfile, CustomerProfile, EventGuest, PaymentStatus } from '../types'
+import type { CanteenOrder, ChildProfile, CustomerProfile, EventGuest, LuccaEvent, PaymentStatus } from '../types'
 
 export interface ClientVisitHistoryItem {
   id: string
@@ -61,12 +61,55 @@ const mapChild = (id: string, data: Record<string, unknown>): ChildProfile => ({
   notes: String(data.notes ?? ''),
   visitCount: Number(data.visitCount ?? 0),
   eventGuestCount: Number(data.eventGuestCount ?? 0),
+  eventReservationCount: Number(data.eventReservationCount ?? 0),
   lastVisitAt: dateFromTimestamp(data.lastVisitAt),
+  firstReservationAt: dateFromTimestamp(data.firstReservationAt),
+  lastReservationAt: dateFromTimestamp(data.lastReservationAt),
+  lastInteractionAt: dateFromTimestamp(data.lastInteractionAt),
   lastSource: (data.lastSource as ChildProfile['lastSource']) ?? '',
   marketingConsent: Boolean(data.marketingConsent),
   marketingConsentAt: dateFromTimestamp(data.marketingConsentAt),
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),
+})
+
+const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
+  id,
+  title: String(data.title ?? ''),
+  birthdayChildName: String(data.birthdayChildName ?? ''),
+  childId: data.childId ? String(data.childId) : null,
+  childBirthDate: data.childBirthDate ? String(data.childBirthDate) : null,
+  customerName: String(data.customerName ?? ''),
+  customerId: data.customerId ? String(data.customerId) : null,
+  customerPhone: String(data.customerPhone ?? ''),
+  date: String(data.date ?? ''),
+  startTime: String(data.startTime ?? ''),
+  endTime: String(data.endTime ?? ''),
+  contractedChildrenCount: Number(data.contractedChildrenCount ?? 0),
+  registeredGuestsCount: Number(data.registeredGuestsCount ?? 0),
+  status: (data.status as LuccaEvent['status']) ?? 'reserved',
+  eventType: (data.eventType as LuccaEvent['eventType']) ?? 'birthday',
+  totalAmount: data.totalAmount === null || data.totalAmount === undefined ? null : Number(data.totalAmount),
+  depositAmount: data.depositAmount === null || data.depositAmount === undefined ? null : Number(data.depositAmount),
+  pendingAmount: data.pendingAmount === null || data.pendingAmount === undefined ? null : Number(data.pendingAmount),
+  eventPaidAmount: data.eventPaidAmount === null || data.eventPaidAmount === undefined ? null : Number(data.eventPaidAmount),
+  financialStatus: (data.financialStatus as LuccaEvent['financialStatus']) ?? undefined,
+  notes: String(data.notes ?? ''),
+  tvModeEnabled: Boolean(data.tvModeEnabled),
+  tvDisplayEnabled: Boolean(data.tvDisplayEnabled),
+  tvImageUrl: String(data.tvImageUrl ?? ''),
+  tvImageUpdatedAt: dateFromTimestamp(data.tvImageUpdatedAt),
+  tvTitle: String(data.tvTitle ?? ''),
+  tvMessage: String(data.tvMessage ?? ''),
+  tvBannerImageUrl: String(data.tvBannerImageUrl ?? ''),
+  showGuestCounterOnTv: data.showGuestCounterOnTv !== false,
+  showEventNameOnTv: data.showEventNameOnTv !== false,
+  hideSensitiveInfoOnTv: Boolean(data.hideSensitiveInfoOnTv),
+  createdAt: dateFromTimestamp(data.createdAt),
+  updatedAt: dateFromTimestamp(data.updatedAt),
+  createdBy: data.createdBy ? String(data.createdBy) : null,
+  createdByName: String(data.createdByName ?? ''),
+  updatedBy: data.updatedBy ? String(data.updatedBy) : null,
 })
 
 const mapVisit = (id: string, data: Record<string, unknown>): ClientVisitHistoryItem => ({
@@ -145,8 +188,9 @@ export function useClientsData() {
   const [customers, setCustomers] = useState<CustomerProfile[]>([])
   const [visits, setVisits] = useState<ClientVisitHistoryItem[]>([])
   const [eventGuests, setEventGuests] = useState<EventGuest[]>([])
+  const [events, setEvents] = useState<LuccaEvent[]>([])
   const [canteenOrders, setCanteenOrders] = useState<CanteenOrder[]>([])
-  const [loadingKeys, setLoadingKeys] = useState(new Set(['children', 'customers', 'visits', 'eventGuests', 'canteenOrders']))
+  const [loadingKeys, setLoadingKeys] = useState(new Set(['children', 'customers', 'visits', 'eventGuests', 'events', 'canteenOrders']))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -189,6 +233,10 @@ export function useClientsData() {
             setEventGuests(snapshot.docs.map((docSnapshot) => mapGuest(docSnapshot.id, docSnapshot.data())))
             markLoaded('eventGuests')
           }, handleSnapshotError),
+          onSnapshot(getCollectionRef('events'), (snapshot) => {
+            setEvents(snapshot.docs.map((docSnapshot) => mapEvent(docSnapshot.id, docSnapshot.data())))
+            markLoaded('events')
+          }, handleSnapshotError),
           onSnapshot(getCollectionRef('canteenOrders'), (snapshot) => {
             setCanteenOrders(snapshot.docs.map((docSnapshot) => mapOrder(docSnapshot.id, docSnapshot.data())))
             markLoaded('canteenOrders')
@@ -221,6 +269,7 @@ export function useClientsData() {
     customers,
     visits,
     eventGuests,
+    events,
     canteenOrders,
     isLoading: loadingKeys.size > 0,
     error,

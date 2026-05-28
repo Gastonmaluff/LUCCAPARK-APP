@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Monitor, PartyPopper, Power, Square, XCircle } from 'lucide-react'
 import { EventCapacityBadge } from './EventCapacityBadge'
 import { EventGuestList } from './EventGuestList'
@@ -35,6 +36,29 @@ const methodLabel = (method?: string, cardType?: string) => {
   return 'Sin metodo'
 }
 
+const expenseCategoryLabel: Record<string, string> = {
+  canteen_purchase: 'Cantina / compra de productos',
+  cleaning: 'Limpieza',
+  decoration: 'Decoración',
+  maintenance: 'Mantenimiento',
+  operations: 'Operativa general',
+  other: 'Otro',
+  services: 'Servicios',
+  wages: 'Sueldos / jornales',
+}
+
+const taskPriorityLabel: Record<string, string> = {
+  high: 'Alta',
+  medium: 'Media',
+  low: 'Baja',
+}
+
+const taskStatusLabel: Record<string, string> = {
+  completed: 'Completada',
+  in_progress: 'En proceso',
+  pending: 'Pendiente',
+}
+
 export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const { error, guests, isLoading } = useEventGuests(event?.id)
   const { orders: canteenOrders } = useCanteenOrders()
@@ -48,6 +72,8 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
   const [isExpenseOpen, setIsExpenseOpen] = useState(false)
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isTaskOpen, setIsTaskOpen] = useState(false)
+  const userNameByUid = new Map(usersResult.users.map((user) => [user.uid, user.displayName]))
+  const resolveUserName = (uid?: string | null, storedName?: string) => storedName || (uid ? userNameByUid.get(uid) : '') || 'Sin usuario'
 
   if (!event) {
     return (
@@ -103,6 +129,13 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
           <p className="muted">
             {event.customerName} - {event.date} - {formatEventTimeRange(event)}
           </p>
+          {event.childId ? (
+            <div className="event-linked-child">
+              <Link className="button ghost small-button" to={`/admin/clientes?childId=${event.childId}`}>
+                Ver perfil del niño
+              </Link>
+            </div>
+          ) : null}
         </div>
         <EventCapacityBadge event={event} guestCount={guests.length || event.registeredGuestsCount} />
       </div>
@@ -157,13 +190,16 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         <div className="module-list">
           {eventPayments.length === 0 ? <div className="empty-state">No hay cobros registrados para este evento.</div> : null}
           {eventPayments.map((payment) => (
-            <div className="module-row" key={payment.id}>
-              <span>
+            <article className="event-ledger-card" key={payment.id}>
+              <div className="event-ledger-main">
                 <strong>{payment.description || 'Cobro de evento'}</strong>
-                <small>{payment.paidAt?.toLocaleString('es-PY') ?? 'Sin fecha'} - {methodLabel(payment.paymentMethod, payment.cardType)} - {payment.createdBy || 'Sin usuario'}</small>
-              </span>
-              <strong>{formatGuarani(payment.totalPaid)}</strong>
-            </div>
+                <p className="muted">
+                  {payment.paidAt?.toLocaleString('es-PY') ?? 'Sin fecha'} · {methodLabel(payment.paymentMethod, payment.cardType)}
+                </p>
+                <p className="muted">Registrado por: {resolveUserName(payment.createdBy, payment.createdByName)}</p>
+              </div>
+              <strong className="event-ledger-amount">{formatGuarani(payment.totalPaid)}</strong>
+            </article>
           ))}
         </div>
 
@@ -171,14 +207,27 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         <div className="module-list">
           {eventExpenses.length === 0 ? <div className="empty-state">No hay gastos asociados a este evento.</div> : null}
           {eventExpenses.map((expense) => (
-            <div className="module-row" key={expense.id}>
-              <span>
+            <article className="event-ledger-card" key={expense.id}>
+              <div className="event-ledger-main">
                 <strong>{expense.description}</strong>
-                <small>{expense.date} - {expense.category}</small>
-              </span>
-              <strong>{formatGuarani(expense.amount)}</strong>
-              {expense.receiptUrl ? <a className="button ghost" href={expense.receiptUrl} rel="noreferrer" target="_blank">Ver comprobante</a> : <StatusPill tone="info">Sin comprobante</StatusPill>}
-            </div>
+                <p className="muted">
+                  {expenseCategoryLabel[expense.category] ?? expense.category} · {expense.spentAt?.toLocaleDateString('es-PY') ?? expense.date}
+                </p>
+                <p className="muted">
+                  Registrado por: {resolveUserName(expense.createdByUid || expense.createdBy, expense.createdByName)}
+                </p>
+              </div>
+              <div className="event-ledger-side">
+                <strong className="event-ledger-amount">{formatGuarani(expense.amount)}</strong>
+                {expense.receiptUrl ? (
+                  <a className="button ghost small-button" href={expense.receiptUrl} rel="noreferrer" target="_blank">
+                    Ver comprobante
+                  </a>
+                ) : (
+                  <StatusPill tone="info">Sin comprobante</StatusPill>
+                )}
+              </div>
+            </article>
           ))}
         </div>
       </section>
@@ -193,20 +242,28 @@ export function EventDetailPanel({ event }: EventDetailPanelProps) {
         <div className="module-list">
           {eventTasks.length === 0 ? <div className="empty-state">No hay tareas vinculadas a este evento.</div> : null}
           {eventTasks.map((task) => (
-            <div className="module-row" key={task.id}>
-              <span>
+            <article className="event-task-card" key={task.id}>
+              <div className="event-task-main">
                 <strong>{task.title}</strong>
-                <small>{task.assignedToName || task.assignedTo || 'Sin asignar'} - {task.priority}</small>
-              </span>
-              <StatusPill tone={task.status === 'completed' ? 'available' : task.status === 'in_progress' ? 'info' : 'warning'}>
-                {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En proceso' : 'Pendiente'}
-              </StatusPill>
-              {task.status !== 'completed' ? (
-                <button className="button ghost" onClick={() => updateTaskStatus(task, 'completed')} type="button">
-                  Completar
-                </button>
-              ) : null}
-            </div>
+                <p className="muted">
+                  Asignada a: {resolveUserName(task.assignedToUid || task.assignedTo, task.assignedToName)} · Prioridad: {taskPriorityLabel[task.priority] ?? task.priority}
+                </p>
+                <p className="muted">
+                  Asignada por: {resolveUserName(task.assignedByUid || task.createdBy, task.assignedByName || task.createdByName)}
+                  {task.dueAt ? ` · Vence: ${task.dueAt.toLocaleString('es-PY')}` : ''}
+                </p>
+              </div>
+              <div className="event-task-side">
+                <StatusPill tone={task.status === 'completed' ? 'available' : task.status === 'in_progress' ? 'info' : 'warning'}>
+                  {taskStatusLabel[task.status] ?? task.status}
+                </StatusPill>
+                {task.status !== 'completed' ? (
+                  <button className="button ghost small-button" onClick={() => updateTaskStatus(task, 'completed')} type="button">
+                    Completar
+                  </button>
+                ) : null}
+              </div>
+            </article>
           ))}
         </div>
       </section>

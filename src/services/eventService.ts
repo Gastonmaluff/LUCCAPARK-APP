@@ -77,22 +77,110 @@ const findChildByNameAndPhone = async (childName: string, phone?: string) => {
   }) ?? null
 }
 
+const findChildByReservation = async (childName: string, birthDate?: string, phone?: string) => {
+  const normalizedName = lowerKey(childName)
+  const normalizedBirthDate = optionalText(birthDate)
+  const normalizedPhone = optionalText(phone)
+
+  const snapshot = await getDocs(
+    query(
+      getCollectionRef('children'),
+      where('searchName', '==', normalizedName),
+      limit(25),
+    ),
+  )
+
+  return (
+    snapshot.docs.find((docSnapshot) => {
+      const data = docSnapshot.data() as Record<string, unknown>
+      const childBirthDate = optionalText(String(data.birthDate ?? ''))
+      const childPhone = optionalText(String(data.customerPhone ?? data.mainCustomerPhone ?? ''))
+      const sameName = lowerKey(String(data.name ?? '')) === normalizedName || lowerKey(String(data.searchName ?? '')) === normalizedName
+      const sameBirth = normalizedBirthDate ? childBirthDate === normalizedBirthDate : true
+      const samePhone = normalizedPhone ? childPhone === normalizedPhone : true
+
+      if (!sameName) {
+        return false
+      }
+
+      if (normalizedBirthDate) {
+        return sameBirth
+      }
+
+      if (normalizedPhone) {
+        return samePhone
+      }
+
+      return true
+    }) ?? null
+  )
+}
+
 export const createEvent = async (input: CreateEventInput) => {
   await ensureReceptionSession()
 
   const title = formatEventTitle(input.title || `Cumpleanos de ${input.birthdayChildName}`)
   const birthdayChildName = formatPersonName(input.birthdayChildName)
+  const childBirthDate = optionalText(input.childBirthDate)
   const customerName = formatPersonName(input.customerName)
   const customerPhone = phoneDigits(input.customerPhone ?? '')
   const eventRef = doc(getCollectionRef('events'))
   const userAudit = await getCurrentUserAudit()
   const userId = userAudit.uid
+  const existingCustomer = await findCustomerByPhone(customerPhone)
+  const customerRef = existingCustomer
+    ? getDocumentRef('customers', existingCustomer.id)
+    : doc(getCollectionRef('customers'))
+  const existingChild = await findChildByReservation(birthdayChildName, childBirthDate, customerPhone)
+  const childRef = existingChild ? getDocumentRef('children', existingChild.id) : doc(getCollectionRef('children'))
+
+  await setDoc(
+    customerRef,
+    {
+      name: customerName,
+      phone: customerPhone,
+      updatedAt: serverTimestamp(),
+      ...(existingCustomer ? {} : { marketingConsent: false, createdAt: serverTimestamp() }),
+    },
+    { merge: true },
+  )
+
+  await setDoc(
+    childRef,
+    {
+      id: childRef.id,
+      name: birthdayChildName,
+      searchName: lowerKey(birthdayChildName),
+      customerId: customerRef.id,
+      customerName,
+      customerPhone,
+      mainCustomerId: customerRef.id,
+      mainCustomerName: customerName,
+      mainCustomerPhone: customerPhone,
+      source: 'event',
+      lastSource: 'event',
+      eventId: eventRef.id,
+      eventName: title,
+      eventDate: input.date,
+      birthdayChildName,
+      eventReservationCount: increment(1),
+      lastReservationAt: serverTimestamp(),
+      lastInteractionAt: serverTimestamp(),
+      ...(childBirthDate ? { birthDate: childBirthDate } : {}),
+      ...(existingChild ? {} : { eventGuestCount: 0, visitCount: 0, marketingConsent: false, createdAt: serverTimestamp(), firstReservationAt: serverTimestamp() }),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
 
   await setDoc(eventRef, {
     id: eventRef.id,
     title,
     birthdayChildName,
+    childId: childRef.id,
+    childBirthDate,
     customerName,
+    customerId: customerRef.id,
     customerPhone,
     date: input.date,
     startTime: input.startTime,

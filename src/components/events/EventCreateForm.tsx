@@ -16,6 +16,7 @@ interface EventCreateFormProps {
 const buildInitialForm = (date = getTodayDateKey()): CreateEventInput => ({
   title: '',
   birthdayChildName: '',
+  childBirthDate: '',
   customerName: '',
   customerPhone: '',
   date,
@@ -111,6 +112,7 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
         ...form,
         title: normalizedTitle || `Cumpleanos de ${normalizedBirthdayChildName}`,
         birthdayChildName: normalizedBirthdayChildName || normalizedTitle,
+        childBirthDate: form.childBirthDate || undefined,
         customerName: formatPersonName(form.customerName),
         contractedChildrenCount: Number(form.contractedChildrenCount || 1),
         totalAmount: form.totalAmount ?? null,
@@ -187,6 +189,13 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
             onChange={(event) => updateField('customerPhone', formatParaguayanPhone(event.target.value))}
             value={form.customerPhone}
           />
+        </label>
+      </div>
+
+      <div className="form-inline">
+        <label className="field">
+          <span>Fecha de nacimiento del cumpleañero</span>
+          <input onChange={(event) => updateField('childBirthDate', event.target.value)} type="date" value={form.childBirthDate ?? ''} />
         </label>
       </div>
 

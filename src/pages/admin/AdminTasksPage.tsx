@@ -16,6 +16,17 @@ type TaskFilter = 'mine' | 'assigned_by_me' | 'all' | 'pending' | 'in_progress' 
 const priorityLabel: Record<LuccaTask['priority'], string> = { high: 'Alta', low: 'Baja', medium: 'Media' }
 const statusLabel: Record<LuccaTask['status'], string> = { completed: 'Completada', in_progress: 'En proceso', pending: 'Pendiente' }
 
+const formatDateTime = (date?: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('es-PY', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date)
+    : 'Sin fecha'
+
 export function AdminTasksPage() {
   const { events } = useEventDayContext()
   const { permissions, profile } = useUserProfile()
@@ -24,6 +35,10 @@ export function AdminTasksPage() {
   const [filter, setFilter] = useState<TaskFilter>('all')
   const [editingTask, setEditingTask] = useState<LuccaTask | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const userNameByUid = useMemo(() => new Map(usersResult.users.map((user) => [user.uid, user.displayName])), [usersResult.users])
+  const resolveUserLabel = (uid?: string | null, storedName?: string, fallback?: string) =>
+    storedName || (uid ? userNameByUid.get(uid) : '') || fallback || 'Sin usuario vinculado'
 
   const filteredTasks = useMemo(
     () =>
@@ -85,33 +100,62 @@ export function AdminTasksPage() {
         {isLoading ? <div className="empty-state">Cargando tareas...</div> : null}
         <div className="module-list task-list">
           {filteredTasks.length === 0 && !isLoading ? <div className="empty-state">No hay tareas para mostrar.</div> : null}
-          {filteredTasks.map((task) => (
-            <div className={`module-row task-row priority-${task.priority}`} key={task.id}>
-              <span>
-                <strong>{task.title}</strong>
-                <small>Prioridad: {priorityLabel[task.priority]}{task.dueAt ? ` · Vence: ${task.dueAt.toLocaleString('es-PY')}` : ''}</small>
-                <small>Asignada a: {task.assignedToName || task.assignedTo || 'Asignación anterior sin usuario vinculado'}</small>
-                <small>Asignada por: {task.assignedByName || task.createdByName || 'Usuario no identificado'}{task.eventName ? ` · Evento: ${task.eventName}` : ''}</small>
-              </span>
-              <StatusPill tone={task.priority === 'high' ? 'danger' : task.priority === 'medium' ? 'warning' : 'info'}>{priorityLabel[task.priority]}</StatusPill>
-              <StatusPill tone={task.status === 'completed' ? 'available' : task.status === 'in_progress' ? 'info' : 'warning'}>{statusLabel[task.status]}</StatusPill>
-              <div className="module-actions">
-                <button className="button ghost" onClick={() => setEditingTask(task)} type="button">
-                  Editar
-                </button>
-                {task.status === 'pending' ? (
-                  <button className="button secondary" onClick={() => updateTaskStatus(task, 'in_progress')} type="button">
-                    En proceso
+          {filteredTasks.map((task) => {
+            const assignedTo = resolveUserLabel(task.assignedToUid || task.assignedTo, task.assignedToName, task.assignedToEmail)
+            const assignedBy = resolveUserLabel(task.assignedByUid || task.createdBy, task.assignedByName || task.createdByName)
+            const eventName = task.eventName || events.find((event) => event.id === task.eventId)?.title || ''
+            return (
+              <article className={`task-card priority-${task.priority}`} key={task.id}>
+                <div className="task-card-top">
+                  <div className="task-card-title">
+                    <strong>{task.title}</strong>
+                    <p className="muted">{task.description || 'Sin descripción'}</p>
+                  </div>
+                  <div className="task-card-badges">
+                    <StatusPill tone={task.status === 'completed' ? 'available' : task.status === 'in_progress' ? 'info' : 'warning'}>
+                      {statusLabel[task.status]}
+                    </StatusPill>
+                    <StatusPill tone={task.priority === 'high' ? 'danger' : task.priority === 'medium' ? 'warning' : 'info'}>
+                      Prioridad: {priorityLabel[task.priority]}
+                    </StatusPill>
+                  </div>
+                </div>
+
+                <div className="task-card-meta">
+                  <span>
+                    <strong>Asignada a:</strong> {assignedTo}
+                  </span>
+                  <span>
+                    <strong>Asignada por:</strong> {assignedBy}
+                  </span>
+                  <span>
+                    <strong>Vence:</strong> {formatDateTime(task.dueAt)}
+                  </span>
+                  {eventName ? (
+                    <span>
+                      <strong>Evento:</strong> {eventName}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="task-card-actions">
+                  <button className="button ghost" onClick={() => setEditingTask(task)} type="button">
+                    Editar
                   </button>
-                ) : null}
-                {task.status !== 'completed' ? (
-                  <button className="button primary" onClick={() => updateTaskStatus(task, 'completed')} type="button">
-                    Completar
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ))}
+                  {task.status === 'pending' ? (
+                    <button className="button secondary" onClick={() => updateTaskStatus(task, 'in_progress')} type="button">
+                      En proceso
+                    </button>
+                  ) : null}
+                  {task.status !== 'completed' ? (
+                    <button className="button primary" onClick={() => updateTaskStatus(task, 'completed')} type="button">
+                      Completar
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            )
+          })}
         </div>
       </article>
 

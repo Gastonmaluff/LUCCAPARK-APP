@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { CalendarHeart, Gift, MessageCircle, Phone, Search, Star, UserRound, Users, X } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { MetricCard } from '../../components/MetricCard'
@@ -7,14 +7,15 @@ import { StatusPill } from '../../components/StatusPill'
 import { useClientsData, type ClientVisitHistoryItem } from '../../hooks/useClients'
 import { formatShortTime, getLocalDateKey } from '../../utils/date'
 import { formatGuarani } from '../../utils/money'
-import type { CanteenOrder, ChildProfile, EventGuest } from '../../types'
+import { lowerSearchKey } from '../../utils/textFormat'
+import type { CanteenOrder, ChildProfile, EventGuest, LuccaEvent } from '../../types'
 
 type ClientFilter = 'all' | 'birthday' | 'thisMonth' | 'visit' | 'event' | 'frequent'
 
 const filters: Array<{ id: ClientFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
-  { id: 'birthday', label: 'Cumpleanos proximos' },
-  { id: 'thisMonth', label: 'Visito este mes' },
+  { id: 'birthday', label: 'Cumpleaños próximos' },
+  { id: 'thisMonth', label: 'Visitó este mes' },
   { id: 'visit', label: 'Visita normal' },
   { id: 'event', label: 'Evento' },
   { id: 'frequent', label: 'Frecuentes' },
@@ -57,12 +58,26 @@ const formatBirthday = (date: Date | null | undefined) =>
       }).format(date)
     : 'Sin dato'
 
-const getTotalActivity = (child: ChildProfile) => child.visitCount + child.eventGuestCount
+const normalizeDigits = (value?: string) => (value ?? '').replace(/\D/g, '')
+
+const getTotalActivity = (child: ChildProfile) => child.visitCount + child.eventGuestCount + (child.eventReservationCount ?? 0)
 
 const childSearchText = (child: ChildProfile) =>
   [child.name, child.mainCustomerName, child.customerName, child.mainCustomerPhone, child.customerPhone].join(' ').toLocaleLowerCase('es-PY')
 
-const isChildFromSource = (child: ChildProfile, source: 'visit' | 'event') => child.lastSource === source
+const getChildBadgeLabel = (child: ChildProfile) => {
+  const hasVisits = child.visitCount > 0
+  const hasEvents = child.eventGuestCount > 0 || (child.eventReservationCount ?? 0) > 0
+
+  if (hasVisits && hasEvents) return 'Visita + Evento'
+  if (hasEvents) return 'Evento'
+  return 'Visita'
+}
+
+const getChildBadgeTone = (child: ChildProfile) => {
+  const hasEvents = child.eventGuestCount > 0 || (child.eventReservationCount ?? 0) > 0
+  return hasEvents ? 'warning' : 'info'
+}
 
 const getChildVisits = (child: ChildProfile, visits: ClientVisitHistoryItem[]) =>
   visits
@@ -77,8 +92,25 @@ const getChildOrders = (child: ChildProfile, orders: CanteenOrder[], visits: Cli
   return orders.filter((order) => order.childId === child.id || (order.visitId ? visitIds.has(order.visitId) : false))
 }
 
+const getChildReservations = (child: ChildProfile, events: LuccaEvent[]) => {
+  const normalizedName = lowerSearchKey(child.name)
+  const normalizedPhone = normalizeDigits(child.mainCustomerPhone || child.customerPhone)
+
+  return events
+    .filter((event) => {
+      const eventPhone = normalizeDigits(event.customerPhone)
+      const eventName = lowerSearchKey(event.birthdayChildName || event.title)
+      return (
+        event.childId === child.id ||
+        (eventName === normalizedName && Boolean(child.birthDate && event.childBirthDate === child.birthDate)) ||
+        (eventName === normalizedName && Boolean(normalizedPhone && eventPhone === normalizedPhone))
+      )
+    })
+    .sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`))
+}
+
 const normalizePhoneForWhatsApp = (phone?: string) => {
-  const digits = (phone ?? '').replace(/\D/g, '')
+  const digits = normalizeDigits(phone)
   if (!digits) return ''
   if (digits.startsWith('595')) return digits
   if (digits.startsWith('0')) return `595${digits.slice(1)}`
@@ -93,12 +125,18 @@ const buildWhatsAppUrl = (child: ChildProfile) => {
 }
 
 export function AdminClientsPage() {
-  const { canteenOrders, children, error, eventGuests, isLoading, visits } = useClientsData()
+  const { canteenOrders, children, error, eventGuests, events, isLoading, visits } = useClientsData()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ClientFilter>('all')
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
-  const now = new Date()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [now] = useState(() => new Date())
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+  useEffect(() => {
+    const childId = searchParams.get('childId')
+    setSelectedChildId(childId)
+  }, [searchParams])
 
   const upcomingBirthdays = useMemo(
     () =>
@@ -120,8 +158,8 @@ export function AdminClientsPage() {
         filter === 'all' ||
         (filter === 'birthday' && Boolean(birthday && birthday.daysUntil <= 30)) ||
         (filter === 'thisMonth' && Boolean(child.lastVisitAt && getLocalDateKey(child.lastVisitAt).startsWith(currentMonth))) ||
-        (filter === 'visit' && isChildFromSource(child, 'visit')) ||
-        (filter === 'event' && isChildFromSource(child, 'event')) ||
+        (filter === 'visit' && child.visitCount > 0 && child.eventGuestCount === 0 && (child.eventReservationCount ?? 0) === 0) ||
+        (filter === 'event' && (child.eventGuestCount > 0 || (child.eventReservationCount ?? 0) > 0)) ||
         (filter === 'frequent' && getTotalActivity(child) >= 3)
       return matchesSearch && matchesFilter
     })
@@ -131,23 +169,29 @@ export function AdminClientsPage() {
   const selectedVisits = selectedChild ? getChildVisits(selectedChild, visits) : []
   const selectedGuests = selectedChild ? getChildGuests(selectedChild, eventGuests) : []
   const selectedOrders = selectedChild ? getChildOrders(selectedChild, canteenOrders, visits) : []
+  const selectedReservations = selectedChild ? getChildReservations(selectedChild, events) : []
   const selectedBirthday = nextBirthdayInfo(selectedChild?.birthDate, now)
   const selectedConsumptionTotal = selectedOrders.reduce((sum, order) => sum + order.total, 0)
 
-  const openProfile = (childId: string) => setSelectedChildId(childId)
-  const closeProfile = () => setSelectedChildId(null)
+  const openProfile = (childId: string) => {
+    setSearchParams({ childId })
+  }
+
+  const closeProfile = () => {
+    setSearchParams({})
+  }
 
   return (
     <>
       <AdminModuleHeader
         eyebrow="Base comercial"
         title="Clientes"
-        description="Ninos, responsables, cumpleanos proximos e historial de visitas y eventos."
+        description="Niños, responsables, cumpleaños próximos e historial de visitas y eventos."
       />
 
       <div className="metric-grid clients-metrics">
-        <MetricCard label="Total de ninos" value={String(children.length)} detail="Perfiles permanentes" icon={<Users />} color="var(--turquoise)" />
-        <MetricCard label="Cumpleanos proximos" value={String(upcomingBirthdays.length)} detail="Proximos 30 dias" icon={<Gift />} color="var(--yellow)" />
+        <MetricCard label="Total de niños" value={String(children.length)} detail="Perfiles permanentes" icon={<Users />} color="var(--turquoise)" />
+        <MetricCard label="Cumpleaños próximos" value={String(upcomingBirthdays.length)} detail="Próximos 30 días" icon={<Gift />} color="var(--yellow)" />
         <MetricCard
           label="Nuevos este mes"
           value={String(children.filter((child) => child.createdAt && getLocalDateKey(child.createdAt).startsWith(currentMonth)).length)}
@@ -158,7 +202,7 @@ export function AdminClientsPage() {
         <MetricCard
           label="Clientes frecuentes"
           value={String(children.filter((child) => getTotalActivity(child) >= 3).length)}
-          detail="3 o mas registros"
+          detail="3 o más registros"
           icon={<CalendarHeart />}
           color="var(--green)"
         />
@@ -168,22 +212,23 @@ export function AdminClientsPage() {
         <div className="panel-header">
           <h2 className="panel-title">
             <Gift color="var(--yellow)" />
-            Cumpleanos proximos
+            Cumpleaños próximos
           </h2>
-          <StatusPill tone="warning">{upcomingBirthdays.length} en 30 dias</StatusPill>
+          <StatusPill tone="warning">{upcomingBirthdays.length} en 30 días</StatusPill>
         </div>
         <div className="birthday-wide-list">
           {upcomingBirthdays.map(({ birthday, child }) => {
             const whatsappUrl = buildWhatsAppUrl(child)
             return (
               <article className="birthday-card birthday-card-wide" key={child.id}>
-                <div>
+                <div className="birthday-card-main">
                   <strong>{child.name}</strong>
                   <p className="muted">
-                    Cumple: {formatBirthday(birthday.date)} · Cumple {birthday.turningAge} anos en {birthday.daysUntil} dias
+                    Cumple: {formatBirthday(birthday.date)} · Cumple {birthday.turningAge} años en {birthday.daysUntil} días
                   </p>
                   <p className="muted">
-                    Responsable: {child.mainCustomerName || child.customerName || 'Sin dato'} · {child.mainCustomerPhone || child.customerPhone || 'Sin telefono'}
+                    Responsable: {child.mainCustomerName || child.customerName || 'Sin dato'} ·{' '}
+                    {child.mainCustomerPhone || child.customerPhone || 'Sin teléfono'}
                   </p>
                 </div>
                 <div className="birthday-actions">
@@ -200,7 +245,7 @@ export function AdminClientsPage() {
               </article>
             )
           })}
-          {upcomingBirthdays.length === 0 ? <div className="empty-state">No hay cumpleanos proximos cargados.</div> : null}
+          {upcomingBirthdays.length === 0 ? <div className="empty-state">No hay cumpleaños próximos cargados.</div> : null}
         </div>
       </section>
 
@@ -208,7 +253,7 @@ export function AdminClientsPage() {
         <div className="panel-header clients-toolbar">
           <h2 className="panel-title">
             <UserRound color="var(--orange)" />
-            Ninos registrados
+            Niños registrados
           </h2>
           <StatusPill tone="info">{filteredChildren.length} resultados</StatusPill>
         </div>
@@ -217,7 +262,7 @@ export function AdminClientsPage() {
           <span>
             <Search size={16} /> Buscar
           </span>
-          <input onChange={(event) => setSearch(event.target.value)} placeholder="Nombre, responsable o telefono" value={search} />
+          <input onChange={(event) => setSearch(event.target.value)} placeholder="Nombre, responsable o teléfono" value={search} />
         </label>
 
         <div className="client-filter-row" role="tablist" aria-label="Filtros de clientes">
@@ -235,16 +280,23 @@ export function AdminClientsPage() {
         <div className="client-table">
           {filteredChildren.map((child) => {
             const birthday = nextBirthdayInfo(child.birthDate, now)
+            const hasBirthdaySoon = Boolean(birthday && birthday.daysUntil <= 30)
             return (
-              <button className="client-row" key={child.id} onClick={() => openProfile(child.id)} type="button">
-                <span>
+              <button className="client-row client-row-enhanced" key={child.id} onClick={() => openProfile(child.id)} type="button">
+                <div className="client-row-main">
                   <strong>{child.name}</strong>
                   <small>{child.mainCustomerName || child.customerName || 'Responsable sin dato'}</small>
-                </span>
-                <span>{child.mainCustomerPhone || child.customerPhone || 'Sin telefono'}</span>
-                <span>{birthday ? `${birthday.daysUntil} dias` : 'Sin cumple'}</span>
-                <span>{getTotalActivity(child)} registros</span>
-                <StatusPill tone={child.lastSource === 'event' ? 'warning' : 'info'}>{child.lastSource === 'event' ? 'Evento' : 'Visita'}</StatusPill>
+                </div>
+                <div className="client-row-meta">
+                  <span>{child.mainCustomerPhone || child.customerPhone || 'Sin teléfono'}</span>
+                  <span>{birthday ? `${birthday.daysUntil} días` : 'Sin cumple'}</span>
+                  <span>{getTotalActivity(child)} registros</span>
+                </div>
+                <div className="client-row-badges">
+                  <StatusPill tone={getChildBadgeTone(child)}>{getChildBadgeLabel(child)}</StatusPill>
+                  {getTotalActivity(child) >= 3 ? <StatusPill tone="available">Frecuente</StatusPill> : null}
+                  {hasBirthdaySoon ? <StatusPill tone="warning">Cumpleaños próximo</StatusPill> : null}
+                </div>
               </button>
             )
           })}
@@ -257,15 +309,15 @@ export function AdminClientsPage() {
             <div className="modal-header">
               <div className="client-profile-header">
                 <div>
-                  <p className="eyebrow">Perfil del nino</p>
+                  <p className="eyebrow">Perfil del niño</p>
                   <h2>{selectedChild.name}</h2>
                   <p className="muted">
                     {selectedChild.mainCustomerName || selectedChild.customerName || 'Responsable sin dato'} ·{' '}
-                    {selectedChild.mainCustomerPhone || selectedChild.customerPhone || 'Sin telefono'}
+                    {selectedChild.mainCustomerPhone || selectedChild.customerPhone || 'Sin teléfono'}
                   </p>
                 </div>
                 <StatusPill tone={selectedBirthday && selectedBirthday.daysUntil <= 30 ? 'warning' : 'info'}>
-                  {selectedBirthday ? `Cumple en ${selectedBirthday.daysUntil} dias` : 'Sin cumple'}
+                  {selectedBirthday ? `Cumple en ${selectedBirthday.daysUntil} días` : 'Sin cumple'}
                 </StatusPill>
               </div>
               <button className="icon-button modal-close" onClick={closeProfile} type="button" aria-label="Cerrar perfil">
@@ -276,10 +328,10 @@ export function AdminClientsPage() {
             <div className="client-profile-grid">
               <span>
                 <strong>{formatBirthday(selectedBirthday?.date)}</strong>
-                Proximo cumple
+                Próximo cumple
               </span>
               <span>
-                <strong>{selectedBirthday ? `${selectedBirthday.turningAge} anos` : selectedChild.ageRange || '--'}</strong>
+                <strong>{selectedBirthday ? `${selectedBirthday.turningAge} años` : selectedChild.ageRange || '--'}</strong>
                 Edad / rango
               </span>
               <span>
@@ -291,12 +343,20 @@ export function AdminClientsPage() {
                 Eventos asistidos
               </span>
               <span>
+                <strong>{selectedReservations.length}</strong>
+                Reservas de cumpleaños
+              </span>
+              <span>
                 <strong>{formatGuarani(selectedConsumptionTotal)}</strong>
                 Consumo asociado
               </span>
               <span>
                 <strong>{formatDate(selectedChild.lastVisitAt)}</strong>
-                Ultima visita
+                Última visita
+              </span>
+              <span>
+                <strong>{formatDate(selectedChild.lastReservationAt)}</strong>
+                Última reserva
               </span>
             </div>
 
@@ -309,12 +369,48 @@ export function AdminClientsPage() {
               ) : null}
               <button className="button secondary" disabled type="button">
                 <Gift size={17} />
-                Enviar promocion
+                Enviar promoción
               </button>
               <Link className="button ghost" to="/admin/reservas">
                 <CalendarHeart size={17} />
                 Crear reserva
               </Link>
+            </div>
+
+            <div className="client-history-section">
+              <h3>Historial de reservas y eventos</h3>
+              <div className="module-list">
+                {selectedReservations.slice(0, 6).map((event) => (
+                  <article className="child-history-card" key={event.id}>
+                    <div className="child-history-main">
+                      <strong>{event.title || event.birthdayChildName}</strong>
+                      <p className="muted">
+                        {event.customerName || 'Responsable sin dato'} · {event.date} · {event.startTime} a {event.endTime}
+                      </p>
+                      <p className="muted">
+                        {event.childBirthDate ? `Nacimiento: ${event.childBirthDate} · ` : ''}
+                        {event.customerPhone || 'Sin teléfono'}
+                      </p>
+                    </div>
+                    <div className="child-history-side">
+                      <StatusPill tone={event.status === 'cancelled' ? 'blocked' : event.status === 'finished' ? 'available' : 'warning'}>
+                        {event.status === 'cancelled'
+                          ? 'Cancelado'
+                          : event.status === 'finished'
+                            ? 'Finalizado'
+                            : event.status === 'active'
+                              ? 'En curso'
+                              : 'Reservado'}
+                      </StatusPill>
+                      <StatusPill tone={event.childId ? 'available' : 'info'}>{event.childId ? 'Vinculado' : 'Legado'}</StatusPill>
+                      <Link className="button ghost small-button" to={`/admin/reservas?eventId=${event.id}`}>
+                        Ver evento
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+                {selectedReservations.length === 0 ? <div className="empty-state">Sin reservas asociadas.</div> : null}
+              </div>
             </div>
 
             <div className="client-history-section">
@@ -324,16 +420,20 @@ export function AdminClientsPage() {
                   const visitOrders = canteenOrders.filter((order) => order.visitId === visit.id)
                   const visitConsumption = visitOrders.reduce((sum, order) => sum + order.total, 0)
                   return (
-                    <div className="module-row" key={visit.id}>
-                      <div>
+                    <article className="child-history-card" key={visit.id}>
+                      <div className="child-history-main">
                         <strong>{formatDate(visit.startedAt ?? visit.createdAt)}</strong>
                         <p className="muted">
                           {visit.planName || 'Visita normal'} · {visit.status || 'registrada'} · ingreso {formatShortTime(visit.startedAt)}
                         </p>
                       </div>
-                      <StatusPill tone={visit.paymentStatus === 'paid' ? 'available' : 'warning'}>{visit.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'}</StatusPill>
-                      <strong>{visitConsumption ? formatGuarani(visitConsumption) : 'Sin consumo'}</strong>
-                    </div>
+                      <div className="child-history-side">
+                        <StatusPill tone={visit.paymentStatus === 'paid' ? 'available' : 'warning'}>
+                          {visit.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente'}
+                        </StatusPill>
+                        <strong>{visitConsumption ? formatGuarani(visitConsumption) : 'Sin consumo'}</strong>
+                      </div>
+                    </article>
                   )
                 })}
                 {selectedVisits.length === 0 ? <div className="empty-state">Sin visitas normales registradas.</div> : null}
@@ -341,18 +441,20 @@ export function AdminClientsPage() {
             </div>
 
             <div className="client-history-section">
-              <h3>Historial de eventos</h3>
+              <h3>Eventos asistidos</h3>
               <div className="module-list">
                 {selectedGuests.slice(0, 6).map((guest) => (
-                  <div className="module-row" key={guest.id}>
-                    <div>
+                  <article className="child-history-card" key={guest.id}>
+                    <div className="child-history-main">
                       <strong>{guest.eventName}</strong>
                       <p className="muted">
                         {guest.eventDate} · cumple/evento de {guest.birthdayChildName}
                       </p>
                     </div>
-                    <StatusPill tone={guest.isExtra ? 'warning' : 'available'}>{guest.isExtra ? 'Adicional' : 'Invitado'}</StatusPill>
-                  </div>
+                    <div className="child-history-side">
+                      <StatusPill tone={guest.isExtra ? 'warning' : 'available'}>{guest.isExtra ? 'Adicional' : 'Invitado'}</StatusPill>
+                    </div>
+                  </article>
                 ))}
                 {selectedGuests.length === 0 ? <div className="empty-state">Sin eventos asociados.</div> : null}
               </div>

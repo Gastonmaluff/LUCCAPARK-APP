@@ -4433,6 +4433,210 @@ img {
   gap: 12px;
 }
 
+.finance-movement-card,
+.finance-closure-card,
+.event-ledger-card,
+.event-task-card,
+.child-history-card,
+.task-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.finance-movement-top,
+.finance-closure-main,
+.event-ledger-card,
+.event-task-card,
+.child-history-card,
+.task-card-top {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+}
+
+.finance-movement-top,
+.finance-closure-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.finance-movement-title,
+.event-ledger-main,
+.event-task-main,
+.child-history-main,
+.task-card-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.finance-movement-title strong,
+.finance-closure-main strong,
+.event-ledger-main strong,
+.event-task-main strong,
+.child-history-main strong,
+.task-card-title strong {
+  color: var(--ink);
+  font-size: 1.02rem;
+}
+
+.finance-movement-title .muted,
+.finance-closure-main .muted,
+.event-ledger-main .muted,
+.event-task-main .muted,
+.child-history-main .muted,
+.task-card-title .muted {
+  margin: 0;
+}
+
+.finance-movement-amount,
+.event-ledger-amount {
+  color: var(--ink);
+  font-size: 1.05rem;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.finance-movement-meta,
+.finance-closure-summary,
+.task-card-meta {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.finance-movement-actions,
+.finance-closure-actions,
+.event-ledger-side,
+.event-task-side,
+.child-history-side,
+.task-card-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.finance-closure-summary {
+  justify-content: flex-start;
+}
+
+.finance-closure-side {
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+}
+
+.finance-closure-summary span {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+  padding: 10px 12px;
+}
+
+.finance-closure-summary small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.finance-closure-summary strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.event-ledger-card,
+.event-task-card,
+.child-history-card {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.task-card {
+  gap: 14px;
+}
+
+.task-card-top {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.task-card-badges {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.task-card-meta {
+  padding-top: 2px;
+}
+
+.task-card-meta span {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+}
+
+.task-card-meta strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.event-linked-child {
+  margin-top: 12px;
+}
+
+.client-row-enhanced {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+}
+
+.client-row-main,
+.client-row-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.client-row-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.client-row-meta span {
+  white-space: nowrap;
+}
+
+.client-row-badges {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.child-history-card {
+  align-items: center;
+}
+
+.child-history-side {
+  justify-content: flex-end;
+}
+
 .finance-panel-toggle {
   align-items: center;
   background: #fff;
@@ -4804,8 +5008,33 @@ img {
   .checkout-payment-grid,
   .canteen-account-card,
   .finance-movement-row,
-  .consumption-consolidated {
+  .consumption-consolidated,
+  .finance-movement-card,
+  .finance-closure-card,
+  .event-ledger-card,
+  .event-task-card,
+  .child-history-card,
+  .task-card,
+  .client-row-enhanced {
     grid-template-columns: 1fr;
+  }
+
+  .finance-movement-top,
+  .task-card-top {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-closure-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-movement-actions,
+  .finance-closure-actions,
+  .event-ledger-side,
+  .event-task-side,
+  .child-history-side,
+  .task-card-actions {
+    justify-content: flex-start;
   }
 
   .account-card-balance {

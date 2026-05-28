@@ -295,18 +295,28 @@ export function AdminFinancePage() {
         <div className="module-list">
           {finance.payments.length === 0 ? <div className="empty-state">No hay cobros registrados en el periodo.</div> : null}
           {finance.payments.map((payment) => (
-            <div className="module-row finance-movement-row" key={payment.id}>
-              <span>{payment.paidAt ? payment.paidAt.toLocaleString('es-PY') : 'Sin fecha'}</span>
-              <StatusPill tone={sourceTone(payment)}>{sourceLabel(payment)}</StatusPill>
-              <span>
-                <strong>{paymentDetail(payment)}</strong>
-                <small>{paymentPerson(payment)}</small>
-                {payment.customerName ? <small>Responsable: {payment.customerName}</small> : null}
-              </span>
-              <span>{methodText(payment)}</span>
-              <strong>{formatGuarani(payment.totalPaid)}</strong>
-              <button className="button ghost" onClick={() => setSelectedPayment(payment)} type="button">Ver detalle</button>
-            </div>
+            <article className="finance-movement-card" key={payment.id}>
+              <div className="finance-movement-top">
+                <div className="finance-movement-title">
+                  <strong>{paymentDetail(payment)}</strong>
+                  <p className="muted">
+                    {paymentPerson(payment)}
+                    {payment.customerName ? ` · Responsable: ${payment.customerName}` : ''}
+                  </p>
+                </div>
+                <strong className="finance-movement-amount">{formatGuarani(payment.totalPaid)}</strong>
+              </div>
+              <div className="finance-movement-meta">
+                <StatusPill tone={sourceTone(payment)}>{sourceLabel(payment)}</StatusPill>
+                <span>{payment.paidAt ? payment.paidAt.toLocaleString('es-PY') : 'Sin fecha'}</span>
+                <span>{methodText(payment)}</span>
+              </div>
+              <div className="finance-movement-actions">
+                <button className="button ghost small-button" onClick={() => setSelectedPayment(payment)} type="button">
+                  Ver detalle
+                </button>
+              </div>
+            </article>
           ))}
         </div>
       </article>
@@ -350,16 +360,40 @@ export function AdminFinancePage() {
         <div className="module-list">
           {finance.closures.length === 0 ? <div className="empty-state">Todavia no hay cierres generados.</div> : null}
           {finance.closures.map((closure) => (
-            <div className="module-row finance-closure-row" key={closure.id}>
-              <span>
-                <strong>Cierre financiero - {closure.dateFrom} al {closure.dateTo}</strong>
-                <small>Generado: {closure.generatedAt?.toLocaleString('es-PY') ?? 'Sin fecha'} - Usuario: {closure.generatedBy || 'Sin usuario'}</small>
-              </span>
-              <span>Total {formatGuarani(closure.totalCollected)}</span>
-              <span>Gastos {formatGuarani(closure.totalExpenses)}</span>
-              <strong>Resultado {formatGuarani(closure.netResult)}</strong>
-              {closure.pdfUrl ? <a className="button ghost" href={closure.pdfUrl} rel="noreferrer" target="_blank">Descargar PDF</a> : null}
-            </div>
+            <article className="finance-closure-card" key={closure.id}>
+              <div className="finance-closure-main">
+                <strong>Cierre financiero</strong>
+                <p className="muted">
+                  Período: {closure.dateFrom} al {closure.dateTo}
+                </p>
+                <p className="muted">
+                  Generado: {closure.generatedAt?.toLocaleString('es-PY') ?? 'Sin fecha'} · Usuario: {displayUserName(closure.generatedBy, closure.generatedByName)}
+                </p>
+              </div>
+              <div className="finance-closure-side">
+                <div className="finance-closure-summary">
+                  <span>
+                    <small>Total cobrado</small>
+                    <strong>{formatGuarani(closure.totalCollected)}</strong>
+                  </span>
+                  <span>
+                    <small>Gastos</small>
+                    <strong>{formatGuarani(closure.totalExpenses)}</strong>
+                  </span>
+                  <span>
+                    <small>Resultado</small>
+                    <strong>{formatGuarani(closure.netResult)}</strong>
+                  </span>
+                </div>
+                <div className="finance-closure-actions">
+                  {closure.pdfUrl ? (
+                    <a className="button ghost small-button" href={closure.pdfUrl} rel="noreferrer" target="_blank">
+                      Descargar PDF
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </article>
           ))}
         </div>
       </article>
