@@ -557,15 +557,21 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { label: 'Ticket promedio cantina', value: ticketCanteen },
     ],
     32,
-    page1Y - 84,
+    page1Y - 100,
     532,
     4,
     { gapX: 8, gapY: 8, height: 42, valueSize: 12.2, compact: true },
   )
 
-  page1.drawLine({ start: { x: marginX, y: page1Y - 12 }, end: { x: pageWidth - marginX, y: page1Y - 12 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page1, fonts, '!', 'Alertas y observaciones', page1Y - 42)
-  drawBullets(page1, fonts, buildObservations(input), 42, 70, 500, { fontSize: 7.5, lineHeight: 8.2, maxLines: 1 })
+  const alertsItems = buildObservations(input)
+  const alertsSpaceNeeded = 80 + alertsItems.length * 12
+  const alertsPage = (page1Y - alertsSpaceNeeded) < 42 ? newContentPage(ctx) : page1
+  const alertsBaseY = alertsPage === page1 ? page1Y : contentTop - 32
+  if (alertsPage === page1) {
+    page1.drawLine({ start: { x: marginX, y: alertsBaseY - 12 }, end: { x: pageWidth - marginX, y: alertsBaseY - 12 }, color: lineGray, thickness: 0.7 })
+  }
+  drawSectionTitle(alertsPage, fonts, '!', 'Alertas y observaciones', alertsBaseY - 42)
+  drawBullets(alertsPage, fonts, alertsItems, 42, alertsBaseY - 66, 500, { fontSize: 7.5, lineHeight: 8.2, maxLines: 1 })
 
   const incomeRows = input.payments.map((payment) => ({
     client: paymentClient(payment),
