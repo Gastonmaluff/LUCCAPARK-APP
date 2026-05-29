@@ -563,16 +563,6 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     { gapX: 8, gapY: 8, height: 42, valueSize: 12.2, compact: true },
   )
 
-  const alertsItems = buildObservations(input)
-  const alertsSpaceNeeded = 80 + alertsItems.length * 12
-  const alertsPage = (page1Y - alertsSpaceNeeded) < 42 ? newContentPage(ctx) : page1
-  const alertsBaseY = alertsPage === page1 ? page1Y : contentTop - 32
-  if (alertsPage === page1) {
-    page1.drawLine({ start: { x: marginX, y: alertsBaseY - 12 }, end: { x: pageWidth - marginX, y: alertsBaseY - 12 }, color: lineGray, thickness: 0.7 })
-  }
-  drawSectionTitle(alertsPage, fonts, '!', 'Alertas y observaciones', alertsBaseY - 42)
-  drawBullets(alertsPage, fonts, alertsItems, 42, alertsBaseY - 66, 500, { fontSize: 7.5, lineHeight: 8.2, maxLines: 1 })
-
   const incomeRows = input.payments.map((payment) => ({
     client: paymentClient(payment),
     concept: paymentConcept(payment),
@@ -590,11 +580,9 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
     relation: expense.type === 'event' ? `Evento: ${safe(expense.eventName, 'Sin nombre')}` : 'Operativa general',
   }))
 
-  const incomeChunks = splitRows(incomeRows, 12, 20)
-  const expenseChunks = splitRows(expenseRows, Math.max(0, 16 - incomeChunks[0].length), 20)
-  const detailPagesCount = Math.max(incomeChunks.length, expenseChunks.length, 1)
-  for (let index = 0; index < detailPagesCount; index += 1) {
-    let page = newContentPage(ctx)
+  const incomeChunks = splitRows(incomeRows, 20, 20)
+  for (let index = 0; index < Math.max(incomeChunks.length, 1); index += 1) {
+    const page = newContentPage(ctx)
     let y = contentTop - 32
     drawSectionTitle(page, fonts, 'I', index === 0 ? 'Detalle de ingresos cobrados' : 'Detalle de ingresos cobrados - continuación', y)
     y -= 28
@@ -607,15 +595,16 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { align: 'right', header: 'Monto', render: (row) => money(row.total), width: 74 },
     ], incomeChunks[index] ?? [], { emptyText: 'No se registraron ingresos cobrados en este periodo.', fontSize: 7.6, rowHeight: 18 })
     y -= incomeHeight + 22
-    if (index === detailPagesCount - 1) {
+    if (index === incomeChunks.length - 1) {
       drawText(page, 'Subtotal ingresos cobrados', 470, y + 4, fonts.bold, 9, { align: 'right' })
       drawText(page, money(input.totals.totalCollected), 564, y + 4, fonts.bold, 9.5, { align: 'right' })
-      y -= 28
     }
-    if (y < 150) {
-      page = newContentPage(ctx)
-      y = contentTop - 32
-    }
+  }
+
+  const expenseChunks = splitRows(expenseRows, 20, 20)
+  for (let index = 0; index < Math.max(expenseChunks.length, 1); index += 1) {
+    const page = newContentPage(ctx)
+    let y = contentTop - 32
     drawSectionTitle(page, fonts, 'G', index === 0 ? 'Detalle de gastos registrados' : 'Detalle de gastos registrados - continuación', y)
     y -= 28
     const expenseHeight = drawDataTable(page, fonts, 32, y, [
@@ -627,21 +616,9 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { align: 'right', header: 'Monto', render: (row) => money(row.amount), width: 54 },
     ], expenseChunks[index] ?? [], { emptyText: 'No se registraron gastos en este periodo.', fontSize: 7.4, rowHeight: 18 })
     y -= expenseHeight + 20
-    if (index === detailPagesCount - 1) {
+    if (index === expenseChunks.length - 1) {
       drawText(page, 'Subtotal gastos registrados', 470, y + 4, fonts.bold, 9, { align: 'right' })
       drawText(page, money(input.totals.totalExpenses), 564, y + 4, fonts.bold, 9.5, { align: 'right' })
-      y -= 30
-      if (y < 150) {
-        page = newContentPage(ctx)
-        y = contentTop - 32
-      }
-      drawSectionTitle(page, fonts, 'O', 'Observaciones de cierre', y)
-      drawRoundedBox(page, 32, y - 74, 532, 58, { fill: rgb(1, 1, 1), border: lineGray })
-      drawBullets(page, fonts, [
-        input.payments.length ? 'Se registraron cobros provenientes de los módulos operativos.' : 'No se registraron cobros en el periodo.',
-        input.expenses.length ? `Se registraron ${input.expenses.length} gastos clasificados.` : 'No se registraron gastos en el periodo.',
-        (input.methodTotals.missing ?? 0) > 0 ? `Quedan ${money(input.methodTotals.missing ?? 0)} sin método registrado.` : 'Los cobros del periodo tienen método registrado.',
-      ], 44, y - 32, 500)
     }
   }
 
@@ -660,7 +637,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       { label: 'Margen operativo', value: percent(margin) },
     ],
     32,
-    640,
+    628,
     532,
     1,
     { gapY: 8, height: 32, valueSize: 12.6 },
@@ -669,28 +646,23 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   page3.drawLine({ start: { x: marginX, y: page3Y - 12 }, end: { x: pageWidth - marginX, y: page3Y - 12 }, color: lineGray, thickness: 0.7 })
   drawSectionTitle(page3, fonts, '*', 'Top productos de cantina', page3Y - 36)
   const topRows = topProducts.map((item) => ({ ...item, percent: (item.revenue / totalCanteenRevenue) * 100 }))
-  drawDataTable(page3, fonts, 32, page3Y - 64, [
+  const topTableHeight = drawDataTable(page3, fonts, 32, page3Y - 64, [
     { header: 'Producto', render: (row) => row.name, width: 112 },
     { align: 'center', header: 'Unidades', render: (row) => String(row.quantity), width: 55 },
     { align: 'right', header: 'Ingreso', render: (row) => money(row.revenue), width: 70 },
     { align: 'right', header: 'Participación', render: (row) => percent(row.percent), width: 70 },
   ], topRows, { emptyText: 'No se registraron ventas de cantina en este periodo.', rowHeight: 22 })
   drawBarList(page3, fonts, topRows.map((row) => ({ label: row.name, percent: row.percent, value: row.revenue })), 350, page3Y - 64, 214, 132)
+  const afterTopSection = page3Y - 64 - Math.max(topTableHeight, 132) - 16
 
-  page3.drawLine({ start: { x: marginX, y: page3Y - 274 }, end: { x: pageWidth - marginX, y: page3Y - 274 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page3, fonts, 'G', 'Gastos por categoría', page3Y - 294)
+  page3.drawLine({ start: { x: marginX, y: afterTopSection - 8 }, end: { x: pageWidth - marginX, y: afterTopSection - 8 }, color: lineGray, thickness: 0.7 })
+  drawSectionTitle(page3, fonts, 'G', 'Gastos por categoría', afterTopSection - 36)
   const expenseCategoryRows = expenseCategories.map((row) => ({ ...row, percent: (row.amount / totalExpenseAmount) * 100 }))
-  drawDataTable(page3, fonts, 32, page3Y - 320, [
+  drawDataTable(page3, fonts, 32, afterTopSection - 62, [
     { header: 'Categoría', render: (row) => row.category, width: 118 },
     { align: 'right', header: 'Monto', render: (row) => money(row.amount), width: 95 },
     { align: 'right', header: 'Participación', render: (row) => percent(row.percent), width: 95 },
   ], expenseCategoryRows.length ? [...expenseCategoryRows, { amount: input.totals.totalExpenses, category: 'TOTAL', percent: 100 }] : [], { emptyText: 'No se registraron gastos en este periodo.', rowHeight: 20 })
-  drawBarList(page3, fonts, expenseCategoryRows.map((row) => ({ label: row.category, percent: row.percent, value: row.amount })), 350, page3Y - 320, 214, 140)
-
-  page3.drawLine({ start: { x: marginX, y: page3Y - 496 }, end: { x: pageWidth - marginX, y: page3Y - 496 }, color: lineGray, thickness: 0.7 })
-  drawSectionTitle(page3, fonts, 'H', 'Hallazgos y recomendaciones', page3Y - 516)
-  drawRoundedBox(page3, 32, 58, 532, 66, { fill: rgb(1, 1, 1), border: lineGray })
-  drawBullets(page3, fonts, buildFindings(input, topProducts, expenseCategories), 44, 108, 500, { fontSize: 8.2, lineHeight: 9.5, maxLines: 1 })
 
   const activeEvents = (input.events ?? []).filter((event) => {
     const hasPayment = input.payments.some((payment) => payment.eventId === event.id)
@@ -704,15 +676,16 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
       const page = newContentPage(ctx)
       drawSectionTitle(page, fonts, 'E', index ? 'Detalle financiero de eventos - continuación' : 'Detalle financiero de eventos', 674)
       drawDataTable(page, fonts, 32, 646, [
-        { header: 'Evento', render: (row) => safe(row.title || row.birthdayChildName), width: 94 },
-        { header: 'Fecha', render: (row) => formatDateKey(row.date), width: 54 },
-        { header: 'Responsable', render: (row) => safe(row.customerName), width: 86 },
-        { align: 'right', header: 'Contratado', render: (row) => money(row.totalAmount ?? 0), width: 70 },
-        { align: 'right', header: 'Cobrado', render: (row) => money(getEventPaidAmount(row, input.payments)), width: 62 },
-        { align: 'right', header: 'Pendiente', render: (row) => money(getEventPendingAmount(row, input.payments)), width: 62 },
-        { align: 'right', header: 'Cantina', render: (row) => money(canteenOrders.filter((order) => order.eventId === row.id).reduce((sum, order) => sum + order.total, 0)), width: 52 },
-        { align: 'right', header: 'Gastos', render: (row) => money(input.expenses.filter((expense) => expense.eventId === row.id).reduce((sum, expense) => sum + expense.amount, 0)), width: 52 },
-      ], chunk, { fontSize: 6.8, rowHeight: 20 })
+        { header: 'Evento', render: (row) => safe(row.title || row.birthdayChildName), width: 82 },
+        { header: 'Fecha', render: (row) => formatDateKey(row.date), width: 48 },
+        { header: 'Responsable', render: (row) => safe(row.customerName), width: 76 },
+        { align: 'right', header: 'Contratado', render: (row) => money(row.totalAmount ?? 0), width: 62 },
+        { align: 'right', header: 'Cobrado', render: (row) => money(getEventPaidAmount(row, input.payments)), width: 56 },
+        { align: 'right', header: 'Pendiente', render: (row) => money(getEventPendingAmount(row, input.payments)), width: 56 },
+        { align: 'right', header: 'Cantina', render: (row) => money(canteenOrders.filter((order) => order.eventId === row.id).reduce((sum, order) => sum + order.total, 0)), width: 48 },
+        { align: 'right', header: 'Gastos', render: (row) => money(input.expenses.filter((expense) => expense.eventId === row.id).reduce((sum, expense) => sum + expense.amount, 0)), width: 48 },
+        { align: 'right', header: 'Resultado neto', render: (row) => { const cobrado = getEventPaidAmount(row, input.payments); const cantina = canteenOrders.filter((order) => order.eventId === row.id).reduce((sum, order) => sum + order.total, 0); const gastos = input.expenses.filter((expense) => expense.eventId === row.id).reduce((sum, expense) => sum + expense.amount, 0); return money(cobrado + cantina - gastos) }, width: 56 },
+      ], chunk, { fontSize: 6.5, rowHeight: 20 })
     })
   }
 
