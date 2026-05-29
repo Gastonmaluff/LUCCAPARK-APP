@@ -229,32 +229,153 @@ function Donut({ data }: { data: Array<{ label: string; value: number; color: st
   )
 }
 
-function LineTrend({ data }: { data: Array<{ label: string; value: number }> }) {
-  const max = Math.max(...data.map((item) => item.value), 1)
-  if (!data.some((item) => item.value > 0)) {
+function VisitEvolutionChart({ data }: { data: Array<{ label: string; value: number }> }) {
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  if (!data.some((d) => d.value > 0)) {
     return <EmptyReportState>Todavía no hay visitas registradas en este período.</EmptyReportState>
   }
-  const points = data
-    .map((item, index) => {
-      const x = data.length === 1 ? 500 : 36 + (index / (data.length - 1)) * 528
-      const y = 178 - (item.value / max) * 132
-      return `${x},${y}`
-    })
-    .join(' ')
+
+  const W = 640
+  const H = 220
+  const padL = 32
+  const padR = 20
+  const padT = 24
+  const padB = 52
+  const chartW = W - padL - padR
+  const chartH = H - padT - padB
+
+  const n = data.length
+  const max = Math.max(...data.map((d) => d.value), 1)
+  const total = data.reduce((s, d) => s + d.value, 0)
+  const avg = total / n
+
+  const xOf = (i: number) => padL + (n <= 1 ? chartW / 2 : (i / (n - 1)) * chartW)
+  const yOf = (v: number) => padT + chartH - (v / max) * chartH
+
+  const pts = data.map((d, i) => ({ x: xOf(i), y: yOf(d.value) }))
+
+  const linePath = pts.reduce((acc, pt, i) => {
+    if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+    const prev = pts[i - 1]
+    const cpx = ((prev.x + pt.x) / 2).toFixed(1)
+    return `${acc} C ${cpx} ${prev.y.toFixed(1)} ${cpx} ${pt.y.toFixed(1)} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+  }, '')
+
+  const baseY = padT + chartH
+  const areaPath = `${linePath} L ${pts[n - 1].x.toFixed(1)} ${baseY} L ${pts[0].x.toFixed(1)} ${baseY} Z`
+
+  const maxIdx = data.reduce((best, d, i) => (d.value > data[best].value ? i : best), 0)
+  const labelStep = n > 56 ? 14 : n > 28 ? 7 : n > 14 ? 3 : n > 7 ? 2 : 1
+  const yTicks = [0, Math.round(max / 2), max]
+
+  const tipX = hovered !== null ? Math.min(Math.max(pts[hovered].x, 56), W - 56) : 0
+  const tipY = hovered !== null ? Math.max(pts[hovered].y - 46, padT) : 0
+
   return (
-    <div className="report-line-chart">
-      <svg viewBox="0 0 600 220" role="img" aria-label="Evolución de visitas">
-        <polyline points={points} fill="none" stroke="var(--orange)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-        {data.map((item, index) => {
-          const x = data.length === 1 ? 500 : 36 + (index / (data.length - 1)) * 528
-          const y = 178 - (item.value / max) * 132
-          return <circle cx={x} cy={y} fill="var(--turquoise)" key={item.label} r="5" />
-        })}
-      </svg>
-      <div className="report-line-labels">
-        {data.map((item) => <span key={item.label}>{item.label}<strong>{item.value}</strong></span>)}
+    <>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+        <small style={{ fontSize: 11, color: '#aaa' }}>Promedio diario</small>
+        <strong style={{ fontSize: 16, color: 'var(--orange)' }}>{avg.toFixed(2)} visitas</strong>
       </div>
-    </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
+        role="img"
+        aria-label="Evolución de visitas"
+        onMouseLeave={() => setHovered(null)}
+      >
+        <defs>
+          <linearGradient id="evGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" style={{ stopColor: 'var(--orange)', stopOpacity: 0.25 }} />
+            <stop offset="100%" style={{ stopColor: 'var(--orange)', stopOpacity: 0 }} />
+          </linearGradient>
+        </defs>
+
+        {yTicks.map((tick) => {
+          const ty = yOf(tick)
+          return (
+            <g key={tick}>
+              <line x1={padL} x2={W - padR} y1={ty} y2={ty} stroke={tick === 0 ? '#e0e0e0' : '#f2f2f2'} strokeWidth="1" />
+              {tick > 0 && (
+                <text x={padL - 6} y={ty + 4} textAnchor="end" fontSize="9" fill="#ccc">{tick}</text>
+              )}
+            </g>
+          )
+        })}
+
+        <line
+          x1={padL} x2={W - padR} y1={yOf(avg)} y2={yOf(avg)}
+          stroke="var(--orange)" strokeWidth="1" strokeDasharray="4 3" opacity="0.4"
+        />
+
+        <path d={areaPath} fill="url(#evGrad)" />
+        <path d={linePath} fill="none" stroke="var(--orange)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+        {n <= 31 && pts.map((pt, i) => {
+          if (data[i].value === 0) return null
+          const isMax = i === maxIdx
+          const isHov = i === hovered
+          return (
+            <circle key={i} cx={pt.x} cy={pt.y}
+              r={isMax ? 5.5 : isHov ? 5 : 3.5}
+              fill={isMax || isHov ? 'var(--orange)' : 'white'}
+              stroke="var(--orange)" strokeWidth="2" />
+          )
+        })}
+
+        {(() => {
+          const mx = pts[maxIdx].x
+          const my = pts[maxIdx].y
+          const calloutY = Math.max(my - 32, padT)
+          const rx = Math.min(Math.max(mx - 32, padL), W - padR - 64)
+          return (
+            <g>
+              <rect x={rx} y={calloutY} width={64} height={22} rx="5" fill="var(--orange)" />
+              <text x={rx + 32} y={calloutY + 15} textAnchor="middle" fontSize="9.5" fill="white" fontWeight="700">
+                Pico · {max}
+              </text>
+            </g>
+          )
+        })()}
+
+        {data.map((d, i) => {
+          if (i % labelStep !== 0 && i !== n - 1) return null
+          return (
+            <text key={i} x={xOf(i)} y={H - 10} textAnchor="middle" fontSize="9" fill="#bbb">
+              {d.label}
+            </text>
+          )
+        })}
+
+        {pts.map((pt, i) => {
+          const slotW = n > 1 ? chartW / (n - 1) : chartW
+          return (
+            <rect key={i}
+              x={pt.x - slotW / 2} y={padT}
+              width={slotW} height={chartH + 4}
+              fill="transparent" style={{ cursor: 'crosshair' }}
+              onMouseEnter={() => setHovered(i)}
+            />
+          )
+        })}
+
+        {hovered !== null && (
+          <g>
+            <line x1={pts[hovered].x} x2={pts[hovered].x} y1={padT} y2={baseY}
+              stroke="#e0e0e0" strokeWidth="1" strokeDasharray="3 2" />
+            <rect x={tipX - 52} y={tipY} width={104} height={36} rx="7"
+              fill="white" stroke="#e8e8e8" strokeWidth="1" />
+            <text x={tipX} y={tipY + 13} textAnchor="middle" fontSize="9.5" fill="#aaa">
+              {data[hovered].label}
+            </text>
+            <text x={tipX} y={tipY + 29} textAnchor="middle" fontSize="13" fill="var(--orange)" fontWeight="700">
+              {data[hovered].value} {data[hovered].value === 1 ? 'visita' : 'visitas'}
+            </text>
+          </g>
+        )}
+      </svg>
+    </>
   )
 }
 
@@ -561,7 +682,7 @@ export function AdminReportsPage() {
         </div>
         <article className="panel report-panel report-wide-panel">
           <h3>Evolución de visitas</h3>
-          <LineTrend data={evolution} />
+          <VisitEvolutionChart data={evolution} />
         </article>
       </section>
 
