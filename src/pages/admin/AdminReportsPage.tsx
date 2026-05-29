@@ -92,7 +92,7 @@ const visitAmount = (visit: ClientVisitHistoryItem) => Number(visit.amountCharge
 
 const orderDate = (order: CanteenOrder) => order.paidAt ?? order.createdAt ?? order.updatedAt ?? null
 
-const orderCountsAsConsumption = (order: CanteenOrder) => order.status !== 'cancelled'
+const orderCountsAsConsumption = (order: CanteenOrder) => order.status !== 'cancelled' && order.total > 0 && order.items.length > 0
 
 const orderCountsAsPaidSale = (order: CanteenOrder) => order.status === 'paid'
 
@@ -290,7 +290,7 @@ export function AdminReportsPage() {
     visitsInPeriod.forEach((visit) => {
       const child = childById.get(visit.childId)
       const count = getVisitChildrenCount(visit)
-      const normalized = normalizeGender(child?.gender)
+      const normalized = normalizeGender(visit.childGender ?? child?.gender)
       if (normalized === 'male') gender.male += count
       else if (normalized === 'female') gender.female += count
       else gender.unknown += count
