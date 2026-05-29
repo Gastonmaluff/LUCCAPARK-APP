@@ -8,6 +8,7 @@ export interface ClientVisitHistoryItem {
   id: string
   childId: string
   childName: string
+  childGender?: string
   customerId?: string
   customerName?: string
   startedAt?: Date | null
