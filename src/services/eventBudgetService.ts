@@ -195,8 +195,6 @@ const pageWidth = 595.28
 const pageHeight = 841.89
 const margin = 42
 const orange = rgb(1, 0.35, 0.07)
-const turquoise = rgb(0.03, 0.61, 0.66)
-const green = rgb(0.34, 0.64, 0.06)
 const black = rgb(0.08, 0.12, 0.18)
 const gray = rgb(0.42, 0.47, 0.55)
 const light = rgb(0.95, 0.97, 0.98)
@@ -256,9 +254,6 @@ const drawWrapped = (
   return y - Math.max(1, lines.length) * (size + 4)
 }
 
-const drawBox = (page: ReturnType<PDFDocument['addPage']>, x: number, y: number, width: number, height: number, fill = rgb(1, 1, 1)) => {
-  page.drawRectangle({ x, y, width, height, color: fill, borderColor: line, borderWidth: 0.8 })
-}
 
 const formatDateKey = (value?: string) => {
   if (!value) return 'A definir'
