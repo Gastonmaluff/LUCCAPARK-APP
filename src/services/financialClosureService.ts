@@ -384,31 +384,6 @@ const loadLogo = async (doc: PDFDocument) => {
 const paymentClient = (payment: PaymentRecord) => safe(payment.childName || payment.customerName || payment.eventName, 'Sin referencia')
 const paymentConcept = (payment: PaymentRecord) => safe(payment.description || payment.concepts || 'Cobro', 'Cobro')
 
-const buildObservations = (input: ClosurePdfInput) => {
-  const observations: string[] = []
-  if (input.pendingAmount > 0) observations.push(`Existe pendiente de cobro por ${money(input.pendingAmount)}.`)
-  const cash = input.methodTotals.cash ?? 0
-  if (input.totals.totalCollected > 0) observations.push(`El ${Math.round((cash / input.totals.totalCollected) * 100)}% de los cobros fueron en efectivo.`)
-  if ((input.methodTotals.missing ?? 0) > 0) observations.push(`Existen movimientos sin método de pago registrado por ${money(input.methodTotals.missing ?? 0)}.`)
-  const eventExpenses = input.expenses.filter((expense) => expense.type === 'event').length
-  observations.push(eventExpenses > 0 ? `Se registraron ${eventExpenses} gastos asociados a eventos.` : 'No se registraron gastos asociados a eventos en el periodo.')
-  if (observations.length === 0) observations.push('No se detectaron observaciones automáticas para este periodo.')
-  return observations
-}
-
-const buildFindings = (input: ClosurePdfInput, topProducts: Array<{ name: string; revenue: number }>, expenseCategories: Array<{ category: string; amount: number }>) => {
-  const findings: string[] = []
-  if (input.totals.totalCollected > 0) {
-    findings.push(`La cantina representó el ${Math.round((input.totals.canteenCollected / input.totals.totalCollected) * 100)}% del total cobrado durante el periodo.`)
-    findings.push(`El resultado neto del periodo fue ${input.totals.netResult >= 0 ? 'positivo' : 'negativo'} por ${money(Math.abs(input.totals.netResult))}.`)
-  }
-  if (topProducts[0]) findings.push(`${topProducts[0].name} fue el producto de mayor facturación de cantina.`)
-  if (expenseCategories[0]) findings.push(`${expenseCategories[0].category} fue la categoría de gasto con mayor importe registrado.`)
-  if ((input.methodTotals.missing ?? 0) > 0) findings.push(`Existen movimientos sin método de pago registrado por revisar.`)
-  if (findings.length === 0) findings.push('No existen datos suficientes para generar recomendaciones adicionales.')
-  return findings
-}
-
 const groupTopProducts = (orders: CanteenOrder[]) => {
   const map = new Map<string, { name: string; quantity: number; revenue: number }>()
   orders.forEach((order) => {
