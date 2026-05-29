@@ -269,7 +269,7 @@ const formatDateKey = (value?: string) => {
 
 const loadLogo = async (doc: PDFDocument) => {
   try {
-    const response = await fetch(`${import.meta.env.BASE_URL || '/'}assets/lucca-logo-cropped.png`)
+    const response = await fetch(`${import.meta.env.BASE_URL || '/'}assets/lucca-logo-transparent.png`)
     if (!response.ok) return null
     return doc.embedPng(await response.arrayBuffer())
   } catch {
@@ -310,28 +310,36 @@ const drawTable = (
   fonts: PdfFonts,
   y: number,
   rows: Array<{ amount: number; concept: string; detail: string }>,
-  title: string,
 ) => {
-  drawText(page, title, margin, y, fonts.bold, 13)
-  y -= 24
-  page.drawRectangle({ x: margin, y, width: pageWidth - margin * 2, height: 22, color: black })
-  drawText(page, 'Concepto', margin + 10, y + 7, fonts.bold, 8.5, { color: rgb(1, 1, 1) })
-  drawText(page, 'Detalle', margin + 150, y + 7, fonts.bold, 8.5, { color: rgb(1, 1, 1) })
-  drawText(page, 'Monto', pageWidth - margin - 10, y + 7, fonts.bold, 8.5, { align: 'right', color: rgb(1, 1, 1) })
-  y -= 22
+  const tableW = pageWidth - margin * 2
+  const headerH = 28
+  const rowH = 36
+  const colConcept = 148
+  const colDetail = tableW - colConcept - 118
+
+  page.drawRectangle({ x: margin, y, width: tableW, height: headerH, color: orange })
+  drawText(page, 'Concepto', margin + 12, y + 9, fonts.bold, 9, { color: rgb(1, 1, 1) })
+  drawText(page, 'Detalle', margin + colConcept + 10, y + 9, fonts.bold, 9, { color: rgb(1, 1, 1) })
+  drawText(page, 'Monto', pageWidth - margin - 12, y + 9, fonts.bold, 9, { align: 'right', color: rgb(1, 1, 1) })
+  y -= headerH
+
   if (!rows.length) {
-    drawBox(page, margin, y - 30, pageWidth - margin * 2, 30, light)
-    drawText(page, 'Sin conceptos económicos configurados.', margin + 12, y - 18, fonts.regular, 9, { color: gray })
-    return y - 40
+    page.drawRectangle({ x: margin, y: y - 36, width: tableW, height: 36, color: light, borderColor: line, borderWidth: 0.6 })
+    drawText(page, 'Sin conceptos económicos configurados.', margin + 12, y - 22, fonts.regular, 9, { color: gray })
+    return y - 46
   }
+
   rows.forEach((row, index) => {
-    drawBox(page, margin, y - 24, pageWidth - margin * 2, 24, index % 2 ? light : rgb(1, 1, 1))
-    drawText(page, row.concept, margin + 10, y - 15, fonts.regular, 8.6, { maxWidth: 126 })
-    drawText(page, row.detail, margin + 150, y - 15, fonts.regular, 8.6, { maxWidth: 250 })
-    drawText(page, formatGuarani(row.amount), pageWidth - margin - 10, y - 15, fonts.bold, 8.6, { align: 'right' })
-    y -= 24
+    const bg = index % 2 === 0 ? rgb(1, 1, 1) : rgb(0.984, 0.988, 0.994)
+    page.drawRectangle({ x: margin, y: y - rowH, width: tableW, height: rowH, color: bg })
+    page.drawLine({ start: { x: margin, y: y - rowH }, end: { x: margin + tableW, y: y - rowH }, color: line, thickness: 0.5 })
+    drawText(page, row.concept, margin + 12, y - rowH + 13, fonts.bold, 9, { maxWidth: colConcept - 20 })
+    drawText(page, row.detail, margin + colConcept + 10, y - rowH + 13, fonts.regular, 9, { maxWidth: colDetail - 10, color: black })
+    drawText(page, formatGuarani(row.amount), pageWidth - margin - 12, y - rowH + 13, fonts.bold, 9, { align: 'right' })
+    y -= rowH
   })
-  return y - 14
+
+  return y - 8
 }
 
 export const buildEventBudgetPdf = async (budget: EventBudget) => {
@@ -342,76 +350,91 @@ export const buildEventBudgetPdf = async (budget: EventBudget) => {
   }
   const logo = await loadLogo(doc)
   const page = doc.addPage([pageWidth, pageHeight])
+
   page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: rgb(1, 1, 1) })
-  page.drawRectangle({ x: 0, y: pageHeight - 96, width: pageWidth, height: 96, color: light })
-  if (logo) page.drawImage(logo, { x: margin, y: pageHeight - 86, width: 92, height: 54 })
-  drawText(page, 'Presupuesto de evento', pageWidth - margin, pageHeight - 48, fonts.bold, 21, { align: 'right' })
+
+  // ENCABEZADO
+  if (logo) page.drawImage(logo, { x: margin, y: pageHeight - 90, width: 110, height: 68 })
+  page.drawLine({ start: { x: margin + 124, y: pageHeight - 26 }, end: { x: margin + 124, y: pageHeight - 98 }, color: orange, thickness: 1.3 })
+  drawText(page, 'Presupuesto de evento', pageWidth - margin, pageHeight - 44, fonts.bold, 22, { align: 'right' })
   drawText(page, `Emitido: ${new Intl.DateTimeFormat('es-PY').format(new Date())}`, pageWidth - margin, pageHeight - 68, fonts.regular, 9.5, { align: 'right', color: gray })
   drawText(page, `Código: ${budget.id.slice(0, 8).toUpperCase()}`, pageWidth - margin, pageHeight - 84, fonts.regular, 9.5, { align: 'right', color: gray })
+  page.drawLine({ start: { x: margin, y: pageHeight - 110 }, end: { x: pageWidth - margin, y: pageHeight - 110 }, color: line, thickness: 0.8 })
 
-  let y = pageHeight - 132
-  y = drawWrapped(
-    page,
+  // INTRODUCCIÓN
+  let y = pageHeight - 130
+  const introLines = wrapText(
     `Estimado/a ${budget.responsibleName}, preparamos el siguiente presupuesto para el cumpleaños de ${budget.childName} en Lucca Park.`,
-    margin,
-    y,
-    fonts.regular,
-    12,
-    pageWidth - margin * 2,
-    3,
-  ) - 14
+    fonts.regular, 11, pageWidth - margin * 2, 3,
+  )
+  introLines.forEach((ln, i) => drawText(page, ln, margin, y - i * 16, fonts.regular, 11, { color: black }))
+  y -= introLines.length * 16 + 18
+  page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, color: line, thickness: 0.8 })
+  y -= 20
 
-  drawBox(page, margin, y - 88, pageWidth - margin * 2, 88, rgb(1, 1, 1))
-  drawText(page, 'Información del evento', margin + 14, y - 22, fonts.bold, 12.5, { color: orange })
-  const infoRows = [
-    ['Cumpleañero/a', budget.childName],
-    ['Responsable', budget.responsibleName],
-    ['Fecha tentativa', formatDateKey(budget.tentativeEventDate)],
-    ['Horario tentativo', `${budget.tentativeStartTime || 'A definir'} a ${budget.tentativeEndTime || 'A definir'}`],
-    ['Invitados estimados', `${budget.guestCount || 0} niños`],
+  // FICHA DE EVENTO
+  const infoItems = [
+    { label: 'Cumpleañero/a', value: budget.childName },
+    { label: 'Responsable', value: budget.responsibleName },
+    { label: 'Fecha tentativa', value: formatDateKey(budget.tentativeEventDate) },
+    { label: 'Horario tentativo', value: `${budget.tentativeStartTime || 'A definir'} a ${budget.tentativeEndTime || 'A definir'}` },
+    { label: 'Invitados estimados', value: `${budget.guestCount || 0} niños` },
   ]
-  infoRows.forEach(([label, value], index) => {
-    const x = margin + 14 + (index % 2) * 248
-    const rowY = y - 42 - Math.floor(index / 2) * 22
-    drawText(page, label, x, rowY, fonts.bold, 8, { color: gray })
-    drawText(page, value, x + 88, rowY, fonts.regular, 9, { maxWidth: 150 })
+  const INFO_ROW_H = 48
+  const INFO_COL_W = (pageWidth - margin * 2) / 2
+  const infoRowCount = Math.ceil(infoItems.length / 2)
+  const infoTotalH = infoRowCount * INFO_ROW_H
+
+  page.drawRectangle({ x: margin, y: y - infoTotalH, width: pageWidth - margin * 2, height: infoTotalH, color: rgb(1, 1, 1), borderColor: line, borderWidth: 0.8 })
+  for (let r = 1; r < infoRowCount; r++) {
+    page.drawLine({ start: { x: margin, y: y - r * INFO_ROW_H }, end: { x: pageWidth - margin, y: y - r * INFO_ROW_H }, color: line, thickness: 0.6 })
+  }
+  page.drawLine({ start: { x: margin + INFO_COL_W, y }, end: { x: margin + INFO_COL_W, y: y - infoTotalH }, color: line, thickness: 0.6 })
+
+  infoItems.forEach((item, idx) => {
+    const col = idx % 2
+    const row = Math.floor(idx / 2)
+    const itemX = margin + col * INFO_COL_W
+    const centerY = y - row * INFO_ROW_H - INFO_ROW_H / 2
+    page.drawCircle({ x: itemX + 22, y: centerY, size: 9, color: rgb(1, 0.93, 0.88), borderColor: orange, borderWidth: 0.9 })
+    drawText(page, item.label, itemX + 38, centerY + 9, fonts.regular, 7.5, { color: gray })
+    drawText(page, item.value, itemX + 38, centerY - 5, fonts.bold, 10.5, { color: black, maxWidth: INFO_COL_W - 55 })
   })
-  y -= 116
+  y -= infoTotalH + 22
 
-  y = drawTable(page, fonts, y, economicRows(budget), budget.decorationMode === 'alternatives' ? 'Conceptos base' : 'Detalle económico')
+  // TABLA DE CONCEPTOS
+  y = drawTable(page, fonts, y, economicRows(budget))
 
+  // TOTAL O ALTERNATIVAS DE DECORACIÓN
   if (budget.decorationMode === 'alternatives') {
-    drawText(page, 'Subtotal sin decoración', pageWidth - margin, y, fonts.bold, 13, { align: 'right' })
-    drawText(page, formatGuarani(budget.baseSubtotal), pageWidth - margin, y - 18, fonts.bold, 16, { align: 'right', color: turquoise })
-    y -= 54
-    drawText(page, 'Elegí tu opción de decoración', margin, y, fonts.bold, 13, { color: orange })
-    y -= 18
+    drawText(page, 'Subtotal sin decoración', pageWidth - margin, y, fonts.bold, 11, { align: 'right', color: gray })
+    drawText(page, formatGuarani(budget.baseSubtotal), pageWidth - margin, y - 18, fonts.bold, 16, { align: 'right', color: orange })
+    y -= 52
+    drawText(page, 'Elegí tu opción de decoración', margin, y, fonts.bold, 12, { color: orange })
+    y -= 16
     budget.alternativeTotals.forEach((item) => {
-      drawBox(page, margin, y - 70, pageWidth - margin * 2, 62, rgb(1, 1, 1))
-      drawText(page, item.decoration.name, margin + 12, y - 26, fonts.bold, 10.5)
-      drawWrapped(page, item.decoration.description || item.decoration.includes.join(', '), margin + 12, y - 42, fonts.regular, 8.2, 330, 2)
+      page.drawRectangle({ x: margin, y: y - 68, width: pageWidth - margin * 2, height: 60, color: rgb(1, 1, 1), borderColor: line, borderWidth: 0.8 })
+      drawText(page, item.decoration.name, margin + 12, y - 24, fonts.bold, 10.5)
+      drawWrapped(page, item.decoration.description || item.decoration.includes.join(', '), margin + 12, y - 40, fonts.regular, 8.2, 330, 2)
       drawText(page, `Decoración: ${formatGuarani(item.decoration.price)}`, pageWidth - margin - 12, y - 30, fonts.regular, 8.5, { align: 'right', color: gray })
-      drawText(page, `Total: ${formatGuarani(item.total)}`, pageWidth - margin - 12, y - 50, fonts.bold, 12, { align: 'right', color: green })
+      drawText(page, `Total: ${formatGuarani(item.total)}`, pageWidth - margin - 12, y - 50, fonts.bold, 12, { align: 'right', color: orange })
       y -= 74
     })
   } else {
-    drawText(page, 'Total estimado', pageWidth - margin, y, fonts.bold, 13, { align: 'right' })
-    drawText(page, formatGuarani(budget.finalTotal ?? budget.baseSubtotal), pageWidth - margin, y - 22, fonts.bold, 20, { align: 'right', color: green })
-    y -= 62
+    y -= 14
+    drawText(page, 'Total estimado', pageWidth - margin, y, fonts.bold, 10.5, { align: 'right', color: gray })
+    y -= 12
+    const totalBoxW = 210
+    const totalBoxH = 44
+    page.drawRectangle({ x: pageWidth - margin - totalBoxW, y: y - totalBoxH, width: totalBoxW, height: totalBoxH, color: rgb(1, 1, 1), borderColor: orange, borderWidth: 1.5 })
+    drawText(page, formatGuarani(budget.finalTotal ?? budget.baseSubtotal), pageWidth - margin - 14, y - totalBoxH / 2 - 9, fonts.bold, 20, { align: 'right', color: orange })
+    y -= totalBoxH + 12
   }
 
-  if (y < 170) y = 170
-  drawBox(page, margin, y - 88, pageWidth - margin * 2, 78, light)
-  drawText(page, 'Condiciones comerciales', margin + 14, y - 30, fonts.bold, 11.5, { color: orange })
-  ;[
-    'Presupuesto sujeto a disponibilidad de fecha y horario.',
-    'La reserva se confirma mediante el pago de una seña.',
-    'Los valores indicados tienen una validez de 7 días.',
-    'Los servicios adicionales están sujetos a disponibilidad.',
-  ].forEach((text, index) => drawText(page, `• ${text}`, margin + 18, y - 48 - index * 11, fonts.regular, 8.5, { color: gray }))
+  // PIE
+  page.drawLine({ start: { x: margin, y: 42 }, end: { x: pageWidth - margin, y: 42 }, color: orange, thickness: 1.3 })
+  if (logo) page.drawImage(logo, { x: pageWidth / 2 - 28, y: 8, width: 56, height: 30, opacity: 0.4 })
 
-  drawText(page, 'Será un gusto acompañar este momento especial en Lucca Park.', pageWidth / 2, 54, fonts.bold, 11, { align: 'center', color: turquoise })
-  drawText(page, 'Página 1 de 1', pageWidth / 2, 28, fonts.regular, 8, { align: 'center', color: gray })
   return doc.save()
 }
 
