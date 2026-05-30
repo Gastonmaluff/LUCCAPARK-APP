@@ -48,10 +48,12 @@ const mapAddon = (id: string, data: Record<string, unknown>): BudgetAddon => ({
 const mapDecoration = (id: string, data: Record<string, unknown>): BudgetDecoration => ({
   id,
   name: String(data.name ?? ''),
+  category: String(data.category ?? ''),
   level: Number(data.level ?? 1),
   description: String(data.description ?? ''),
   includes: Array.isArray(data.includes) ? data.includes.map(String) : [],
   price: Number(data.price ?? 0),
+  imageUrl: String(data.imageUrl ?? ''),
   isActive: data.isActive !== false,
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),

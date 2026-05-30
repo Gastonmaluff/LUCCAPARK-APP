@@ -561,10 +561,12 @@ export interface BudgetAddon {
 export interface BudgetDecoration {
   id: string
   name: string
+  category?: string
   level: number
   description?: string
   includes: string[]
   price: number
+  imageUrl?: string
   isActive: boolean
   createdAt?: Date | null
   updatedAt?: Date | null
@@ -596,10 +598,12 @@ export interface BudgetAddonSnapshot {
 export interface BudgetDecorationSnapshot {
   id?: string
   name: string
+  category?: string
   level: number
   description?: string
   includes: string[]
   price: number
+  imageUrl?: string
 }
 
 export interface BudgetAlternativeTotal {
@@ -662,10 +666,12 @@ export interface UpsertBudgetAddonInput {
 export interface UpsertBudgetDecorationInput {
   id?: string
   name: string
+  category?: string
   level: number
   description?: string
   includes: string[]
   price: number
+  imageUrl?: string
   isActive: boolean
 }
 

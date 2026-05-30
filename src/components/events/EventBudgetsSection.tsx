@@ -1,4 +1,5 @@
 import {
+  BookImage,
   Calculator,
   CheckCircle2,
   Download,
@@ -19,10 +20,12 @@ import {
   addonSnapshotFromConfig,
   convertBudgetToReservation,
   decorationSnapshotFromConfig,
+  downloadDecorationCatalogPdf,
   downloadEventBudgetPdf,
   packageSnapshotFromConfig,
   saveEventBudget,
   updateEventBudgetStatus,
+  uploadDecorationImage,
   upsertBudgetAddon,
   upsertBudgetDecoration,
   upsertBudgetGuestPackage,
@@ -140,7 +143,8 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
   const { addons, decorations, packages } = useEventBudgetData()
   const [packageForm, setPackageForm] = useState({ basePrice: '', extraGuestPrice: '', id: '', isActive: true, maxGuests: '', minGuests: '', name: '' })
   const [addonForm, setAddonForm] = useState<{ calculationType: BudgetAddonCalculationType; description: string; id: string; isActive: boolean; name: string; unitPrice: string }>({ calculationType: 'fixed', description: '', id: '', isActive: true, name: '', unitPrice: '' })
-  const [decorationForm, setDecorationForm] = useState({ description: '', id: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+  const [decorationForm, setDecorationForm] = useState({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+  const [decorationImageFile, setDecorationImageFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -177,16 +181,33 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
 
   const saveDecoration = async () => {
     setSaving(true)
-    await upsertBudgetDecoration({
+    const decorationId = await upsertBudgetDecoration({
+      category: decorationForm.category,
       description: decorationForm.description,
       id: decorationForm.id || undefined,
+      imageUrl: decorationForm.imageUrl,
       includes: decorationForm.includes.split('\n'),
       isActive: decorationForm.isActive,
       level: Number(decorationForm.level),
       name: decorationForm.name,
       price: parseCurrencyInput(decorationForm.price),
     })
-    setDecorationForm({ description: '', id: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+    if (decorationImageFile) {
+      const imageUrl = await uploadDecorationImage(decorationImageFile, decorationId)
+      await upsertBudgetDecoration({
+        category: decorationForm.category,
+        description: decorationForm.description,
+        id: decorationId,
+        imageUrl,
+        includes: decorationForm.includes.split('\n'),
+        isActive: decorationForm.isActive,
+        level: Number(decorationForm.level),
+        name: decorationForm.name,
+        price: parseCurrencyInput(decorationForm.price),
+      })
+    }
+    setDecorationForm({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+    setDecorationImageFile(null)
     setMessage('Decoración guardada.')
     setSaving(false)
   }
@@ -245,18 +266,53 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
           <article className="budget-config-card">
             <h3>Opciones de decoración</h3>
             <div className="compact-form">
-              <label className="field"><span>Nombre</span><input value={decorationForm.name} onChange={(event) => setDecorationForm((current) => ({ ...current, name: event.target.value }))} /></label>
-              <label className="field"><span>Nivel</span><input type="number" value={decorationForm.level} onChange={(event) => setDecorationForm((current) => ({ ...current, level: event.target.value }))} /></label>
-              <label className="field"><span>Descripción</span><input value={decorationForm.description} onChange={(event) => setDecorationForm((current) => ({ ...current, description: event.target.value }))} /></label>
-              <label className="field"><span>Incluye</span><textarea rows={3} value={decorationForm.includes} onChange={(event) => setDecorationForm((current) => ({ ...current, includes: event.target.value }))} /></label>
+              <label className="field"><span>Título visible</span><input value={decorationForm.name} onChange={(event) => setDecorationForm((current) => ({ ...current, name: event.target.value }))} /></label>
+              <label className="field">
+                <span>Categoría</span>
+                <select value={decorationForm.category} onChange={(event) => setDecorationForm((current) => ({ ...current, category: event.target.value }))}>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Femenino">Femenino</option>
+                  <option value="Unisex">Unisex</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Nivel</span>
+                <select value={decorationForm.level} onChange={(event) => setDecorationForm((current) => ({ ...current, level: event.target.value }))}>
+                  <option value="1">Nivel 1</option>
+                  <option value="2">Nivel 2</option>
+                  <option value="3">Nivel 3</option>
+                </select>
+              </label>
+              <label className="field"><span>Descripción corta</span><input value={decorationForm.description} onChange={(event) => setDecorationForm((current) => ({ ...current, description: event.target.value }))} /></label>
+              <label className="field"><span>Incluye (una línea por ítem)</span><textarea rows={4} value={decorationForm.includes} onChange={(event) => setDecorationForm((current) => ({ ...current, includes: event.target.value }))} /></label>
               <label className="field"><span>Precio</span><input value={decorationForm.price} onChange={(event) => setDecorationForm((current) => ({ ...current, price: event.target.value }))} /></label>
+              <label className="field">
+                <span>Imagen principal</span>
+                {decorationForm.imageUrl ? <img src={decorationForm.imageUrl} alt="Imagen actual" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4, marginBottom: 4, display: 'block' }} /> : null}
+                <input type="file" accept="image/*" onChange={(event) => setDecorationImageFile(event.target.files?.[0] ?? null)} />
+                {decorationImageFile ? <small style={{ color: 'var(--green)' }}>📎 {decorationImageFile.name}</small> : null}
+              </label>
               <label className="settings-toggle"><input type="checkbox" checked={decorationForm.isActive} onChange={(event) => setDecorationForm((current) => ({ ...current, isActive: event.target.checked }))} /> Activo</label>
             </div>
             <button className="button primary" disabled={saving || !decorationForm.name} onClick={saveDecoration} type="button">Guardar decoración</button>
             <div className="budget-config-list">
               {decorations.map((item) => (
-                <button className="user-row-button" key={item.id} onClick={() => setDecorationForm({ description: item.description ?? '', id: item.id, includes: item.includes.join('\n'), isActive: item.isActive, level: String(item.level), name: item.name, price: String(item.price) })} type="button">
-                  <strong>{item.name}</strong><small>Nivel {item.level} · {formatGuarani(item.price)} · {item.isActive ? 'Activo' : 'Inactivo'}</small>
+                <button
+                  className="user-row-button"
+                  key={item.id}
+                  onClick={() => {
+                    setDecorationForm({ category: item.category ?? 'Unisex', description: item.description ?? '', id: item.id, imageUrl: item.imageUrl ?? '', includes: item.includes.join('\n'), isActive: item.isActive, level: String(item.level), name: item.name, price: String(item.price) })
+                    setDecorationImageFile(null)
+                  }}
+                  type="button"
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {item.imageUrl ? <img src={item.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} /> : <div style={{ width: 36, height: 36, background: 'var(--bg-muted, #f4f4f4)', borderRadius: 4, flexShrink: 0 }} />}
+                    <div>
+                      <strong>{item.name}</strong>
+                      <small>{item.category ? `${item.category} · ` : ''}Nivel {item.level} · {formatGuarani(item.price)} · {item.isActive ? 'Activo' : 'Inactivo'}</small>
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
@@ -405,7 +461,9 @@ function BudgetFormModal({ budget, onClose }: { budget?: EventBudget | null; onC
                       onClick={() => decorationMode === 'selected' ? setSelectedDecoration(snapshot) : toggleAlternative(decoration)}
                       type="button"
                     >
+                      {decoration.imageUrl ? <img src={decoration.imageUrl} alt="" style={{ width: '100%', height: 56, objectFit: 'cover', borderRadius: 4, marginBottom: 4, display: 'block' }} /> : null}
                       <strong>{decoration.name}</strong>
+                      <small>{decoration.category ? `${decoration.category} · Nivel ${decoration.level}` : `Nivel ${decoration.level}`}</small>
                       <small>{decoration.description}</small>
                       <span>{formatGuarani(decoration.price)}</span>
                       <i>{active ? 'Seleccionada' : '+ Agregar opción'}</i>
@@ -452,14 +510,85 @@ function BudgetFormModal({ budget, onClose }: { budget?: EventBudget | null; onC
   )
 }
 
+function DecorationCatalogModal({ decorations, onClose }: { decorations: BudgetDecoration[]; onClose: () => void }) {
+  const [selected, setSelected] = useState<string[]>([])
+  const [generating, setGenerating] = useState(false)
+  const active = decorations.filter((d) => d.isActive)
+
+  const toggle = (id: string) => {
+    setSelected((current) => {
+      if (current.includes(id)) return current.filter((x) => x !== id)
+      if (current.length >= 3) return current
+      return [...current, id]
+    })
+  }
+
+  const generate = async () => {
+    setGenerating(true)
+    await downloadDecorationCatalogPdf(active.filter((d) => selected.includes(d.id)))
+    setGenerating(false)
+    onClose()
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="modal-card" role="dialog" aria-modal="true" style={{ maxWidth: 520 }}>
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Decoración</p>
+            <h2>Generar catálogo de decoración</h2>
+          </div>
+          <button className="button ghost" onClick={onClose} type="button"><X size={18} /> Cerrar</button>
+        </div>
+        <p className="muted" style={{ marginBottom: 12 }}>Seleccioná hasta 3 opciones para incluir en el PDF.</p>
+        {active.length === 0 ? <div className="empty-state">No hay opciones de decoración activas configuradas.</div> : null}
+        <div className="budget-config-list">
+          {active.map((decoration) => {
+            const isSelected = selected.includes(decoration.id)
+            const isDisabled = !isSelected && selected.length >= 3
+            return (
+              <button
+                className={`user-row-button ${isSelected ? 'selected' : ''}`}
+                disabled={isDisabled}
+                key={decoration.id}
+                onClick={() => toggle(decoration.id)}
+                style={{ opacity: isDisabled ? 0.4 : 1 }}
+                type="button"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                  {decoration.imageUrl
+                    ? <img src={decoration.imageUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                    : <div style={{ width: 44, height: 44, background: 'var(--bg-muted, #f4f4f4)', borderRadius: 4, flexShrink: 0 }} />}
+                  <div>
+                    <strong>{decoration.name}</strong>
+                    <small>{[decoration.category, `Nivel ${decoration.level}`].filter(Boolean).join(' · ')} · {formatGuarani(decoration.price)}</small>
+                  </div>
+                </div>
+                {isSelected ? <CheckCircle2 size={18} color="var(--green)" style={{ flexShrink: 0 }} /> : null}
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'flex-end' }}>
+          <small className="muted">{selected.length}/3 seleccionadas</small>
+          <button className="button primary" disabled={selected.length === 0 || generating} onClick={generate} type="button">
+            <Download size={17} /> {generating ? 'Generando PDF…' : 'Descargar PDF'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export function EventBudgetsSection() {
-  const { budgets, error, isLoading } = useEventBudgetData()
+  const { budgets, decorations, error, isLoading } = useEventBudgetData()
   const { profile } = useUserProfile()
   const canManageConfig = profile?.role === 'admin' || profile?.role === 'socio'
   const canManageBudgets = profile?.role === 'admin' || profile?.role === 'socio' || profile?.role === 'encargado_eventos'
   const [filter, setFilter] = useState<BudgetFilter>('all')
   const [showForm, setShowForm] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
+  const [showCatalog, setShowCatalog] = useState(false)
   const [editingBudget, setEditingBudget] = useState<EventBudget | null>(null)
   const [actionError, setActionError] = useState('')
   const filteredBudgets = useMemo(() => (filter === 'all' ? budgets : budgets.filter((budget) => budget.status === filter)), [budgets, filter])
@@ -501,6 +630,7 @@ export function EventBudgetsSection() {
         </div>
         <div className="module-actions">
           <StatusPill tone="info">{budgets.length} presupuestos</StatusPill>
+          {canManageBudgets ? <button className="button ghost" onClick={() => setShowCatalog(true)} type="button"><BookImage size={17} /> Catálogo de decoración</button> : null}
           {canManageConfig ? <button className="button ghost" onClick={() => setShowConfig(true)} type="button"><Settings2 size={17} /> Configurar precios y servicios</button> : null}
           {canManageBudgets ? <button className="button primary" onClick={() => { setEditingBudget(null); setShowForm(true) }} type="button"><Plus size={18} /> Crear presupuesto</button> : null}
         </div>
@@ -547,6 +677,7 @@ export function EventBudgetsSection() {
       </div>
       {showForm ? <BudgetFormModal budget={editingBudget} onClose={() => setShowForm(false)} /> : null}
       {showConfig ? <BudgetConfigPanel onClose={() => setShowConfig(false)} /> : null}
+      {showCatalog ? <DecorationCatalogModal decorations={decorations} onClose={() => setShowCatalog(false)} /> : null}
     </article>
   )
 }

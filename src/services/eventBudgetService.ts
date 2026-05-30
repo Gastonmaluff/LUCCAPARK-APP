@@ -1,5 +1,7 @@
 import { PDFDocument, PDFFont, rgb, StandardFonts } from 'pdf-lib'
 import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { createEvent } from './eventService'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
@@ -74,10 +76,12 @@ export const upsertBudgetDecoration = async (input: UpsertBudgetDecorationInput)
     {
       id: decorationRef.id,
       name: optionalText(input.name),
+      category: input.category ?? '',
       level: Number(input.level) || 1,
       description: optionalText(input.description),
       includes: cleanIncludes(input.includes),
       price: parseCurrencyInput(input.price),
+      imageUrl: input.imageUrl ?? '',
       isActive: input.isActive,
       updatedAt: serverTimestamp(),
       ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: userAudit.uid, createdByName: userAudit.name }),
@@ -85,6 +89,13 @@ export const upsertBudgetDecoration = async (input: UpsertBudgetDecorationInput)
     { merge: true },
   )
   return decorationRef.id
+}
+
+export const uploadDecorationImage = async (file: File, decorationId: string): Promise<string> => {
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const imageRef = storageRef(storage, `decoration-images/${decorationId}/main.${ext}`)
+  await uploadBytes(imageRef, file, { contentType: file.type })
+  return getDownloadURL(imageRef)
 }
 
 export const saveEventBudget = async (input: UpsertEventBudgetInput) => {
@@ -467,10 +478,144 @@ export const addonSnapshotFromConfig = (item: BudgetAddon, quantity: number) => 
 })
 
 export const decorationSnapshotFromConfig = (item: BudgetDecoration) => ({
+  category: item.category,
   description: item.description,
   id: item.id,
+  imageUrl: item.imageUrl,
   includes: item.includes,
   level: item.level,
   name: item.name,
   price: item.price,
 })
+
+const fetchImageForPdf = async (docInstance: PDFDocument, url: string) => {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return null
+    const bytes = await response.arrayBuffer()
+    const contentType = response.headers.get('content-type') ?? ''
+    if (contentType.includes('png') || url.toLowerCase().includes('.png')) {
+      return docInstance.embedPng(bytes)
+    }
+    return docInstance.embedJpg(bytes)
+  } catch {
+    return null
+  }
+}
+
+export const buildDecorationCatalogPdf = async (decorations: BudgetDecoration[]) => {
+  const doc = await PDFDocument.create()
+  const fonts: PdfFonts = {
+    bold: await doc.embedFont(StandardFonts.HelveticaBold),
+    regular: await doc.embedFont(StandardFonts.Helvetica),
+  }
+  const logo = await loadLogo(doc)
+  const selected = decorations.slice(0, 3)
+  const images = await Promise.all(
+    selected.map((d) => d.imageUrl ? fetchImageForPdf(doc, d.imageUrl) : Promise.resolve(null)),
+  )
+
+  const BLOCK_H = 190
+  const BLOCK_GAP = 12
+  const headerH = 152
+  const footerY = 42
+
+  let page = doc.addPage([pageWidth, pageHeight])
+  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: rgb(1, 1, 1) })
+
+  // ENCABEZADO
+  if (logo) page.drawImage(logo, { x: pageWidth / 2 - 55, y: pageHeight - 84, width: 110, height: 68 })
+  const titleY = pageHeight - 104
+  drawText(page, 'Opciones de decoración', pageWidth / 2, titleY, fonts.bold, 20, { align: 'center', color: black })
+  page.drawLine({ start: { x: margin, y: titleY + 6 }, end: { x: 96, y: titleY + 6 }, color: orange, thickness: 1.2 })
+  page.drawLine({ start: { x: pageWidth - 96, y: titleY + 6 }, end: { x: pageWidth - margin, y: titleY + 6 }, color: orange, thickness: 1.2 })
+  drawText(page, 'Elegí la opción ideal para tu evento', pageWidth / 2, pageHeight - 122, fonts.regular, 10.5, { align: 'center', color: gray })
+  page.drawLine({ start: { x: margin, y: pageHeight - headerH }, end: { x: pageWidth - margin, y: pageHeight - headerH }, color: line, thickness: 0.8 })
+
+  let y = pageHeight - headerH - 8
+
+  for (let idx = 0; idx < selected.length; idx++) {
+    const decoration = selected[idx]
+    const image = images[idx]
+
+    if (idx > 0 && y - BLOCK_H < footerY + 8) {
+      page.drawLine({ start: { x: margin, y: footerY }, end: { x: pageWidth - margin, y: footerY }, color: orange, thickness: 1.3 })
+      if (logo) page.drawImage(logo, { x: pageWidth / 2 - 28, y: 8, width: 56, height: 30, opacity: 0.4 })
+      page = doc.addPage([pageWidth, pageHeight])
+      page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: rgb(1, 1, 1) })
+      y = pageHeight - 40
+    }
+
+    const blockBottom = y - BLOCK_H
+    page.drawRectangle({ x: margin, y: blockBottom, width: pageWidth - margin * 2, height: BLOCK_H, color: rgb(1, 1, 1), borderColor: line, borderWidth: 0.8 })
+
+    const imgW = 200
+    const imgH = BLOCK_H - 16
+    if (image) {
+      page.drawImage(image, { x: margin + 8, y: blockBottom + 8, width: imgW, height: imgH })
+    } else {
+      page.drawRectangle({ x: margin + 8, y: blockBottom + 8, width: imgW, height: imgH, color: light })
+      drawText(page, 'Sin imagen', margin + 8 + imgW / 2, blockBottom + 8 + imgH / 2 - 4, fonts.regular, 8, { align: 'center', color: gray })
+    }
+    page.drawLine({ start: { x: margin + imgW + 12, y: y - 12 }, end: { x: margin + imgW + 12, y: blockBottom + 12 }, color: line, thickness: 0.6 })
+
+    const textX = margin + imgW + 20
+    const contentW = pageWidth - margin - textX - 12
+    let textY = y - 18
+
+    drawText(page, decoration.name, textX, textY, fonts.bold, 13, { color: black, maxWidth: contentW })
+    textY -= 15
+
+    const catLevel = [decoration.category || '', `Nivel ${decoration.level}`].filter(Boolean).join(' · ')
+    drawText(page, catLevel, textX, textY, fonts.regular, 8.5, { color: gray })
+    textY -= 12
+
+    page.drawLine({ start: { x: textX, y: textY }, end: { x: pageWidth - margin - 12, y: textY }, color: line, thickness: 0.5 })
+    textY -= 12
+
+    if (decoration.description) {
+      const descLines = wrapText(decoration.description, fonts.regular, 8.5, contentW, 2)
+      descLines.forEach((ln, i) => drawText(page, ln, textX, textY - i * 12, fonts.regular, 8.5, { color: black }))
+      textY -= descLines.length * 12 + 6
+    }
+
+    if (decoration.includes.length > 0) {
+      drawText(page, 'Incluye:', textX, textY, fonts.bold, 8.5, { color: orange })
+      textY -= 12
+      const maxItems = Math.min(decoration.includes.length, 4)
+      for (let i = 0; i < maxItems; i++) {
+        drawText(page, `• ${decoration.includes[i]}`, textX, textY, fonts.regular, 8, { color: black, maxWidth: contentW })
+        textY -= 11
+      }
+      if (decoration.includes.length > maxItems) {
+        drawText(page, `+ ${decoration.includes.length - maxItems} más…`, textX, textY, fonts.regular, 7.5, { color: gray })
+      }
+    }
+
+    const priceBoxW = 152
+    const priceBoxH = 30
+    page.drawRectangle({ x: pageWidth - margin - priceBoxW - 8, y: blockBottom + 10, width: priceBoxW, height: priceBoxH, color: rgb(1, 1, 1), borderColor: orange, borderWidth: 1.3 })
+    drawText(page, formatGuarani(decoration.price), pageWidth - margin - 18, blockBottom + 10 + priceBoxH / 2 - 8, fonts.bold, 13, { align: 'right', color: orange })
+
+    y = blockBottom - BLOCK_GAP
+  }
+
+  page.drawLine({ start: { x: margin, y: footerY }, end: { x: pageWidth - margin, y: footerY }, color: orange, thickness: 1.3 })
+  if (logo) page.drawImage(logo, { x: pageWidth / 2 - 28, y: 8, width: 56, height: 30, opacity: 0.4 })
+
+  return doc.save()
+}
+
+export const downloadDecorationCatalogPdf = async (decorations: BudgetDecoration[]) => {
+  const bytes = await buildDecorationCatalogPdf(decorations)
+  const pdfBytes = new Uint8Array(bytes)
+  const blob = new Blob([pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength)], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `catalogo-decoracion-lucca-park-${new Date().toISOString().slice(0, 10)}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
