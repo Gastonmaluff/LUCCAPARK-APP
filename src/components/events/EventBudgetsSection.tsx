@@ -181,35 +181,41 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
 
   const saveDecoration = async () => {
     setSaving(true)
-    const decorationId = await upsertBudgetDecoration({
-      category: decorationForm.category,
-      description: decorationForm.description,
-      id: decorationForm.id || undefined,
-      imageUrl: decorationForm.imageUrl,
-      includes: decorationForm.includes.split('\n'),
-      isActive: decorationForm.isActive,
-      level: Number(decorationForm.level),
-      name: decorationForm.name,
-      price: parseCurrencyInput(decorationForm.price),
-    })
-    if (decorationImageFile) {
-      const imageUrl = await uploadDecorationImage(decorationImageFile, decorationId)
-      await upsertBudgetDecoration({
+    setMessage('')
+    try {
+      const decorationId = await upsertBudgetDecoration({
         category: decorationForm.category,
         description: decorationForm.description,
-        id: decorationId,
-        imageUrl,
+        id: decorationForm.id || undefined,
+        imageUrl: decorationForm.imageUrl,
         includes: decorationForm.includes.split('\n'),
         isActive: decorationForm.isActive,
         level: Number(decorationForm.level),
         name: decorationForm.name,
         price: parseCurrencyInput(decorationForm.price),
       })
+      if (decorationImageFile) {
+        const imageUrl = await uploadDecorationImage(decorationImageFile, decorationId)
+        await upsertBudgetDecoration({
+          category: decorationForm.category,
+          description: decorationForm.description,
+          id: decorationId,
+          imageUrl,
+          includes: decorationForm.includes.split('\n'),
+          isActive: decorationForm.isActive,
+          level: Number(decorationForm.level),
+          name: decorationForm.name,
+          price: parseCurrencyInput(decorationForm.price),
+        })
+      }
+      setDecorationForm({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+      setDecorationImageFile(null)
+      setMessage('Decoración guardada correctamente.')
+    } catch (err) {
+      setMessage(`Error al guardar: ${err instanceof Error ? err.message : 'Intentá de nuevo.'}`)
+    } finally {
+      setSaving(false)
     }
-    setDecorationForm({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
-    setDecorationImageFile(null)
-    setMessage('Decoración guardada.')
-    setSaving(false)
   }
 
   return (
@@ -222,7 +228,7 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
           </div>
           <button className="button ghost" onClick={onClose} type="button"><X size={18} /> Cerrar</button>
         </div>
-        {message ? <div className="form-alert success">{message}</div> : null}
+        {message ? <div className={`form-alert ${message.startsWith('Error') ? 'error' : 'success'}`}>{message}</div> : null}
         <div className="budget-config-grid">
           <article className="budget-config-card">
             <h3>Paquetes por cantidad de invitados</h3>
@@ -306,12 +312,18 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
                   }}
                   type="button"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {item.imageUrl ? <img src={item.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} /> : <div style={{ width: 36, height: 36, background: 'var(--bg-muted, #f4f4f4)', borderRadius: 4, flexShrink: 0 }} />}
-                    <div>
-                      <strong>{item.name}</strong>
-                      <small>{item.category ? `${item.category} · ` : ''}Nivel {item.level} · {formatGuarani(item.price)} · {item.isActive ? 'Activo' : 'Inactivo'}</small>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+                    {item.imageUrl
+                      ? <img src={item.imageUrl} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                      : <div style={{ width: 64, height: 64, background: 'var(--bg-muted, #f0f0f0)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#bbb' }}>Sin imagen</div>}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                      <strong style={{ fontSize: 14 }}>{item.name}</strong>
+                      <small style={{ color: 'var(--text-muted, #888)' }}>{[item.category, `Nivel ${item.level}`].filter(Boolean).join(' · ')}</small>
+                      <span style={{ fontWeight: 600, color: 'var(--orange)', fontSize: 13 }}>{formatGuarani(item.price)}</span>
                     </div>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: item.isActive ? 'var(--green-light, #e6f9f0)' : '#f5f5f5', color: item.isActive ? 'var(--green, #1a9e6a)' : '#aaa', flexShrink: 0 }}>
+                      {item.isActive ? 'Activo' : 'Inactivo'}
+                    </span>
                   </div>
                 </button>
               ))}
