@@ -489,52 +489,59 @@ export const decorationSnapshotFromConfig = (item: BudgetDecoration) => ({
 })
 
 const fetchImageForPdf = async (docInstance: PDFDocument, url: string) => {
-  // Usa canvas para convertir cualquier formato (WebP, JPEG, PNG, etc.) a PNG
-  // pdf-lib solo soporta JPEG y PNG nativamente; WebP u otros formatos fallan silenciosamente con fetch directo
-  try {
-    const pngBytes = await new Promise<Uint8Array | null>((resolve) => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas')
-          const maxDim = 1400
-          const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight, 1))
-          canvas.width = Math.round(img.naturalWidth * scale)
-          canvas.height = Math.round(img.naturalHeight * scale)
-          const ctx = canvas.getContext('2d')
-          if (!ctx) { resolve(null); return }
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) { resolve(null); return }
-              blob.arrayBuffer()
-                .then((buf) => resolve(new Uint8Array(buf)))
-                .catch(() => resolve(null))
-            },
-            'image/png',
-          )
-        } catch { resolve(null) }
-      }
-      img.onerror = () => resolve(null)
-      img.src = url
-    })
-    if (pngBytes) return docInstance.embedPng(pngBytes)
-  } catch { /* fallback a fetch directo */ }
-
-  // Fallback: fetch directo para JPG/PNG cuando canvas no disponible
+  // Estrategia: fetch directo primero (evita conflicto de CORS con caché del browser que cargó
+  // la imagen sin crossOrigin en la card), luego embed nativo si es JPEG/PNG, o conversión
+  // via canvas con blobUrl (mismo origen, sin CORS) para WebP u otros formatos.
   try {
     const response = await fetch(url)
     if (!response.ok) return null
     const bytes = await response.arrayBuffer()
     const contentType = response.headers.get('content-type') ?? ''
-    if (contentType.includes('png') || url.toLowerCase().includes('.png')) {
-      return docInstance.embedPng(bytes)
+
+    if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+      try { return await docInstance.embedJpg(bytes) } catch { /* continúa a canvas */ }
     }
-    return docInstance.embedJpg(bytes)
-  } catch {
-    return null
-  }
+    if (contentType.includes('png')) {
+      try { return await docInstance.embedPng(bytes) } catch { /* continúa a canvas */ }
+    }
+
+    // WebP u otro formato no soportado por pdf-lib: convertir a PNG via canvas usando blobUrl
+    // (blobUrl es mismo origen → no hay problema de CORS ni canvas tainted)
+    const blob = new Blob([bytes], { type: contentType || 'image/jpeg' })
+    const blobUrl = URL.createObjectURL(blob)
+    try {
+      const pngBytes = await new Promise<Uint8Array | null>((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas')
+            const maxDim = 1400
+            const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight, 1))
+            canvas.width = Math.round(img.naturalWidth * scale)
+            canvas.height = Math.round(img.naturalHeight * scale)
+            const ctx = canvas.getContext('2d')
+            if (!ctx) { resolve(null); return }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            canvas.toBlob(
+              (canvasBlob) => {
+                if (!canvasBlob) { resolve(null); return }
+                canvasBlob.arrayBuffer()
+                  .then((buf) => resolve(new Uint8Array(buf)))
+                  .catch(() => resolve(null))
+              },
+              'image/png',
+            )
+          } catch { resolve(null) }
+        }
+        img.onerror = () => resolve(null)
+        img.src = blobUrl
+      })
+      if (pngBytes) return await docInstance.embedPng(pngBytes)
+    } finally {
+      URL.revokeObjectURL(blobUrl)
+    }
+  } catch { /* sin imagen */ }
+  return null
 }
 
 export const buildDecorationCatalogPdf = async (decorations: BudgetDecoration[]) => {
