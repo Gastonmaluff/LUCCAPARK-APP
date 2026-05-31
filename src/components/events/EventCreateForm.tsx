@@ -44,6 +44,9 @@ const hasTimeOverlap = (startA: string, endA: string, startB: string, endB: stri
   return start < otherEnd && otherStart < end
 }
 
+const formatCurrencyInputValue = (value: number | null | undefined) =>
+  value === null || value === undefined ? '' : new Intl.NumberFormat('es-PY').format(value)
+
 export function EventCreateForm({ events = [], initialDate, onCancel, onCreated }: EventCreateFormProps) {
   const [form, setForm] = useState<CreateEventInput>(() => buildInitialForm(initialDate))
   const [allowOverlap, setAllowOverlap] = useState(false)
@@ -221,21 +224,19 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
         <label className="field">
           <span>Monto total</span>
           <input
-            min={0}
+            inputMode="numeric"
             onChange={(event) => updateField('totalAmount', event.target.value === '' ? null : parseCurrencyInput(event.target.value))}
             placeholder="Opcional"
-            type="number"
-            value={form.totalAmount ?? ''}
+            value={formatCurrencyInputValue(form.totalAmount)}
           />
         </label>
         <label className="field">
           <span>Seña</span>
           <input
-            min={0}
+            inputMode="numeric"
             onChange={(event) => updateField('depositAmount', event.target.value === '' ? null : parseCurrencyInput(event.target.value))}
             placeholder="Opcional"
-            type="number"
-            value={form.depositAmount ?? ''}
+            value={formatCurrencyInputValue(form.depositAmount)}
           />
         </label>
       </div>
