@@ -9,16 +9,18 @@ import {
   Plus,
   Send,
   Settings2,
+  Trash2,
   X,
   XCircle,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { StatusPill } from '../StatusPill'
 import { useEventBudgetData } from '../../hooks/useEventBudgets'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import {
   addonSnapshotFromConfig,
   convertBudgetToReservation,
+  deleteBudgetDecoration,
   decorationSnapshotFromConfig,
   downloadDecorationCatalogPdf,
   downloadEventBudgetPdf,
@@ -92,6 +94,8 @@ const newBudgetForm = (): UpsertEventBudgetInput => ({
   tentativeStartTime: '',
 })
 
+const newDecorationForm = () => ({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+
 const snapshotTotal = (addons: BudgetAddonSnapshot[]) => addons.reduce((sum, addon) => sum + addon.subtotal, 0)
 
 const buildBudgetPayload = (
@@ -143,10 +147,17 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
   const { addons, decorations, packages } = useEventBudgetData()
   const [packageForm, setPackageForm] = useState({ basePrice: '', extraGuestPrice: '', id: '', isActive: true, maxGuests: '', minGuests: '', name: '' })
   const [addonForm, setAddonForm] = useState<{ calculationType: BudgetAddonCalculationType; description: string; id: string; isActive: boolean; name: string; unitPrice: string }>({ calculationType: 'fixed', description: '', id: '', isActive: true, name: '', unitPrice: '' })
-  const [decorationForm, setDecorationForm] = useState({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
+  const [decorationForm, setDecorationForm] = useState(newDecorationForm)
   const [decorationImageFile, setDecorationImageFile] = useState<File | null>(null)
+  const decorationImageInputRef = useRef<HTMLInputElement | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+
+  const resetDecorationForm = () => {
+    setDecorationForm(newDecorationForm())
+    setDecorationImageFile(null)
+    if (decorationImageInputRef.current) decorationImageInputRef.current.value = ''
+  }
 
   const savePackage = async () => {
     setSaving(true)
@@ -208,11 +219,26 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
           price: parseCurrencyInput(decorationForm.price),
         })
       }
-      setDecorationForm({ category: 'Unisex', description: '', id: '', imageUrl: '', includes: '', isActive: true, level: '1', name: '', price: '' })
-      setDecorationImageFile(null)
+      resetDecorationForm()
       setMessage('Decoración guardada correctamente.')
     } catch (err) {
       setMessage(`Error al guardar: ${err instanceof Error ? err.message : 'Intentá de nuevo.'}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeDecoration = async (decoration: BudgetDecoration) => {
+    const confirmed = window.confirm(`¿Eliminar la decoración "${decoration.name}"?`)
+    if (!confirmed) return
+    setSaving(true)
+    setMessage('')
+    try {
+      const result = await deleteBudgetDecoration(decoration)
+      if (decorationForm.id === decoration.id) resetDecorationForm()
+      setMessage(result.imageDeleteFailed ? 'Decoración eliminada. No se pudo borrar la imagen de Storage.' : 'Decoración eliminada.')
+    } catch (error) {
+      setMessage(`Error al eliminar: ${error instanceof Error ? error.message : 'Intentá de nuevo.'}`)
     } finally {
       setSaving(false)
     }
@@ -295,7 +321,7 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
               <label className="field">
                 <span>Imagen principal</span>
                 {decorationForm.imageUrl ? <img src={decorationForm.imageUrl} alt="Imagen actual" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4, marginBottom: 4, display: 'block' }} /> : null}
-                <input type="file" accept="image/*" onChange={(event) => setDecorationImageFile(event.target.files?.[0] ?? null)} />
+                <input ref={decorationImageInputRef} type="file" accept="image/*" onChange={(event) => setDecorationImageFile(event.target.files?.[0] ?? null)} />
                 {decorationImageFile ? <small style={{ color: 'var(--green)' }}>📎 {decorationImageFile.name}</small> : null}
               </label>
               <label className="settings-toggle"><input type="checkbox" checked={decorationForm.isActive} onChange={(event) => setDecorationForm((current) => ({ ...current, isActive: event.target.checked }))} /> Activo</label>
@@ -303,13 +329,14 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
             <button className="button primary" disabled={saving || !decorationForm.name} onClick={saveDecoration} type="button">Guardar decoración</button>
             <div className="budget-config-list">
               {decorations.map((item) => (
-                <button
-                  className="user-row-button"
-                  key={item.id}
+                <div className="user-row-button" key={item.id} style={{ alignItems: 'center', gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
+                  <button
                   onClick={() => {
                     setDecorationForm({ category: item.category ?? 'Unisex', description: item.description ?? '', id: item.id, imageUrl: item.imageUrl ?? '', includes: item.includes.join('\n'), isActive: item.isActive, level: String(item.level), name: item.name, price: String(item.price) })
                     setDecorationImageFile(null)
+                    if (decorationImageInputRef.current) decorationImageInputRef.current.value = ''
                   }}
+                  style={{ background: 'transparent', border: 0, color: 'inherit', padding: 0, textAlign: 'left', width: '100%' }}
                   type="button"
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
@@ -325,7 +352,9 @@ function BudgetConfigPanel({ onClose }: { onClose: () => void }) {
                       {item.isActive ? 'Activo' : 'Inactivo'}
                     </span>
                   </div>
-                </button>
+                  </button>
+                  <button className="button ghost small-button" disabled={saving} onClick={() => removeDecoration(item)} type="button"><Trash2 size={15} /> Eliminar</button>
+                </div>
               ))}
             </div>
           </article>

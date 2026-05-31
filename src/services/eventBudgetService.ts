@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, rgb, StandardFonts } from 'pdf-lib'
-import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
-import { ref as storageRef, uploadBytes, getDownloadURL, getBytes } from 'firebase/storage'
+import { deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { ref as storageRef, uploadBytes, getDownloadURL, getBytes, deleteObject } from 'firebase/storage'
 import { storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { createEvent } from './eventService'
@@ -96,6 +96,44 @@ export const uploadDecorationImage = async (file: File, decorationId: string): P
   const imageRef = storageRef(storage, `decoration-images/${decorationId}/main.${ext}`)
   await uploadBytes(imageRef, file, { contentType: file.type })
   return getDownloadURL(imageRef)
+}
+
+const getFirebaseStoragePathFromUrl = (url: string) => {
+  const trimmedUrl = url.trim()
+  if (!trimmedUrl) return null
+  if (trimmedUrl.startsWith('gs://')) {
+    return decodeURIComponent(trimmedUrl.replace(/^gs:\/\/[^/]+\//, ''))
+  }
+  try {
+    const parsed = new URL(trimmedUrl)
+    const marker = '/o/'
+    const markerIndex = parsed.pathname.indexOf(marker)
+    if (markerIndex < 0) return null
+    const decodedPath = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length))
+    return decodedPath || null
+  } catch {
+    return null
+  }
+}
+
+const getDecorationImageRef = (imageUrl?: string) => {
+  if (!imageUrl) return null
+  const path = getFirebaseStoragePathFromUrl(imageUrl)
+  if (!path || !path.startsWith('decoration-images/')) return null
+  return storageRef(storage, path)
+}
+
+export const deleteBudgetDecoration = async (decoration: Pick<BudgetDecoration, 'id' | 'imageUrl'>) => {
+  await ensureReceptionSession()
+  await deleteDoc(getDocumentRef('budgetDecorations', decoration.id))
+  const imageRef = getDecorationImageRef(decoration.imageUrl)
+  if (!imageRef) return { imageDeleteFailed: false }
+  try {
+    await deleteObject(imageRef)
+    return { imageDeleteFailed: false }
+  } catch {
+    return { imageDeleteFailed: true }
+  }
 }
 
 export const saveEventBudget = async (input: UpsertEventBudgetInput) => {
@@ -518,10 +556,11 @@ const embedBytesInPdf = async (docInstance: PDFDocument, bytes: ArrayBuffer, mim
   const h = new Uint8Array(bytes, 0, 4)
   const isPng = h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4e && h[3] === 0x47
   const isJpg = h[0] === 0xff && h[1] === 0xd8
-  if (isPng || mimeHint.includes('png')) {
+  const normalizedMimeHint = mimeHint.toLowerCase()
+  if (isPng || normalizedMimeHint.includes('png')) {
     try { return await docInstance.embedPng(bytes) } catch {}
   }
-  if (isJpg || mimeHint.includes('jpeg') || mimeHint.includes('jpg')) {
+  if (isJpg || normalizedMimeHint.includes('jpeg') || normalizedMimeHint.includes('jpg')) {
     try { return await docInstance.embedJpg(bytes) } catch {}
   }
   // WebP u otro: convertir a PNG via canvas con blobUrl (mismo origen, sin CORS)
@@ -537,10 +576,10 @@ const embedBytesInPdf = async (docInstance: PDFDocument, bytes: ArrayBuffer, mim
 
 const fetchImageForPdf = async (docInstance: PDFDocument, url: string) => {
   // Para URLs de Firebase Storage: usar SDK (usa Firebase Auth, evita CORS del browser)
-  if (url.includes('firebasestorage.googleapis.com') || url.startsWith('gs://')) {
+  const imageRef = getDecorationImageRef(url)
+  if (imageRef) {
     try {
-      const imgRef = storageRef(storage, url)
-      const bytes = await getBytes(imgRef)
+      const bytes = await getBytes(imageRef)
       const result = await embedBytesInPdf(docInstance, bytes)
       if (result) return result
     } catch { /* fallback a fetch */ }
