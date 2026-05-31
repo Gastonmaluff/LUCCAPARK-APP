@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, rgb, StandardFonts } from 'pdf-lib'
 import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref as storageRef, uploadBytes, getDownloadURL, getBytes } from 'firebase/storage'
 import { storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { createEvent } from './eventService'
@@ -488,60 +488,71 @@ export const decorationSnapshotFromConfig = (item: BudgetDecoration) => ({
   price: item.price,
 })
 
+const canvasToPng = (blobUrl: string): Promise<Uint8Array | null> =>
+  new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        const maxDim = 1400
+        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight, 1))
+        canvas.width = Math.round(img.naturalWidth * scale)
+        canvas.height = Math.round(img.naturalHeight * scale)
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(null); return }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(null); return }
+            blob.arrayBuffer().then((buf) => resolve(new Uint8Array(buf))).catch(() => resolve(null))
+          },
+          'image/png',
+        )
+      } catch { resolve(null) }
+    }
+    img.onerror = () => resolve(null)
+    img.src = blobUrl
+  })
+
+const embedBytesInPdf = async (docInstance: PDFDocument, bytes: ArrayBuffer, mimeHint = '') => {
+  const h = new Uint8Array(bytes, 0, 4)
+  const isPng = h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4e && h[3] === 0x47
+  const isJpg = h[0] === 0xff && h[1] === 0xd8
+  if (isPng || mimeHint.includes('png')) {
+    try { return await docInstance.embedPng(bytes) } catch {}
+  }
+  if (isJpg || mimeHint.includes('jpeg') || mimeHint.includes('jpg')) {
+    try { return await docInstance.embedJpg(bytes) } catch {}
+  }
+  // WebP u otro: convertir a PNG via canvas con blobUrl (mismo origen, sin CORS)
+  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeHint || 'image/webp' }))
+  try {
+    const png = await canvasToPng(blobUrl)
+    if (png) return await docInstance.embedPng(png)
+  } finally {
+    URL.revokeObjectURL(blobUrl)
+  }
+  return null
+}
+
 const fetchImageForPdf = async (docInstance: PDFDocument, url: string) => {
-  // Estrategia: fetch directo primero (evita conflicto de CORS con caché del browser que cargó
-  // la imagen sin crossOrigin en la card), luego embed nativo si es JPEG/PNG, o conversión
-  // via canvas con blobUrl (mismo origen, sin CORS) para WebP u otros formatos.
+  // Para URLs de Firebase Storage: usar SDK (usa Firebase Auth, evita CORS del browser)
+  if (url.includes('firebasestorage.googleapis.com') || url.startsWith('gs://')) {
+    try {
+      const imgRef = storageRef(storage, url)
+      const bytes = await getBytes(imgRef)
+      const result = await embedBytesInPdf(docInstance, bytes)
+      if (result) return result
+    } catch { /* fallback a fetch */ }
+  }
+  // Fallback: fetch directo + blobUrl para canvas (para URLs no-Firebase o si SDK falló)
   try {
     const response = await fetch(url)
     if (!response.ok) return null
     const bytes = await response.arrayBuffer()
-    const contentType = response.headers.get('content-type') ?? ''
-
-    if (contentType.includes('jpeg') || contentType.includes('jpg')) {
-      try { return await docInstance.embedJpg(bytes) } catch { /* continúa a canvas */ }
-    }
-    if (contentType.includes('png')) {
-      try { return await docInstance.embedPng(bytes) } catch { /* continúa a canvas */ }
-    }
-
-    // WebP u otro formato no soportado por pdf-lib: convertir a PNG via canvas usando blobUrl
-    // (blobUrl es mismo origen → no hay problema de CORS ni canvas tainted)
-    const blob = new Blob([bytes], { type: contentType || 'image/jpeg' })
-    const blobUrl = URL.createObjectURL(blob)
-    try {
-      const pngBytes = await new Promise<Uint8Array | null>((resolve) => {
-        const img = new Image()
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas')
-            const maxDim = 1400
-            const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight, 1))
-            canvas.width = Math.round(img.naturalWidth * scale)
-            canvas.height = Math.round(img.naturalHeight * scale)
-            const ctx = canvas.getContext('2d')
-            if (!ctx) { resolve(null); return }
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-            canvas.toBlob(
-              (canvasBlob) => {
-                if (!canvasBlob) { resolve(null); return }
-                canvasBlob.arrayBuffer()
-                  .then((buf) => resolve(new Uint8Array(buf)))
-                  .catch(() => resolve(null))
-              },
-              'image/png',
-            )
-          } catch { resolve(null) }
-        }
-        img.onerror = () => resolve(null)
-        img.src = blobUrl
-      })
-      if (pngBytes) return await docInstance.embedPng(pngBytes)
-    } finally {
-      URL.revokeObjectURL(blobUrl)
-    }
-  } catch { /* sin imagen */ }
-  return null
+    const ct = response.headers.get('content-type') ?? ''
+    return await embedBytesInPdf(docInstance, bytes, ct)
+  } catch { return null }
 }
 
 export const buildDecorationCatalogPdf = async (decorations: BudgetDecoration[]) => {
