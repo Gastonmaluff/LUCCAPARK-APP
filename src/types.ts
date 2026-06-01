@@ -422,9 +422,16 @@ export interface CanteenProduct {
   stock: number | null
   minStock: number | null
   imageUrl?: string
+  imageFit?: ProductImageFit
   isActive: boolean
   createdAt?: Date | null
   updatedAt?: Date | null
+}
+
+export interface ProductImageFit {
+  scale: number
+  x: number
+  y: number
 }
 
 export interface CanteenOrderItem {
@@ -474,6 +481,7 @@ export interface UpsertCanteenProductInput {
   stock?: number | null
   minStock?: number | null
   imageUrl?: string
+  imageFit?: ProductImageFit
   isActive: boolean
 }
 

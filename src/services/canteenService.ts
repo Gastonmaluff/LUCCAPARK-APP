@@ -75,6 +75,13 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
           ? null
           : Number(input.minStock),
       isActive: input.isActive,
+      imageFit: input.imageFit
+        ? {
+            scale: Number(input.imageFit.scale) || 1,
+            x: Number(input.imageFit.x) || 0,
+            y: Number(input.imageFit.y) || 0,
+          }
+        : { scale: 1, x: 0, y: 0 },
       imageUrl: normalizeWhitespace(input.imageUrl ?? ''),
       updatedAt: serverTimestamp(),
       ...(input.id ? {} : { createdAt: serverTimestamp() }),

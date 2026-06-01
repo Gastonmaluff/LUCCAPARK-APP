@@ -9,13 +9,13 @@ import {
   CreditCard,
   Plus,
   Receipt,
-  ShoppingBasket,
   Trash2,
   Users,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { BrandLogo } from '../BrandLogo'
 import { ProductManager } from './ProductManager'
+import { ProductImageView } from './ProductImageView'
 import { CanteenCheckoutModal } from './CanteenCheckoutModal'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
 import { useCanteenOrders, useCanteenProducts, usePaidCanteenOrdersForDate } from '../../hooks/useCanteen'
@@ -481,9 +481,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
               {productCount === 0 ? <div className="empty-state">No hay productos activos en inventario.</div> : null}
               {activeProducts.map((product) => (
                 <button className="quick-product-card" key={product.id} onClick={() => addProduct(selectedOrder, product)} type="button">
-                  <span className="quick-product-image">
-                    {product.imageUrl ? <img alt={product.name} src={product.imageUrl} /> : <ShoppingBasket size={34} />}
-                  </span>
+                  <ProductImageView alt={product.name} className="quick-product-image" fit={product.imageFit} imageUrl={product.imageUrl} />
                   <strong>{product.name}</strong>
                   <small>{product.category}</small>
                   <b>{formatGuarani(product.salePrice ?? product.price)}</b>

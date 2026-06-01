@@ -3650,6 +3650,7 @@ img {
   border-radius: var(--radius);
   display: flex;
   justify-content: center;
+  overflow: hidden;
 }
 
 .quick-product-image {
@@ -3663,6 +3664,17 @@ img {
 .product-card-image img {
   height: 100%;
   object-fit: contain;
+  transform-origin: center;
+  width: 100%;
+}
+
+.product-fit-frame {
+  align-items: center;
+  color: #94a3b8;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  overflow: hidden;
   width: 100%;
 }
 
@@ -4074,6 +4086,15 @@ img {
   width: 100%;
 }
 
+.product-image-preview .product-fit-frame {
+  height: 120px;
+}
+
+.product-image-fit-action {
+  align-items: end;
+  display: flex;
+}
+
 .product-card-image {
   height: 82px;
   padding: 6px;
@@ -4081,6 +4102,52 @@ img {
 
 .product-card-image svg {
   color: #94a3b8;
+}
+
+.product-fit-modal {
+  align-self: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  display: grid;
+  gap: 16px;
+  margin: auto;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  width: min(720px, 100%);
+}
+
+.product-fit-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(260px, 1fr);
+}
+
+.product-fit-preview-card {
+  box-shadow: none;
+  min-width: 0;
+}
+
+.product-fit-preview-card .product-card-image {
+  height: 170px;
+}
+
+.product-fit-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.product-fit-nudge {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, 42px);
+}
+
+.product-fit-nudge .icon-button {
+  color: var(--ink);
 }
 
 .clients-layout {
@@ -5953,6 +6020,7 @@ img {
   .pending-grid,
   .canteen-hero,
   .canteen-account-grid,
+  .product-fit-layout,
   .picker-grid,
   .public-editor-grid,
   .reservation-row,

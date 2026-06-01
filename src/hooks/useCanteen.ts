@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
 import { isSameLocalDate } from '../utils/date'
-import type { CanteenCategory, CanteenOrder, CanteenOrderStatus, CanteenProduct, PaymentMethod } from '../types'
+import type { CanteenCategory, CanteenOrder, CanteenOrderStatus, CanteenProduct, PaymentMethod, ProductImageFit } from '../types'
 
 const dateFromTimestamp = (value: unknown): Date | null => {
   if (value instanceof Timestamp) {
@@ -17,6 +17,16 @@ const dateFromTimestamp = (value: unknown): Date | null => {
   return null
 }
 
+const mapProductImageFit = (value: unknown): ProductImageFit | undefined => {
+  if (!value || typeof value !== 'object') return undefined
+  const fit = value as Partial<ProductImageFit>
+  return {
+    scale: Number.isFinite(Number(fit.scale)) ? Number(fit.scale) : 1,
+    x: Number.isFinite(Number(fit.x)) ? Number(fit.x) : 0,
+    y: Number.isFinite(Number(fit.y)) ? Number(fit.y) : 0,
+  }
+}
+
 const mapProduct = (id: string, data: Record<string, unknown>): CanteenProduct => ({
   id,
   name: String(data.name ?? ''),
@@ -27,6 +37,7 @@ const mapProduct = (id: string, data: Record<string, unknown>): CanteenProduct =
   stock: data.stock === null || data.stock === undefined ? null : Number(data.stock),
   minStock: data.minStock === null || data.minStock === undefined ? null : Number(data.minStock),
   imageUrl: String(data.imageUrl ?? ''),
+  imageFit: mapProductImageFit(data.imageFit),
   isActive: data.isActive !== false,
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),

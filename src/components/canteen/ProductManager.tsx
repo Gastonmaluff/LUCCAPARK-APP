@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ImageIcon, PackagePlus, Search } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronRight, PackagePlus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { canteenCategories } from '../../config/canteen'
 import { setCanteenProductActive, upsertCanteenProduct, uploadCanteenProductImage } from '../../services/canteenService'
 import { formatGuarani, toNumber } from '../../utils/money'
 import { StatusPill } from '../StatusPill'
-import type { CanteenCategory, CanteenProduct, UpsertCanteenProductInput } from '../../types'
+import { ProductImageView, defaultProductImageFit, normalizeProductImageFit } from './ProductImageView'
+import type { CanteenCategory, CanteenProduct, ProductImageFit, UpsertCanteenProductInput } from '../../types'
 
 interface ProductManagerProps {
   products: CanteenProduct[]
@@ -21,6 +22,7 @@ const emptyProduct: UpsertCanteenProductInput = {
   stock: null,
   minStock: null,
   imageUrl: '',
+  imageFit: defaultProductImageFit,
   isActive: true,
 }
 
@@ -42,6 +44,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
+  const [isImageFitOpen, setIsImageFitOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const activeProductsCount = products.filter((product) => product.isActive).length
@@ -81,6 +84,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
       stock: product.stock,
       minStock: product.minStock,
       imageUrl: product.imageUrl ?? '',
+      imageFit: normalizeProductImageFit(product.imageFit),
       isActive: product.isActive,
     })
     setImageFile(null)
@@ -92,8 +96,15 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
   const resetForm = () => {
     setForm(emptyProduct)
     setImageFile(null)
+    setIsImageFitOpen(false)
     setIsFormOpen(false)
   }
+
+  const setImageFit = (patch: Partial<ProductImageFit>) => {
+    setForm((current) => ({ ...current, imageFit: { ...normalizeProductImageFit(current.imageFit), ...patch } }))
+  }
+
+  const productImageUrl = imagePreviewUrl || form.imageUrl || ''
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -231,13 +242,19 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
                 <span>Foto PNG sin fondo</span>
                 <input accept="image/png,image/jpeg,image/webp" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} type="file" />
               </label>
-              {imagePreviewUrl || form.imageUrl ? (
+              {productImageUrl ? (
                 <div className="product-image-preview">
                   <span>{imageFile ? 'Vista previa nueva' : 'Imagen actual'}</span>
-                  <img alt="Vista previa del producto" src={imagePreviewUrl || form.imageUrl} />
+                  <ProductImageView alt="Vista previa del producto" fit={form.imageFit} imageUrl={productImageUrl} />
                   {isUploadingImage ? <small>Subiendo imagen...</small> : null}
                 </div>
               ) : null}
+              <div className="product-image-fit-action">
+                <button className="button ghost" disabled={!productImageUrl} onClick={() => setIsImageFitOpen(true)} type="button">
+                  <SlidersHorizontal size={16} />
+                  Ajustar imagen
+                </button>
+              </div>
               {form.imageUrl ? (
                 <label className="field">
                   <span>URL de imagen actual</span>
@@ -298,7 +315,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               return (
                 <article className={`product-card ${!product.isActive ? 'inactive' : ''}`} key={product.id}>
                   <div className="product-card-image">
-                    {product.imageUrl ? <img alt={product.name} src={product.imageUrl} /> : <ImageIcon size={30} />}
+                    <ProductImageView alt={product.name} fit={product.imageFit} imageUrl={product.imageUrl} />
                   </div>
                   <div>
                     <strong>{product.name}</strong>
@@ -326,6 +343,126 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
           </div>
         </>
       ) : null}
+      {isImageFitOpen ? (
+        <ProductImageFitModal
+          fit={normalizeProductImageFit(form.imageFit)}
+          imageUrl={productImageUrl}
+          name={form.name || 'Producto'}
+          onChange={setImageFit}
+          onClose={() => setIsImageFitOpen(false)}
+          onReset={() => setForm((current) => ({ ...current, imageFit: defaultProductImageFit }))}
+          onSave={() => setIsImageFitOpen(false)}
+        />
+      ) : null}
     </article>
+  )
+}
+
+function ProductImageFitModal({
+  fit,
+  imageUrl,
+  name,
+  onChange,
+  onClose,
+  onReset,
+  onSave,
+}: {
+  fit: ProductImageFit
+  imageUrl: string
+  name: string
+  onChange: (patch: Partial<ProductImageFit>) => void
+  onClose: () => void
+  onReset: () => void
+  onSave: () => void
+}) {
+  const stepPosition = (axis: 'x' | 'y', delta: number) => {
+    onChange({ [axis]: Math.max(-80, Math.min(80, fit[axis] + delta)) })
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <div aria-modal="true" className="product-fit-modal" role="dialog">
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">Producto</p>
+            <h3>Ajustar imagen</h3>
+          </div>
+          <button className="icon-button" onClick={onClose} type="button" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="product-fit-layout">
+          <article className="product-card product-fit-preview-card">
+            <div className="product-card-image">
+              <ProductImageView alt={name} fit={fit} imageUrl={imageUrl} />
+            </div>
+            <div>
+              <strong>{name}</strong>
+              <p className="muted">Vista previa de card</p>
+            </div>
+          </article>
+
+          <div className="product-fit-controls">
+            <label className="field">
+              <span>Zoom</span>
+              <input
+                max="2.5"
+                min="0.6"
+                onChange={(event) => onChange({ scale: Number(event.target.value) })}
+                step="0.05"
+                type="range"
+                value={fit.scale}
+              />
+            </label>
+            <label className="field">
+              <span>Posicion horizontal</span>
+              <input
+                max="80"
+                min="-80"
+                onChange={(event) => onChange({ x: Number(event.target.value) })}
+                step="1"
+                type="range"
+                value={fit.x}
+              />
+            </label>
+            <label className="field">
+              <span>Posicion vertical</span>
+              <input
+                max="80"
+                min="-80"
+                onChange={(event) => onChange({ y: Number(event.target.value) })}
+                step="1"
+                type="range"
+                value={fit.y}
+              />
+            </label>
+            <div className="product-fit-nudge">
+              <button className="icon-button" onClick={() => stepPosition('y', -5)} type="button" aria-label="Mover arriba">
+                <ArrowUp size={17} />
+              </button>
+              <button className="icon-button" onClick={() => stepPosition('x', -5)} type="button" aria-label="Mover izquierda">
+                <ArrowLeft size={17} />
+              </button>
+              <button className="icon-button" onClick={() => stepPosition('x', 5)} type="button" aria-label="Mover derecha">
+                <ArrowRight size={17} />
+              </button>
+              <button className="icon-button" onClick={() => stepPosition('y', 5)} type="button" aria-label="Mover abajo">
+                <ArrowDown size={17} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="module-actions">
+          <button className="button ghost" onClick={onReset} type="button">
+            Resetear
+          </button>
+          <button className="button primary" onClick={onSave} type="button">
+            Guardar ajuste
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
