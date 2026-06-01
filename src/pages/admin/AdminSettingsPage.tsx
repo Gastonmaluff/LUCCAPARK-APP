@@ -425,24 +425,34 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
       summary: 'Frase corta',
     }
     const nextConfig = { ...draft, birthday: { ...draft.birthday, packages: [...draft.birthday.packages, birthdayPackage] } }
-    await persist(nextConfig, { action: 'create', description: 'Creo un paquete de cumpleanos en la pagina publica', entityName: birthdayPackage.name })
+    await persist(nextConfig, { action: 'create', description: 'Creó un paquete de cumpleaños en la página pública', entityName: birthdayPackage.name })
   }
 
   const deletePackage = async (birthdayPackage: PublicBirthdayPackage) => {
     if (!window.confirm(`Eliminar paquete "${birthdayPackage.name}"?`)) return
     const nextConfig = { ...draft, birthday: { ...draft.birthday, packages: draft.birthday.packages.filter((current) => current.id !== birthdayPackage.id) } }
-    await persist(nextConfig, { action: 'deletion', description: `Elimino paquete de cumpleanos ${birthdayPackage.name}`, entityName: birthdayPackage.name })
+    await persist(nextConfig, { action: 'deletion', description: `Eliminó paquete de cumpleaños ${birthdayPackage.name}`, entityName: birthdayPackage.name })
   }
 
-  const saveHome = () => persist(draft, { action: 'update', description: 'Edito Inicio de la pagina publica', entityName: 'Inicio' })
-  const saveInstallations = () => persist(draft, { action: 'update', description: 'Edito Instalaciones de la pagina publica', entityName: 'Instalaciones' })
-  const saveBirthday = () => persist(draft, { action: 'update', description: 'Edito Cumpleanos de la pagina publica', entityName: 'Cumpleanos' })
+  const saveHome = () => persist(draft, { action: 'update', description: 'Editó Inicio de la página pública', entityName: 'Inicio' })
+  const saveInstallations = () => persist(draft, { action: 'update', description: 'Editó Instalaciones de la página pública', entityName: 'Instalaciones' })
+  const saveBirthday = () => persist(draft, { action: 'update', description: 'Editó Cumpleaños de la página pública', entityName: 'Cumpleaños' })
   const saveContact = () =>
     persist(draft, {
       action: 'update',
-      description: draft.contact.whatsappNumber !== config.contact.whatsappNumber ? 'Cambio numero de WhatsApp publico' : 'Edito Contacto de la pagina publica',
+      description:
+        draft.contact.googleMapsUrl !== config.contact.googleMapsUrl
+          ? 'Cambió link de Google Maps público'
+          : draft.contact.whatsappNumber !== config.contact.whatsappNumber
+            ? 'Cambió número de WhatsApp público'
+            : 'Editó Contacto de la página pública',
       entityName: 'Contacto',
-      metadata: { whatsappAnterior: config.contact.whatsappNumber, whatsappNuevo: draft.contact.whatsappNumber },
+      metadata: {
+        googleMapsAnterior: config.contact.googleMapsUrl,
+        googleMapsNuevo: draft.contact.googleMapsUrl,
+        whatsappAnterior: config.contact.whatsappNumber,
+        whatsappNuevo: draft.contact.whatsappNumber,
+      },
     })
 
   if (isLoading) return <div className="settings-public-page-body"><div className="empty-state">Cargando contenido publico...</div></div>
@@ -538,7 +548,7 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
         </div>
       </PublicEditorSection>
 
-      <PublicEditorSection isOpen={openSections.birthday} onToggle={() => toggleSection('birthday')} title="Cumpleanos">
+      <PublicEditorSection isOpen={openSections.birthday} onToggle={() => toggleSection('birthday')} title="Cumpleaños">
         <div className="public-editor-grid">
           <label className="field">
             <span>Titulo</span>
@@ -556,7 +566,7 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
           </button>
           <button className="button primary" disabled={isSaving} onClick={saveBirthday} type="button">
             <Save size={16} />
-            Guardar Cumpleanos
+            Guardar Cumpleaños
           </button>
         </div>
         <div className="public-editor-list">
@@ -619,8 +629,16 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
             <input onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, title: event.target.value } }))} value={draft.contact.title} />
           </label>
           <label className="field">
-            <span>Numero de WhatsApp</span>
+            <span>Número de WhatsApp</span>
             <input onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, whatsappNumber: event.target.value } }))} value={draft.contact.whatsappNumber} />
+          </label>
+          <label className="field public-editor-full">
+            <span>Link de Google Maps</span>
+            <input
+              onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, googleMapsUrl: event.target.value } }))}
+              placeholder="Pegá un link normal, compartido o iframe de Google Maps"
+              value={draft.contact.googleMapsUrl}
+            />
           </label>
           <label className="field public-editor-full">
             <span>Descripcion</span>

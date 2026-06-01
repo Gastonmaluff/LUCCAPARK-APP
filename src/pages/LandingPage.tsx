@@ -1,9 +1,9 @@
-import { Baby, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Gift, MessageCircle, PartyPopper, ShieldCheck, Star } from 'lucide-react'
+import { Baby, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Gift, MapPin, MessageCircle, PartyPopper, ShieldCheck, Star } from 'lucide-react'
 import { useRef } from 'react'
 import { CalendarPreview } from '../components/CalendarPreview'
 import { SectionHeading } from '../components/SectionHeading'
 import { StatusPill } from '../components/StatusPill'
-import { buildWhatsappLink } from '../config/app'
+import { buildGoogleMapsEmbedUrl, buildWhatsappLink, normalizeExternalUrl } from '../config/app'
 import { demoTimeSlots } from '../data/demoData'
 import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
@@ -11,6 +11,8 @@ export function LandingPage() {
   const { config } = usePublicPageConfig()
   const packageScrollerRef = useRef<HTMLDivElement | null>(null)
   const whatsappHref = (message = config.contact.whatsappMessage) => buildWhatsappLink(config.contact.whatsappNumber, message)
+  const googleMapsUrl = normalizeExternalUrl(config.contact.googleMapsUrl)
+  const googleMapsEmbedUrl = buildGoogleMapsEmbedUrl(config.contact.googleMapsUrl)
   const activeInstallations = config.installations.items.filter((item) => item.isActive)
   const activePackages = config.birthday.packages.filter((item) => item.isActive)
   const scrollPackages = (direction: -1 | 1) => {
@@ -161,16 +163,39 @@ export function LandingPage() {
               Escribir por WhatsApp
             </a>
           </div>
-          <article className="contact-card">
-            <ShieldCheck color="var(--green)" size={32} />
-            <h3>Base profesional desde Fase 1</h3>
-            <p className="muted">Landing, admin, recepción y TV comparten marca, datos separados y arquitectura lista para crecer.</p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <StatusPill tone="available">Seguro</StatusPill>
-              <StatusPill tone="info">Configurable</StatusPill>
-              <StatusPill tone="reserved">Eventos</StatusPill>
-            </div>
-          </article>
+          <div className="contact-page-cards">
+            <article className="contact-card">
+              <ShieldCheck color="var(--green)" size={32} />
+              <h3>Base profesional desde Fase 1</h3>
+              <p className="muted">Landing, admin, recepción y TV comparten marca, datos separados y arquitectura lista para crecer.</p>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <StatusPill tone="available">Seguro</StatusPill>
+                <StatusPill tone="info">Configurable</StatusPill>
+                <StatusPill tone="reserved">Eventos</StatusPill>
+              </div>
+            </article>
+            {googleMapsUrl ? (
+              <article className="contact-card map-contact-card">
+                <div>
+                  <MapPin color="var(--green)" />
+                  <h3>Ubicación</h3>
+                </div>
+                {googleMapsEmbedUrl ? (
+                  <iframe
+                    allowFullScreen
+                    className="contact-map-frame"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={googleMapsEmbedUrl}
+                    title="Ubicación de Lucca Park"
+                  />
+                ) : null}
+                <a className="button ghost" href={googleMapsUrl} target="_blank" rel="noreferrer">
+                  Ver ubicación en Google Maps
+                </a>
+              </article>
+            ) : null}
+          </div>
         </div>
       </section>
 

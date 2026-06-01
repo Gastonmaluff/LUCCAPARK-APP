@@ -2262,6 +2262,33 @@ img {
   box-shadow: var(--shadow);
 }
 
+.contact-page-cards {
+  display: grid;
+  gap: 16px;
+}
+
+.map-contact-card {
+  display: grid;
+  gap: 14px;
+}
+
+.map-contact-card > div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.map-contact-card h3 {
+  margin: 0;
+}
+
+.contact-map-frame {
+  border: 0;
+  border-radius: var(--radius);
+  height: 230px;
+  width: 100%;
+}
+
 .event-day-callout {
   display: grid;
   gap: 16px;

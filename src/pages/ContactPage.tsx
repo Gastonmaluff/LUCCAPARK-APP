@@ -1,10 +1,12 @@
 import { MapPin, MessageCircle, Phone } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
-import { appConfig, buildWhatsappLink } from '../config/app'
+import { appConfig, buildGoogleMapsEmbedUrl, buildWhatsappLink, normalizeExternalUrl } from '../config/app'
 import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
 export function ContactPage() {
   const { config } = usePublicPageConfig()
+  const googleMapsUrl = normalizeExternalUrl(config.contact.googleMapsUrl)
+  const googleMapsEmbedUrl = buildGoogleMapsEmbedUrl(config.contact.googleMapsUrl)
 
   return (
     <main className="section">
@@ -18,14 +20,37 @@ export function ContactPage() {
             Escribir por WhatsApp
           </a>
         </div>
-        <article className="contact-card">
-          <Phone color="var(--orange)" />
-          <h3>Datos configurables</h3>
-          <p className="muted">WhatsApp: {config.contact.whatsappNumber}</p>
-          <p className="muted">
-            <MapPin size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> {appConfig.address}
-          </p>
-        </article>
+        <div className="contact-page-cards">
+          <article className="contact-card">
+            <Phone color="var(--orange)" />
+            <h3>Datos configurables</h3>
+            <p className="muted">WhatsApp: {config.contact.whatsappNumber}</p>
+            <p className="muted">
+              <MapPin size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> {appConfig.address}
+            </p>
+          </article>
+          {googleMapsUrl ? (
+            <article className="contact-card map-contact-card">
+              <div>
+                <MapPin color="var(--green)" />
+                <h3>Ubicación</h3>
+              </div>
+              {googleMapsEmbedUrl ? (
+                <iframe
+                  allowFullScreen
+                  className="contact-map-frame"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={googleMapsEmbedUrl}
+                  title="Ubicación de Lucca Park"
+                />
+              ) : null}
+              <a className="button ghost" href={googleMapsUrl} target="_blank" rel="noreferrer">
+                Ver ubicación en Google Maps
+              </a>
+            </article>
+          ) : null}
+        </div>
       </div>
     </main>
   )

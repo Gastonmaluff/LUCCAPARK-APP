@@ -17,3 +17,33 @@ export const buildWhatsappLink = (number: string, message: string) => {
   const digits = number.replace(/\D/g, '')
   return `https://wa.me/${digits || appConfig.whatsappNumber}?text=${encodeURIComponent(message)}`
 }
+
+export const extractGoogleMapsUrl = (value: string) => {
+  const trimmed = value.trim()
+  const iframeSrc = trimmed.match(/src=["']([^"']+)["']/i)?.[1]
+  return (iframeSrc || trimmed).replace(/&amp;/g, '&').trim()
+}
+
+export const normalizeExternalUrl = (value: string) => {
+  const url = extractGoogleMapsUrl(value)
+  try {
+    return new URL(url).href
+  } catch {
+    return ''
+  }
+}
+
+export const buildGoogleMapsEmbedUrl = (value: string) => {
+  const url = extractGoogleMapsUrl(value)
+  if (!url) return ''
+
+  try {
+    const parsedUrl = new URL(url)
+    const isGoogleMapsUrl = /(^|\.)google\./i.test(parsedUrl.hostname) || parsedUrl.hostname === 'maps.app.goo.gl'
+    if (!isGoogleMapsUrl) return ''
+    if (parsedUrl.pathname.includes('/maps/embed') || parsedUrl.searchParams.get('output') === 'embed') return url
+    return `https://www.google.com/maps?q=${encodeURIComponent(url)}&output=embed`
+  } catch {
+    return ''
+  }
+}

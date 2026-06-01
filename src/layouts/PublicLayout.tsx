@@ -9,7 +9,7 @@ import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 const navItems = [
   { label: 'Inicio', to: '/' },
   { label: 'Instalaciones', to: '/#instalaciones' },
-  { label: 'Cumpleanos', to: '/#cumpleanos' },
+  { label: 'Cumpleaños', to: '/#cumpleanos' },
   { label: 'Contacto', to: '/contacto' },
 ]
 
@@ -39,7 +39,7 @@ export function PublicLayout() {
               rel="noreferrer"
             >
               <CalendarDays size={18} />
-              Reservar cumpleanos
+              Reservar cumpleaños
             </a>
             <button
               className="menu-button"
