@@ -12,3 +12,8 @@ export const appConfig = {
 
 export const whatsappLink = (message: string) =>
   `https://wa.me/${appConfig.whatsappNumber}?text=${encodeURIComponent(message)}`
+
+export const buildWhatsappLink = (number: string, message: string) => {
+  const digits = number.replace(/\D/g, '')
+  return `https://wa.me/${digits || appConfig.whatsappNumber}?text=${encodeURIComponent(message)}`
+}

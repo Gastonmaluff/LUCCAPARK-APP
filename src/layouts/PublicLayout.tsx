@@ -3,18 +3,20 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import { ScrollToHash } from '../components/ScrollToHash'
-import { whatsappLink } from '../config/app'
+import { buildWhatsappLink } from '../config/app'
+import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
 const navItems = [
   { label: 'Inicio', to: '/' },
   { label: 'Instalaciones', to: '/#instalaciones' },
   { label: 'Cumpleanos', to: '/#cumpleanos' },
-  { label: 'Precios', to: '/precios' },
   { label: 'Contacto', to: '/contacto' },
 ]
 
 export function PublicLayout() {
   const [isOpen, setIsOpen] = useState(false)
+  const { config } = usePublicPageConfig()
+  const whatsappHref = buildWhatsappLink(config.contact.whatsappNumber, config.contact.whatsappMessage)
 
   return (
     <div className="page-shell">
@@ -32,7 +34,7 @@ export function PublicLayout() {
           <div className="site-actions">
             <a
               className="button primary desktop-only"
-              href={whatsappLink('Hola, quiero reservar un cumpleanos en Lucca Park.')}
+              href={whatsappHref}
               target="_blank"
               rel="noreferrer"
             >
@@ -62,7 +64,7 @@ export function PublicLayout() {
       </footer>
       <a
         className="whatsapp-float button whatsapp"
-        href={whatsappLink('Hola, quiero consultar disponibilidad para un cumple.')}
+        href={whatsappHref}
         target="_blank"
         rel="noreferrer"
       >

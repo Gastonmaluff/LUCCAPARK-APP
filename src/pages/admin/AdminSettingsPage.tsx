@@ -1,33 +1,41 @@
-import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight, Clock, Eye, History, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, Trash2, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
-import { appConfig } from '../../config/app'
+import { usePublicPageConfig } from '../../hooks/usePublicPageConfig'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import { useUsers } from '../../hooks/useUsers'
+import { logActivity } from '../../services/activityLogService'
 import { subscribeActivityLogs, type ActivityAction, type ActivityLogRecord } from '../../services/activityLogService'
+import {
+  savePublicPageConfig,
+  uploadPublicPageImage,
+  type PublicBirthdayPackage,
+  type PublicInstallationItem,
+  type PublicPageConfig,
+} from '../../services/publicPageService'
 import { saveUserProfile } from '../../services/userService'
 import type { UserRole } from '../../types'
 
 const roleOptions: Array<{ label: string; value: UserRole; detail: string }> = [
-  { detail: 'Acceso total al sistema, usuarios y configuración.', label: 'Dueño / Administrador', value: 'admin' },
-  { detail: 'Acceso a operación y finanzas, sin administración de usuarios.', label: 'Socio', value: 'socio' },
+  { detail: 'Acceso total al sistema, usuarios y configuracion.', label: 'Dueno / Administrador', value: 'admin' },
+  { detail: 'Acceso a operacion y finanzas, sin administracion de usuarios.', label: 'Socio', value: 'socio' },
   { detail: 'Reservas, tareas y gastos asociados a eventos.', label: 'Encargado de eventos', value: 'encargado_eventos' },
-  { detail: 'Ingresos, visitas activas y cobros de salida.', label: 'Recepción', value: 'recepcion' },
+  { detail: 'Ingresos, visitas activas y cobros de salida.', label: 'Recepcion', value: 'recepcion' },
   { detail: 'Cuentas, productos y cobros de cantina.', label: 'Cantina', value: 'cantina' },
 ]
 
 const emptyForm = { displayName: '', email: '', isActive: true, role: 'recepcion' as UserRole, uid: '' }
 
 const activityActionLabels: Record<ActivityAction, string> = {
-  approval: 'Aprobación',
-  cancellation: 'Cancelación',
-  create: 'Creación',
-  creation: 'Creación',
-  deletion: 'Eliminación',
-  edition: 'Edición',
+  approval: 'Aprobacion',
+  cancellation: 'Cancelacion',
+  create: 'Creacion',
+  creation: 'Creacion',
+  deletion: 'Eliminacion',
+  edition: 'Edicion',
   status_change: 'Cambio de estado',
-  update: 'Edición',
+  update: 'Edicion',
 }
 
 const activityTone = (action: ActivityAction) => {
@@ -48,9 +56,36 @@ const formatActivityDate = (date: Date | null) =>
       }).format(date)
     : 'Sin fecha'
 
+const createEditorId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+const updateInstallationItem = (
+  config: PublicPageConfig,
+  itemId: string,
+  patch: Partial<PublicInstallationItem>,
+): PublicPageConfig => ({
+  ...config,
+  installations: {
+    ...config.installations,
+    items: config.installations.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+  },
+})
+
+const updateBirthdayPackage = (
+  config: PublicPageConfig,
+  packageId: string,
+  patch: Partial<PublicBirthdayPackage>,
+): PublicPageConfig => ({
+  ...config,
+  birthday: {
+    ...config.birthday,
+    packages: config.birthday.packages.map((item) => (item.id === packageId ? { ...item, ...patch } : item)),
+  },
+})
+
 export function AdminSettingsPage() {
   const { permissions } = useUserProfile()
   const usersResult = useUsers(permissions.canManageUsers)
+  const publicPage = usePublicPageConfig()
   const [form, setForm] = useState(emptyForm)
   const [message, setMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -61,6 +96,7 @@ export function AdminSettingsPage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLogRecord[]>([])
   const [activityError, setActivityError] = useState<string | null>(null)
   const [isActivityLoading, setIsActivityLoading] = useState(true)
+  const [isPublicEditorOpen, setIsPublicEditorOpen] = useState(false)
 
   useEffect(() => {
     const unsubscribe = subscribeActivityLogs(
@@ -83,7 +119,7 @@ export function AdminSettingsPage() {
     setIsSaving(true)
     try {
       await saveUserProfile(form)
-      setMessage('Funcionario vinculado correctamente. La sesión del administrador sigue activa.')
+      setMessage('Funcionario vinculado correctamente. La sesion del administrador sigue activa.')
       setForm(emptyForm)
       setIsEditingUser(false)
     } catch (error) {
@@ -97,73 +133,9 @@ export function AdminSettingsPage() {
     <>
       <AdminModuleHeader
         eyebrow="Sistema"
-        title="Configuración"
-        description="Datos base, parámetros del parque y administración de usuarios."
-        action={
-          <button className="button primary" onClick={() => window.alert('Los datos comerciales se mantienen en configuración local por ahora.')} type="button">
-            <Save size={18} />
-            Guardar ajustes
-          </button>
-        }
+        title="Configuracion"
+        description="Administracion de usuarios, historial y contenido visible del sitio publico."
       />
-      <div className="settings-grid">
-        <article className="panel">
-          <h2 className="panel-title">
-            <Settings color="var(--orange)" />
-            Datos del parque
-          </h2>
-          <form className="form-grid" style={{ marginTop: 18 }}>
-            <label className="field">
-              <span>Nombre comercial</span>
-              <input defaultValue="Lucca Park" />
-            </label>
-            <label className="field">
-              <span>Dirección</span>
-              <input defaultValue={appConfig.address} />
-            </label>
-          </form>
-        </article>
-        <article className="panel">
-          <h2 className="panel-title">
-            <MessageCircle color="var(--green)" />
-            WhatsApp
-          </h2>
-          <form className="form-grid" style={{ marginTop: 18 }}>
-            <label className="field">
-              <span>Número</span>
-              <input defaultValue={appConfig.whatsappNumber} />
-            </label>
-            <label className="field">
-              <span>Mensaje por defecto</span>
-              <textarea defaultValue="Hola, quiero consultar disponibilidad para un cumple." rows={3} />
-            </label>
-          </form>
-        </article>
-        <article className="panel">
-          <h2 className="panel-title">
-            <Clock color="var(--turquoise)" />
-            Horarios y planes
-          </h2>
-          <ul className="task-list" style={{ marginTop: 18 }}>
-            <li>Plan 1 hora</li>
-            <li>Plan 2 horas</li>
-            <li>Plan libre</li>
-            <li>Horarios de eventos configurables</li>
-          </ul>
-        </article>
-        <article className="panel">
-          <h2 className="panel-title">
-            <MonitorPlay color="var(--yellow)" />
-            TV y visual
-          </h2>
-          <ul className="task-list" style={{ marginTop: 18 }}>
-            <li>Modo normal con temporizadores</li>
-            <li>Modo evento con imagen full screen</li>
-            <li>Configuración simple por evento</li>
-            <li><Palette size={16} /> Colores base Lucca Park</li>
-          </ul>
-        </article>
-      </div>
 
       {permissions.canManageUsers ? (
         <article className="panel users-permissions-panel">
@@ -173,7 +145,7 @@ export function AdminSettingsPage() {
               <Users color="var(--orange)" size={20} />
               <span>
                 <strong>Usuarios y permisos</strong>
-                <small>Administrá quién puede acceder al sistema y qué puede realizar.</small>
+                <small>Administra quien puede acceder al sistema y que puede realizar.</small>
               </span>
             </span>
             <strong>{usersResult.users.filter((user) => user.isActive).length} activos</strong>
@@ -193,108 +165,108 @@ export function AdminSettingsPage() {
                   Agregar usuario
                 </button>
               </div>
-          <details className="user-help-box">
-            <summary>¿Cómo crear un usuario?</summary>
-            <ol>
-              <li>Crear la cuenta en Firebase Authentication.</li>
-              <li>Copiar el UID.</li>
-              <li>Volver aquí y presionar Agregar usuario.</li>
-              <li>Cargar UID, nombre, email y rol.</li>
-              <li>Guardar. El funcionario podrá iniciar sesión desde su dispositivo.</li>
-            </ol>
-          </details>
-          {message ? <div className={message.includes('No se') ? 'form-alert error' : 'form-alert success'}>{message}</div> : null}
-          {usersResult.error ? <div className="form-alert error">No se pudieron cargar usuarios: {usersResult.error}</div> : null}
-          <div className="user-permission-grid">
-            <div className="module-list">
-              {usersResult.isLoading ? <div className="empty-state">Cargando usuarios...</div> : null}
-              {!usersResult.isLoading && usersResult.users.length === 0 ? <div className="empty-state">Todavía no hay funcionarios vinculados.</div> : null}
-              {usersResult.users.map((user) => (
-                <article className="user-profile-card" key={user.uid}>
+              <details className="user-help-box">
+                <summary>Como crear un usuario?</summary>
+                <ol>
+                  <li>Crear la cuenta en Firebase Authentication.</li>
+                  <li>Copiar el UID.</li>
+                  <li>Volver aqui y presionar Agregar usuario.</li>
+                  <li>Cargar UID, nombre, email y rol.</li>
+                  <li>Guardar. El funcionario podra iniciar sesion desde su dispositivo.</li>
+                </ol>
+              </details>
+              {message ? <div className={message.includes('No se') ? 'form-alert error' : 'form-alert success'}>{message}</div> : null}
+              {usersResult.error ? <div className="form-alert error">No se pudieron cargar usuarios: {usersResult.error}</div> : null}
+              <div className="user-permission-grid">
+                <div className="module-list">
+                  {usersResult.isLoading ? <div className="empty-state">Cargando usuarios...</div> : null}
+                  {!usersResult.isLoading && usersResult.users.length === 0 ? <div className="empty-state">Todavia no hay funcionarios vinculados.</div> : null}
+                  {usersResult.users.map((user) => (
+                    <article className="user-profile-card" key={user.uid}>
+                      <div>
+                        <strong>{user.displayName}</strong>
+                        <small>{user.email || 'Sin email cargado'}</small>
+                        {detailUid === user.uid ? <small className="technical-id">UID: {user.uid}</small> : null}
+                      </div>
+                      <div className="user-card-meta">
+                        <StatusPill tone={user.isActive ? 'available' : 'blocked'}>{user.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
+                        <StatusPill tone="info">{roleOptions.find((role) => role.value === user.role)?.label ?? user.role}</StatusPill>
+                      </div>
+                      <div className="user-card-actions">
+                        <button
+                          className="button ghost small-button"
+                          onClick={() => {
+                            setForm({ displayName: user.displayName, email: user.email, isActive: user.isActive, role: user.role, uid: user.uid })
+                            setIsEditingUser(true)
+                          }}
+                          type="button"
+                        >
+                          Editar
+                        </button>
+                        <button className="button ghost small-button" onClick={() => setDetailUid((current) => (current === user.uid ? null : user.uid))} type="button">
+                          <Eye size={14} />
+                          Ver detalle
+                        </button>
+                        <button
+                          className="button secondary small-button"
+                          onClick={() => saveUserProfile({ displayName: user.displayName, email: user.email, isActive: !user.isActive, role: user.role, uid: user.uid })}
+                          type="button"
+                        >
+                          {user.isActive ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <div className="user-editor">
                   <div>
-                    <strong>{user.displayName}</strong>
-                    <small>{user.email || 'Sin email cargado'}</small>
-                    {detailUid === user.uid ? <small className="technical-id">UID: {user.uid}</small> : null}
+                    <p className="eyebrow">{form.uid ? 'Editar usuario' : 'Nuevo vinculo'}</p>
+                    <h3>{form.displayName || 'Usuario del sistema'}</h3>
                   </div>
-                  <div className="user-card-meta">
-                    <StatusPill tone={user.isActive ? 'available' : 'blocked'}>{user.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
-                    <StatusPill tone="info">{roleOptions.find((role) => role.value === user.role)?.label ?? user.role}</StatusPill>
-                  </div>
-                  <div className="user-card-actions">
-                    <button
-                      className="button ghost small-button"
-                      onClick={() => {
-                        setForm({ displayName: user.displayName, email: user.email, isActive: user.isActive, role: user.role, uid: user.uid })
-                        setIsEditingUser(true)
-                      }}
-                      type="button"
-                    >
-                      Editar
-                    </button>
-                    <button className="button ghost small-button" onClick={() => setDetailUid((current) => (current === user.uid ? null : user.uid))} type="button">
-                      <Eye size={14} />
-                      Ver detalle
-                    </button>
-                    <button
-                      className="button secondary small-button"
-                      onClick={() => saveUserProfile({ displayName: user.displayName, email: user.email, isActive: !user.isActive, role: user.role, uid: user.uid })}
-                      type="button"
-                    >
-                      {user.isActive ? 'Desactivar' : 'Activar'}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-            <div className="user-editor">
-              <div>
-                <p className="eyebrow">{form.uid ? 'Editar usuario' : 'Nuevo vínculo'}</p>
-                <h3>{form.displayName || 'Usuario del sistema'}</h3>
+                  {!isEditingUser ? <div className="empty-state">Selecciona un usuario o toca Agregar usuario.</div> : null}
+                  {isEditingUser ? (
+                    <>
+                      <label className="field">
+                        <span>Nombre</span>
+                        <input onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} value={form.displayName} />
+                      </label>
+                      <label className="field">
+                        <span>Email</span>
+                        <input onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} value={form.email} />
+                      </label>
+                      <label className="field">
+                        <span>Rol</span>
+                        <select onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} value={form.role}>
+                          {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                        </select>
+                      </label>
+                      <details className="advanced-user-box" open={!form.uid}>
+                        <summary>Configuracion tecnica</summary>
+                        <label className="field">
+                          <span>UID real</span>
+                          <input onChange={(event) => setForm((current) => ({ ...current, uid: event.target.value }))} value={form.uid} />
+                          <small>Este identificador se obtiene desde Firebase Authentication.</small>
+                        </label>
+                      </details>
+                      <label className="checkbox-option">
+                        <input checked={form.isActive} onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+                        Usuario activo
+                      </label>
+                      <div className="role-detail-list">
+                        {roleOptions.map((role) => (
+                          <span key={role.value}>
+                            <strong>{role.label}</strong>
+                            <small>{role.detail}</small>
+                          </span>
+                        ))}
+                      </div>
+                      <button className="button primary" disabled={isSaving} onClick={saveUser} type="button">
+                        {isSaving ? 'Guardando...' : 'Guardar usuario'}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               </div>
-              {!isEditingUser ? <div className="empty-state">Seleccioná un usuario o tocá Agregar usuario.</div> : null}
-              {isEditingUser ? (
-                <>
-                  <label className="field">
-                    <span>Nombre</span>
-                    <input onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} value={form.displayName} />
-                  </label>
-                  <label className="field">
-                    <span>Email</span>
-                    <input onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} value={form.email} />
-                  </label>
-                  <label className="field">
-                    <span>Rol</span>
-                    <select onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} value={form.role}>
-                      {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
-                    </select>
-                  </label>
-                  <details className="advanced-user-box" open={!form.uid}>
-                    <summary>Configuración técnica</summary>
-                    <label className="field">
-                      <span>UID real</span>
-                      <input onChange={(event) => setForm((current) => ({ ...current, uid: event.target.value }))} value={form.uid} />
-                      <small>Este identificador se obtiene desde Firebase Authentication.</small>
-                    </label>
-                  </details>
-                  <label className="checkbox-option">
-                    <input checked={form.isActive} onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
-                    Usuario activo
-                  </label>
-                  <div className="role-detail-list">
-                    {roleOptions.map((role) => (
-                      <span key={role.value}>
-                        <strong>{role.label}</strong>
-                        <small>{role.detail}</small>
-                      </span>
-                    ))}
-                  </div>
-                  <button className="button primary" disabled={isSaving} onClick={saveUser} type="button">
-                    {isSaving ? 'Guardando...' : 'Guardar usuario'}
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
             </div>
           ) : null}
         </article>
@@ -317,7 +289,7 @@ export function AdminSettingsPage() {
             {isActivityLoading ? <div className="empty-state">Cargando actividad...</div> : null}
             {activityError ? <div className="form-alert error">No se pudo cargar el historial: {activityError}</div> : null}
             {!isActivityLoading && !activityError && activityLogs.length === 0 ? (
-              <div className="empty-state">Todavía no hay actividad registrada.</div>
+              <div className="empty-state">Todavia no hay actividad registrada.</div>
             ) : null}
             <div className="settings-activity-list">
               {activityLogs.map((log) => (
@@ -330,7 +302,7 @@ export function AdminSettingsPage() {
                   </div>
                   <div className="settings-activity-meta">
                     <StatusPill tone={activityTone(log.action)}>{activityActionLabels[log.action] ?? log.action}</StatusPill>
-                    <span>Módulo: {log.module}</span>
+                    <span>Modulo: {log.module}</span>
                   </div>
                 </article>
               ))}
@@ -338,6 +310,346 @@ export function AdminSettingsPage() {
           </div>
         ) : null}
       </article>
+
+      <article className="panel settings-public-page-panel">
+        <button className="finance-collapsible-header" onClick={() => setIsPublicEditorOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isPublicEditorOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <ImagePlus color="var(--green)" size={20} />
+            <span>
+              <strong>Editar pagina publica</strong>
+              <small>Configura los textos, imagenes y secciones visibles del sitio publico.</small>
+            </span>
+          </span>
+          <strong>{publicPage.isLoading ? 'Cargando' : 'Contenido'}</strong>
+        </button>
+        {isPublicEditorOpen ? (
+          <PublicPageEditor config={publicPage.config} error={publicPage.error} isLoading={publicPage.isLoading} />
+        ) : null}
+      </article>
     </>
+  )
+}
+
+function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConfig; error: string | null; isLoading: boolean }) {
+  const [draft, setDraft] = useState<PublicPageConfig>(config)
+  const [openSections, setOpenSections] = useState({ birthday: false, contact: false, home: true, installations: false })
+  const [status, setStatus] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    setDraft(config)
+  }, [config])
+
+  const toggleSection = (section: keyof typeof openSections) => {
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }))
+  }
+
+  const persist = async (
+    nextConfig: PublicPageConfig,
+    activity: { action: ActivityAction; description: string; entityName?: string; metadata?: Record<string, unknown> },
+  ) => {
+    setStatus(null)
+    setIsSaving(true)
+    try {
+      await savePublicPageConfig(nextConfig)
+      setDraft(nextConfig)
+      setStatus('Cambios guardados.')
+      void logActivity({
+        action: activity.action,
+        description: activity.description,
+        entityName: activity.entityName ?? 'Pagina publica',
+        metadata: activity.metadata,
+        module: 'Configuración',
+      })
+    } catch (saveError) {
+      setStatus(saveError instanceof Error ? saveError.message : 'No se pudieron guardar los cambios.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const uploadHeroImage = async (file: File | null) => {
+    if (!file) return
+    setStatus(null)
+    setUploadingKey('hero')
+    try {
+      const imageUrl = await uploadPublicPageImage(file, 'hero', 'main')
+      const nextConfig = { ...draft, home: { ...draft.home, heroImageUrl: imageUrl } }
+      await persist(nextConfig, { action: 'update', description: 'Edito imagen principal de Inicio', entityName: 'Inicio' })
+    } catch (uploadError) {
+      setStatus(uploadError instanceof Error ? uploadError.message : 'No se pudo subir la imagen.')
+    } finally {
+      setUploadingKey(null)
+    }
+  }
+
+  const uploadInstallationImage = async (item: PublicInstallationItem, file: File | null) => {
+    if (!file) return
+    setStatus(null)
+    setUploadingKey(item.id)
+    try {
+      const imageUrl = await uploadPublicPageImage(file, 'installations', item.id)
+      const nextConfig = updateInstallationItem(draft, item.id, { imageUrl })
+      await persist(nextConfig, { action: 'update', description: `Edito imagen de instalacion ${item.title}`, entityName: item.title })
+    } catch (uploadError) {
+      setStatus(uploadError instanceof Error ? uploadError.message : 'No se pudo subir la imagen.')
+    } finally {
+      setUploadingKey(null)
+    }
+  }
+
+  const addInstallation = async () => {
+    const item: PublicInstallationItem = { accent: 'orange', id: createEditorId('installation'), imageUrl: '', isActive: true, title: 'Nueva instalacion' }
+    const nextConfig = { ...draft, installations: { ...draft.installations, items: [...draft.installations.items, item] } }
+    await persist(nextConfig, { action: 'create', description: 'Creo una instalacion en la pagina publica', entityName: item.title })
+  }
+
+  const deleteInstallation = async (item: PublicInstallationItem) => {
+    if (!window.confirm(`Eliminar instalacion "${item.title}"?`)) return
+    const nextConfig = { ...draft, installations: { ...draft.installations, items: draft.installations.items.filter((current) => current.id !== item.id) } }
+    await persist(nextConfig, { action: 'deletion', description: `Elimino instalacion ${item.title}`, entityName: item.title })
+  }
+
+  const addPackage = async () => {
+    const birthdayPackage: PublicBirthdayPackage = {
+      buttonText: 'Consultar',
+      description: 'Descripcion principal',
+      features: ['Incluye juegos', 'Acompanamiento del equipo'],
+      id: createEditorId('package'),
+      isActive: true,
+      name: 'Nuevo paquete',
+      priceText: 'Consultar',
+      secondaryText: 'Descripcion secundaria',
+      summary: 'Frase corta',
+    }
+    const nextConfig = { ...draft, birthday: { ...draft.birthday, packages: [...draft.birthday.packages, birthdayPackage] } }
+    await persist(nextConfig, { action: 'create', description: 'Creo un paquete de cumpleanos en la pagina publica', entityName: birthdayPackage.name })
+  }
+
+  const deletePackage = async (birthdayPackage: PublicBirthdayPackage) => {
+    if (!window.confirm(`Eliminar paquete "${birthdayPackage.name}"?`)) return
+    const nextConfig = { ...draft, birthday: { ...draft.birthday, packages: draft.birthday.packages.filter((current) => current.id !== birthdayPackage.id) } }
+    await persist(nextConfig, { action: 'deletion', description: `Elimino paquete de cumpleanos ${birthdayPackage.name}`, entityName: birthdayPackage.name })
+  }
+
+  const saveHome = () => persist(draft, { action: 'update', description: 'Edito Inicio de la pagina publica', entityName: 'Inicio' })
+  const saveInstallations = () => persist(draft, { action: 'update', description: 'Edito Instalaciones de la pagina publica', entityName: 'Instalaciones' })
+  const saveBirthday = () => persist(draft, { action: 'update', description: 'Edito Cumpleanos de la pagina publica', entityName: 'Cumpleanos' })
+  const saveContact = () =>
+    persist(draft, {
+      action: 'update',
+      description: draft.contact.whatsappNumber !== config.contact.whatsappNumber ? 'Cambio numero de WhatsApp publico' : 'Edito Contacto de la pagina publica',
+      entityName: 'Contacto',
+      metadata: { whatsappAnterior: config.contact.whatsappNumber, whatsappNuevo: draft.contact.whatsappNumber },
+    })
+
+  if (isLoading) return <div className="settings-public-page-body"><div className="empty-state">Cargando contenido publico...</div></div>
+
+  return (
+    <div className="settings-public-page-body">
+      {error ? <div className="form-alert error">No se pudo cargar la pagina publica: {error}</div> : null}
+      {status ? <div className={status.includes('No se') ? 'form-alert error' : 'form-alert success'}>{status}</div> : null}
+
+      <PublicEditorSection isOpen={openSections.home} onToggle={() => toggleSection('home')} title="Inicio">
+        <div className="public-editor-grid">
+          <label className="field">
+            <span>Texto pequeno superior</span>
+            <input onChange={(event) => setDraft((current) => ({ ...current, home: { ...current.home, eyebrow: event.target.value } }))} value={draft.home.eyebrow} />
+          </label>
+          <label className="field">
+            <span>Titulo principal</span>
+            <input onChange={(event) => setDraft((current) => ({ ...current, home: { ...current.home, title: event.target.value } }))} value={draft.home.title} />
+          </label>
+          <label className="field public-editor-full">
+            <span>Descripcion</span>
+            <textarea onChange={(event) => setDraft((current) => ({ ...current, home: { ...current.home, description: event.target.value } }))} rows={3} value={draft.home.description} />
+          </label>
+          <label className="field">
+            <span>Imagen principal del hero</span>
+            <input accept="image/*" disabled={uploadingKey === 'hero'} onChange={(event) => void uploadHeroImage(event.currentTarget.files?.[0] ?? null)} type="file" />
+          </label>
+          {draft.home.heroImageUrl ? <img alt="Hero actual" className="public-editor-preview" src={draft.home.heroImageUrl} /> : null}
+        </div>
+        <button className="button primary" disabled={isSaving} onClick={saveHome} type="button">
+          <Save size={16} />
+          Guardar Inicio
+        </button>
+      </PublicEditorSection>
+
+      <PublicEditorSection isOpen={openSections.installations} onToggle={() => toggleSection('installations')} title="Instalaciones">
+        <div className="public-editor-grid">
+          <label className="field">
+            <span>Titulo</span>
+            <input onChange={(event) => setDraft((current) => ({ ...current, installations: { ...current.installations, title: event.target.value } }))} value={draft.installations.title} />
+          </label>
+          <label className="field public-editor-full">
+            <span>Descripcion</span>
+            <textarea onChange={(event) => setDraft((current) => ({ ...current, installations: { ...current.installations, description: event.target.value } }))} rows={3} value={draft.installations.description} />
+          </label>
+        </div>
+        <div className="public-editor-actions">
+          <button className="button secondary" disabled={isSaving} onClick={addInstallation} type="button">
+            <Plus size={16} />
+            Agregar instalacion
+          </button>
+          <button className="button primary" disabled={isSaving} onClick={saveInstallations} type="button">
+            <Save size={16} />
+            Guardar Instalaciones
+          </button>
+        </div>
+        <div className="public-editor-list">
+          {draft.installations.items.map((item) => (
+            <article className="public-editor-card" key={item.id}>
+              <div className="public-editor-card-header">
+                <strong>{item.title}</strong>
+                <button className="button ghost small-button danger-button" onClick={() => void deleteInstallation(item)} type="button">
+                  <Trash2 size={14} />
+                  Eliminar
+                </button>
+              </div>
+              <div className="public-editor-grid">
+                <label className="field">
+                  <span>Titulo</span>
+                  <input onChange={(event) => setDraft((current) => updateInstallationItem(current, item.id, { title: event.target.value }))} value={item.title} />
+                </label>
+                <label className="field">
+                  <span>Acento</span>
+                  <select onChange={(event) => setDraft((current) => updateInstallationItem(current, item.id, { accent: event.target.value }))} value={item.accent}>
+                    <option value="orange">Naranja</option>
+                    <option value="green">Verde</option>
+                    <option value="turquoise">Turquesa</option>
+                    <option value="yellow">Amarillo</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Imagen</span>
+                  <input accept="image/*" disabled={uploadingKey === item.id} onChange={(event) => void uploadInstallationImage(item, event.currentTarget.files?.[0] ?? null)} type="file" />
+                </label>
+                <label className="checkbox-option">
+                  <input checked={item.isActive} onChange={(event) => setDraft((current) => updateInstallationItem(current, item.id, { isActive: event.target.checked }))} type="checkbox" />
+                  Activa
+                </label>
+              </div>
+              {item.imageUrl ? <img alt={item.title} className="public-editor-preview" src={item.imageUrl} /> : null}
+            </article>
+          ))}
+        </div>
+      </PublicEditorSection>
+
+      <PublicEditorSection isOpen={openSections.birthday} onToggle={() => toggleSection('birthday')} title="Cumpleanos">
+        <div className="public-editor-grid">
+          <label className="field">
+            <span>Titulo</span>
+            <input onChange={(event) => setDraft((current) => ({ ...current, birthday: { ...current.birthday, title: event.target.value } }))} value={draft.birthday.title} />
+          </label>
+          <label className="field public-editor-full">
+            <span>Descripcion</span>
+            <textarea onChange={(event) => setDraft((current) => ({ ...current, birthday: { ...current.birthday, description: event.target.value } }))} rows={3} value={draft.birthday.description} />
+          </label>
+        </div>
+        <div className="public-editor-actions">
+          <button className="button secondary" disabled={isSaving} onClick={addPackage} type="button">
+            <Plus size={16} />
+            Crear paquete
+          </button>
+          <button className="button primary" disabled={isSaving} onClick={saveBirthday} type="button">
+            <Save size={16} />
+            Guardar Cumpleanos
+          </button>
+        </div>
+        <div className="public-editor-list">
+          {draft.birthday.packages.map((birthdayPackage) => (
+            <article className="public-editor-card" key={birthdayPackage.id}>
+              <div className="public-editor-card-header">
+                <strong>{birthdayPackage.name}</strong>
+                <button className="button ghost small-button danger-button" onClick={() => void deletePackage(birthdayPackage)} type="button">
+                  <Trash2 size={14} />
+                  Eliminar
+                </button>
+              </div>
+              <div className="public-editor-grid">
+                <label className="field">
+                  <span>Nombre del paquete</span>
+                  <input onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { name: event.target.value }))} value={birthdayPackage.name} />
+                </label>
+                <label className="field">
+                  <span>Frase corta</span>
+                  <input onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { summary: event.target.value }))} value={birthdayPackage.summary} />
+                </label>
+                <label className="field">
+                  <span>Duracion o descripcion principal</span>
+                  <input onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { description: event.target.value }))} value={birthdayPackage.description} />
+                </label>
+                <label className="field">
+                  <span>Descripcion secundaria</span>
+                  <input onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { secondaryText: event.target.value }))} value={birthdayPackage.secondaryText} />
+                </label>
+                <label className="field">
+                  <span>Texto del boton</span>
+                  <input onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { buttonText: event.target.value }))} value={birthdayPackage.buttonText} />
+                </label>
+                <label className="field">
+                  <span>Precio o texto de consulta</span>
+                  <input onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { priceText: event.target.value }))} value={birthdayPackage.priceText} />
+                </label>
+                <label className="field public-editor-full">
+                  <span>Incluye / caracteristicas</span>
+                  <textarea
+                    onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { features: event.target.value.split('\n').map((feature) => feature.trim()).filter(Boolean) }))}
+                    rows={4}
+                    value={birthdayPackage.features.join('\n')}
+                  />
+                </label>
+                <label className="checkbox-option">
+                  <input checked={birthdayPackage.isActive} onChange={(event) => setDraft((current) => updateBirthdayPackage(current, birthdayPackage.id, { isActive: event.target.checked }))} type="checkbox" />
+                  Activo
+                </label>
+              </div>
+            </article>
+          ))}
+        </div>
+      </PublicEditorSection>
+
+      <PublicEditorSection isOpen={openSections.contact} onToggle={() => toggleSection('contact')} title="Contacto">
+        <div className="public-editor-grid">
+          <label className="field">
+            <span>Titulo</span>
+            <input onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, title: event.target.value } }))} value={draft.contact.title} />
+          </label>
+          <label className="field">
+            <span>Numero de WhatsApp</span>
+            <input onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, whatsappNumber: event.target.value } }))} value={draft.contact.whatsappNumber} />
+          </label>
+          <label className="field public-editor-full">
+            <span>Descripcion</span>
+            <textarea onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, description: event.target.value } }))} rows={3} value={draft.contact.description} />
+          </label>
+          <label className="field public-editor-full">
+            <span>Mensaje por defecto de WhatsApp</span>
+            <textarea onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, whatsappMessage: event.target.value } }))} rows={3} value={draft.contact.whatsappMessage} />
+          </label>
+        </div>
+        <button className="button primary" disabled={isSaving} onClick={saveContact} type="button">
+          <Save size={16} />
+          Guardar Contacto
+        </button>
+      </PublicEditorSection>
+    </div>
+  )
+}
+
+function PublicEditorSection({ children, isOpen, onToggle, title }: { children: ReactNode; isOpen: boolean; onToggle: () => void; title: string }) {
+  return (
+    <section className="public-editor-section">
+      <button className="public-editor-section-toggle" onClick={onToggle} type="button">
+        <span>
+          {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          <strong>{title}</strong>
+        </span>
+      </button>
+      {isOpen ? <div className="public-editor-section-body">{children}</div> : null}
+    </section>
   )
 }

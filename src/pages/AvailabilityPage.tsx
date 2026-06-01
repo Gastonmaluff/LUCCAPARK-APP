@@ -2,10 +2,13 @@ import { MessageCircle } from 'lucide-react'
 import { CalendarPreview } from '../components/CalendarPreview'
 import { SectionHeading } from '../components/SectionHeading'
 import { StatusPill } from '../components/StatusPill'
-import { whatsappLink } from '../config/app'
+import { buildWhatsappLink } from '../config/app'
 import { demoTimeSlots } from '../data/demoData'
+import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
 export function AvailabilityPage() {
+  const { config } = usePublicPageConfig()
+
   return (
     <main className="section">
       <div className="container">
@@ -30,7 +33,7 @@ export function AvailabilityPage() {
                   <strong>{slot.status}</strong>
                 </div>
               ))}
-              <a className="button whatsapp" href={whatsappLink('Hola, quiero consultar disponibilidad.')} target="_blank" rel="noreferrer">
+              <a className="button whatsapp" href={buildWhatsappLink(config.contact.whatsappNumber, config.contact.whatsappMessage)} target="_blank" rel="noreferrer">
                 <MessageCircle size={18} />
                 Consultar fecha
               </a>

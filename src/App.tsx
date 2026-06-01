@@ -20,7 +20,6 @@ import { LandingPage } from './pages/LandingPage'
 import { CanteenPage } from './pages/CanteenPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { PricesPage } from './pages/PricesPage'
 import { ReceptionPage } from './pages/ReceptionPage'
 import { TVPage } from './pages/TVPage'
 
@@ -42,7 +41,7 @@ function App() {
         <Route element={<PublicLayout />}>
           <Route index element={<LandingPage />} />
           <Route path="disponibilidad" element={<AvailabilityPage />} />
-          <Route path="precios" element={<PricesPage />} />
+          <Route path="precios" element={<Navigate to="/#cumpleanos" replace />} />
           <Route path="contacto" element={<ContactPage />} />
         </Route>
         <Route element={<ProtectedRoute />}>

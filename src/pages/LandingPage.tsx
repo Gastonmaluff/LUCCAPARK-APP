@@ -1,13 +1,22 @@
-import { Baby, CalendarCheck, CalendarDays, Gift, MessageCircle, PartyPopper, ShieldCheck, Star } from 'lucide-react'
+import { Baby, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Gift, MessageCircle, PartyPopper, ShieldCheck, Star } from 'lucide-react'
+import { useRef } from 'react'
 import { CalendarPreview } from '../components/CalendarPreview'
 import { SectionHeading } from '../components/SectionHeading'
 import { StatusPill } from '../components/StatusPill'
-import { appConfig, whatsappLink } from '../config/app'
-import { demoPackages, demoTimeSlots } from '../data/demoData'
-
-const facilities = ['Juegos interactivos', 'Toboganes', 'Salones privados', 'Zona de juegos']
+import { buildWhatsappLink } from '../config/app'
+import { demoTimeSlots } from '../data/demoData'
+import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
 export function LandingPage() {
+  const { config } = usePublicPageConfig()
+  const packageScrollerRef = useRef<HTMLDivElement | null>(null)
+  const whatsappHref = (message = config.contact.whatsappMessage) => buildWhatsappLink(config.contact.whatsappNumber, message)
+  const activeInstallations = config.installations.items.filter((item) => item.isActive)
+  const activePackages = config.birthday.packages.filter((item) => item.isActive)
+  const scrollPackages = (direction: -1 | 1) => {
+    packageScrollerRef.current?.scrollBy({ behavior: 'smooth', left: direction * 340 })
+  }
+
   return (
     <main>
       <section className="hero" id="inicio">
@@ -16,18 +25,13 @@ export function LandingPage() {
         <span className="confetti dot c3">✦</span>
         <div className="container hero-grid">
           <div className="hero-copy">
-            <span className="eyebrow">Parque infantil y eventos</span>
-            <h1>
-              El lugar donde la <span className="accent-green">diversion</span> cobra vida
-            </h1>
-            <p>
-              Un parque infantil disenado para jugar, celebrar y crear recuerdos inolvidables con una
-              experiencia segura, alegre y profesional.
-            </p>
+            <span className="eyebrow">{config.home.eyebrow}</span>
+            <h1>{config.home.title}</h1>
+            <p>{config.home.description}</p>
             <div className="hero-buttons">
-              <a className="button primary" href={whatsappLink('Hola, quiero reservar un cumpleanos en Lucca Park.')} target="_blank" rel="noreferrer">
+              <a className="button primary" href={whatsappHref()} target="_blank" rel="noreferrer">
                 <CalendarDays size={19} />
-                Reservar cumpleanos
+                Reservar cumpleaños
               </a>
               <a className="button secondary" href="#disponibilidad">
                 <CalendarCheck size={19} />
@@ -36,75 +40,92 @@ export function LandingPage() {
             </div>
           </div>
           <div className="hero-media">
-            <img src={appConfig.heroImageUrl} alt="Ninos jugando en un parque infantil moderno" />
+            <img src={config.home.heroImageUrl} alt="Niños jugando en Lucca Park" />
           </div>
         </div>
       </section>
 
       <section className="section" id="instalaciones">
         <div className="container">
-          <SectionHeading eyebrow="Instalaciones" title="Espacios pensados para cada aventura">
-            Juegos, salones y zonas preparadas para recibir visitas normales y eventos privados.
+          <SectionHeading eyebrow="Instalaciones" title={config.installations.title}>
+            {config.installations.description}
           </SectionHeading>
-          <div className="grid-4">
-            {facilities.map((facility) => (
-              <article className="facility-card" key={facility}>
-                <div className="facility-art">
-                  <span className="play-visual" />
-                </div>
-                <strong>{facility}</strong>
-              </article>
-            ))}
+          <div className="public-installations-marquee">
+            <div className="public-installations-track">
+              {[...activeInstallations, ...activeInstallations].map((facility, index) => (
+                <article className={`facility-card public-facility-card accent-${facility.accent}`} key={`${facility.id}-${index}`}>
+                  <div className="facility-art">
+                    {facility.imageUrl ? <img src={facility.imageUrl} alt="" /> : <span className="play-visual" />}
+                  </div>
+                  <strong>{facility.title}</strong>
+                </article>
+              ))}
+              {activeInstallations.length === 0 ? <div className="empty-state">Instalaciones en preparación.</div> : null}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="section" id="cumpleanos">
         <div className="container">
-          <SectionHeading eyebrow="Cumpleanos" title="Paquetes listos para celebrar">
-            Datos demo configurables. En fases posteriores se conectan a Firestore y presupuestos.
+          <SectionHeading eyebrow="Cumpleaños" title={config.birthday.title}>
+            {config.birthday.description}
           </SectionHeading>
-          <div className="grid-4">
-            {demoPackages.map((plan) => (
-              <article className="package-card" key={plan.name}>
-                <header>
-                  <span className="package-icon">
-                    <Gift size={22} />
-                  </span>
-                  <div>
-                    <h3>{plan.name}</h3>
-                    <p className="muted">{plan.summary}</p>
-                  </div>
-                </header>
-                <p>
-                  <strong>{plan.duration}</strong>
-                  <br />
-                  <span className="muted">{plan.children}</span>
-                </p>
-                <ul>
-                  {plan.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
-                  ))}
-                </ul>
-                <a className="button ghost" href={whatsappLink(`Hola, quiero consultar el paquete ${plan.name}.`)} target="_blank" rel="noreferrer">
-                  Consultar
-                </a>
-              </article>
-            ))}
+          <div className="public-packages-wrap">
+            {activePackages.length > 4 ? (
+              <button className="public-carousel-arrow left" onClick={() => scrollPackages(-1)} type="button" aria-label="Paquetes anteriores">
+                <ChevronLeft size={20} />
+              </button>
+            ) : null}
+            <div className={activePackages.length > 4 ? 'public-package-carousel' : 'grid-4'} ref={packageScrollerRef}>
+              {activePackages.map((plan) => (
+                <article className="package-card public-package-card" key={plan.id}>
+                  <header>
+                    <span className="package-icon">
+                      <Gift size={22} />
+                    </span>
+                    <div>
+                      <h3>{plan.name}</h3>
+                      <p className="muted">{plan.summary}</p>
+                    </div>
+                  </header>
+                  <p>
+                    <strong>{plan.description}</strong>
+                    <br />
+                    <span className="muted">{plan.secondaryText}</span>
+                  </p>
+                  <ul>
+                    {plan.features.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                  <strong className="package-price-text">{plan.priceText}</strong>
+                  <a className="button ghost" href={whatsappHref(`Hola, quiero consultar el paquete ${plan.name}.`)} target="_blank" rel="noreferrer">
+                    {plan.buttonText || 'Consultar'}
+                  </a>
+                </article>
+              ))}
+              {activePackages.length === 0 ? <div className="empty-state">Paquetes en preparación.</div> : null}
+            </div>
+            {activePackages.length > 4 ? (
+              <button className="public-carousel-arrow right" onClick={() => scrollPackages(1)} type="button" aria-label="Siguientes paquetes">
+                <ChevronRight size={20} />
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
 
       <section className="section" id="disponibilidad">
         <div className="container">
-          <SectionHeading eyebrow="Disponibilidad" title="Calendario publico preparado para Firestore">
+          <SectionHeading eyebrow="Disponibilidad" title="Calendario público preparado para Firestore">
             Estados visuales para fechas disponibles, reservadas, bloqueadas o a consultar.
           </SectionHeading>
           <div className="availability-layout">
             <CalendarPreview />
             <div className="side-stack">
               <article className="availability-card">
-                <p className="eyebrow">Proximo cumpleanos reservado</p>
+                <p className="eyebrow">Próximo cumpleaños reservado</p>
                 <h3>Mateo Rios</h3>
                 <p className="muted">Domingo 11 de mayo · 15:00 a 18:00 hs</p>
                 <StatusPill tone="reserved">Reservado</StatusPill>
@@ -119,7 +140,7 @@ export function LandingPage() {
                     </StatusPill>
                   </div>
                 ))}
-                <a className="button whatsapp" href={whatsappLink('Hola, quiero consultar una fecha para mi cumple.')} target="_blank" rel="noreferrer">
+                <a className="button whatsapp" href={whatsappHref('Hola, quiero consultar una fecha para mi cumple.')} target="_blank" rel="noreferrer">
                   <MessageCircle size={18} />
                   Consultar por WhatsApp
                 </a>
@@ -132,10 +153,10 @@ export function LandingPage() {
       <section className="section contact-band" id="contacto">
         <div className="container availability-layout">
           <div>
-            <SectionHeading eyebrow="Contacto" title="Consulta disponibilidad para tu cumple">
-              Deja preparada la conversacion por WhatsApp y luego podremos sumar formulario, mapa y redes.
+            <SectionHeading eyebrow="Contacto" title={config.contact.title}>
+              {config.contact.description}
             </SectionHeading>
-            <a className="button primary" href={whatsappLink('Hola Lucca Park, quiero consultar disponibilidad para un cumple.')} target="_blank" rel="noreferrer">
+            <a className="button primary" href={whatsappHref()} target="_blank" rel="noreferrer">
               <MessageCircle size={19} />
               Escribir por WhatsApp
             </a>
@@ -143,7 +164,7 @@ export function LandingPage() {
           <article className="contact-card">
             <ShieldCheck color="var(--green)" size={32} />
             <h3>Base profesional desde Fase 1</h3>
-            <p className="muted">Landing, admin, recepcion y TV comparten marca, datos demo separados y arquitectura lista para crecer.</p>
+            <p className="muted">Landing, admin, recepción y TV comparten marca, datos separados y arquitectura lista para crecer.</p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <StatusPill tone="available">Seguro</StatusPill>
               <StatusPill tone="info">Configurable</StatusPill>
@@ -156,8 +177,8 @@ export function LandingPage() {
       <section className="section">
         <div className="container grid-4">
           {[
-            ['Diversion', Baby],
-            ['Cumpleanos', PartyPopper],
+            ['Diversión', Baby],
+            ['Cumpleaños', PartyPopper],
             ['Reservas', CalendarCheck],
             ['Experiencia', Star],
           ].map(([label, Icon]) => (
@@ -166,7 +187,7 @@ export function LandingPage() {
                 <Icon size={22} />
               </span>
               <h3>{String(label)}</h3>
-              <p className="muted">Modulo preparado para contenido real editable.</p>
+              <p className="muted">Módulo preparado para contenido real editable.</p>
             </article>
           ))}
         </div>

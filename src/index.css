@@ -344,6 +344,13 @@ img {
   padding: 14px;
 }
 
+.facility-art img {
+  border-radius: var(--radius);
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .play-visual {
   background:
     linear-gradient(90deg, transparent 0 36%, rgba(255, 255, 255, 0.8) 36% 40%, transparent 40%),
@@ -413,6 +420,111 @@ img {
   gap: 8px;
   margin: 0;
   padding-left: 18px;
+}
+
+.public-installations-marquee {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.public-installations-track {
+  display: flex;
+  gap: 18px;
+  min-width: max-content;
+  width: max-content;
+}
+
+.public-installations-track:not(:has(.empty-state)) {
+  animation: public-installations-scroll 42s linear infinite;
+}
+
+.public-installations-marquee:hover .public-installations-track {
+  animation-play-state: paused;
+}
+
+.public-facility-card {
+  min-width: 250px;
+  width: 250px;
+}
+
+.public-facility-card.accent-orange strong {
+  background: var(--orange);
+  color: #fff;
+}
+
+.public-facility-card.accent-green strong {
+  background: var(--green);
+  color: #fff;
+}
+
+.public-facility-card.accent-turquoise strong {
+  background: var(--turquoise);
+  color: #fff;
+}
+
+.public-facility-card.accent-yellow strong {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+@keyframes public-installations-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.public-packages-wrap {
+  position: relative;
+}
+
+.public-package-carousel {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  padding: 4px 52px 12px;
+  scroll-snap-type: x mandatory;
+}
+
+.public-package-card {
+  scroll-snap-align: start;
+}
+
+.public-package-carousel .public-package-card {
+  flex: 0 0 min(310px, 82vw);
+}
+
+.package-price-text {
+  color: var(--orange);
+  font-size: 1.08rem;
+}
+
+.public-carousel-arrow {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  display: flex;
+  height: 42px;
+  justify-content: center;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  z-index: 2;
+}
+
+.public-carousel-arrow.left {
+  left: 0;
+}
+
+.public-carousel-arrow.right {
+  right: 0;
 }
 
 .availability-layout {
@@ -4766,6 +4878,12 @@ img {
   margin-top: 18px;
 }
 
+.settings-public-page-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
 .settings-activity-body {
   display: grid;
   gap: 12px;
@@ -4817,6 +4935,93 @@ img {
   gap: 8px;
   justify-items: end;
   text-align: right;
+}
+
+.settings-public-page-body {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.public-editor-section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.public-editor-section-toggle {
+  align-items: center;
+  background: #f8fafc;
+  border: 0;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.public-editor-section-toggle span {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.public-editor-section-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.public-editor-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.public-editor-full {
+  grid-column: 1 / -1;
+}
+
+.public-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.public-editor-list {
+  display: grid;
+  gap: 12px;
+}
+
+.public-editor-card {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.public-editor-card-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.public-editor-preview {
+  aspect-ratio: 1.8;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  object-fit: cover;
+  width: min(260px, 100%);
+}
+
+.danger-button {
+  color: var(--red);
 }
 
 .user-permission-grid {
@@ -5722,6 +5927,7 @@ img {
   .canteen-hero,
   .canteen-account-grid,
   .picker-grid,
+  .public-editor-grid,
   .reservation-row,
   .reservation-premium-card,
   .today-visit-row,
@@ -5804,6 +6010,20 @@ img {
     align-items: flex-start;
     justify-items: start;
     text-align: left;
+  }
+
+  .public-editor-card-header,
+  .public-editor-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .public-package-carousel {
+    padding-inline: 0;
+  }
+
+  .public-carousel-arrow {
+    display: none;
   }
 
   .account-card-balance {
