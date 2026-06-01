@@ -4760,6 +4760,65 @@ img {
   margin-top: 18px;
 }
 
+.settings-activity-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.settings-activity-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.settings-activity-list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-activity-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.settings-activity-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-activity-main strong {
+  color: var(--ink);
+}
+
+.settings-activity-main p,
+.settings-activity-main small,
+.settings-activity-meta span {
+  color: var(--muted);
+  margin: 0;
+}
+
+.settings-activity-main small,
+.settings-activity-meta span {
+  font-size: 0.86rem;
+  font-weight: 720;
+}
+
+.settings-activity-meta {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  text-align: right;
+}
+
 .user-permission-grid {
   display: grid;
   gap: 16px;
@@ -5716,6 +5775,7 @@ img {
   .event-ledger-card,
   .event-task-card,
   .child-history-card,
+  .settings-activity-card,
   .task-card,
   .client-row-enhanced {
     grid-template-columns: 1fr;
@@ -5735,8 +5795,15 @@ img {
   .event-ledger-side,
   .event-task-side,
   .child-history-side,
+  .settings-activity-meta,
   .task-card-actions {
     justify-content: flex-start;
+  }
+
+  .settings-activity-meta {
+    align-items: flex-start;
+    justify-items: start;
+    text-align: left;
   }
 
   .account-card-balance {

@@ -6,6 +6,7 @@ import { ensureReceptionSession } from './authSession'
 import { createEvent } from './eventService'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
+import { logActivity } from './activityLogService'
 import { formatGuarani, parseCurrencyInput } from '../utils/money'
 import { formatEventTitle, formatPersonName, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
@@ -71,6 +72,7 @@ export const upsertBudgetDecoration = async (input: UpsertBudgetDecorationInput)
   await ensureReceptionSession()
   const userAudit = await getCurrentUserAudit()
   const decorationRef = input.id ? getDocumentRef('budgetDecorations', input.id) : doc(getCollectionRef('budgetDecorations'))
+  const isNew = !input.id
   await setDoc(
     decorationRef,
     {
@@ -84,10 +86,20 @@ export const upsertBudgetDecoration = async (input: UpsertBudgetDecorationInput)
       imageUrl: input.imageUrl ?? '',
       isActive: input.isActive,
       updatedAt: serverTimestamp(),
-      ...(input.id ? {} : { createdAt: serverTimestamp(), createdBy: userAudit.uid, createdByName: userAudit.name }),
+      ...(isNew ? { createdAt: serverTimestamp(), createdBy: userAudit.uid, createdByName: userAudit.name } : {}),
     },
     { merge: true },
   )
+  if (isNew) {
+    void logActivity({
+      action: 'creation',
+      description: `Creó la opción decorativa ${optionalText(input.name)}`,
+      entityId: decorationRef.id,
+      entityName: optionalText(input.name),
+      metadata: { price: parseCurrencyInput(input.price) },
+      module: 'Decoración',
+    })
+  }
   return decorationRef.id
 }
 
@@ -123,9 +135,16 @@ const getDecorationImageRef = (imageUrl?: string) => {
   return storageRef(storage, path)
 }
 
-export const deleteBudgetDecoration = async (decoration: Pick<BudgetDecoration, 'id' | 'imageUrl'>) => {
+export const deleteBudgetDecoration = async (decoration: Pick<BudgetDecoration, 'id' | 'imageUrl' | 'name'>) => {
   await ensureReceptionSession()
   await deleteDoc(getDocumentRef('budgetDecorations', decoration.id))
+  void logActivity({
+    action: 'deletion',
+    description: `Eliminó la opción decorativa ${decoration.name}`,
+    entityId: decoration.id,
+    entityName: decoration.name,
+    module: 'Decoración',
+  })
   const imageRef = getDecorationImageRef(decoration.imageUrl)
   if (!imageRef) return { imageDeleteFailed: false }
   try {
@@ -164,6 +183,14 @@ export const saveEventBudget = async (input: UpsertEventBudgetInput) => {
       : {}),
   }
   await setDoc(budgetRef, payload, { merge: true })
+  void logActivity({
+    action: isNew ? 'creation' : 'edition',
+    description: `${isNew ? 'Creó' : 'Editó'} el presupuesto de evento para ${payload.childName}`,
+    entityId: budgetRef.id,
+    entityName: payload.childName,
+    metadata: { finalTotal: payload.finalTotal, responsibleName: payload.responsibleName },
+    module: 'Presupuestos',
+  })
   return budgetRef.id
 }
 
@@ -176,6 +203,14 @@ export const updateEventBudgetStatus = async (budgetId: string, status: EventBud
   if (status === 'sent') payload.sentAt = serverTimestamp()
   if (status === 'approved') payload.approvedAt = serverTimestamp()
   await updateDoc(getDocumentRef('eventBudgets', budgetId), payload)
+  void logActivity({
+    action: status === 'approved' ? 'approval' : status === 'rejected' ? 'cancellation' : 'status_change',
+    description: `Cambió el estado de un presupuesto a ${status}`,
+    entityId: budgetId,
+    entityName: budgetId,
+    metadata: { status },
+    module: 'Presupuestos',
+  })
 }
 
 export const convertBudgetToReservation = async (budget: EventBudget, selectedDecorationId?: string) => {

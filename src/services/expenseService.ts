@@ -2,6 +2,7 @@ import { Timestamp, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'fire
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { auth, firebaseConfig, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
+import { logActivity } from './activityLogService'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { normalizeWhitespace } from '../utils/textFormat'
 import type { ExpenseCategory, PaymentMethod } from '../types'
@@ -118,6 +119,17 @@ export const saveExpense = async (input: SaveExpenseInput) => {
     },
     { merge: true },
   )
+
+  if (!input.id) {
+    void logActivity({
+      action: 'creation',
+      description: `Registró el gasto ${normalizeWhitespace(input.description)}`,
+      entityId: expenseRef.id,
+      entityName: normalizeWhitespace(input.description),
+      metadata: { amount: Number(input.amount), category: input.category, type: input.type },
+      module: 'Finanzas',
+    })
+  }
 
   return expenseRef.id
 }

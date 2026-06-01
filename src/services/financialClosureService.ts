@@ -5,6 +5,7 @@ import { auth, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { getCollectionRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
+import { logActivity } from './activityLogService'
 import { getEventPaidAmount, getEventPendingAmount } from '../utils/eventFinance'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentRecord } from '../types'
 
@@ -67,6 +68,14 @@ export const generateAndSaveFinancialClosure = async (input: ClosurePdfInput): P
     createdAt: serverTimestamp(),
   }
   await setDoc(closureRef, payload)
+  void logActivity({
+    action: 'creation',
+    description: `Generó el cierre financiero del ${input.dateFrom} al ${input.dateTo}`,
+    entityId: closureRef.id,
+    entityName: `${input.dateFrom} al ${input.dateTo}`,
+    metadata: { netResult: input.totals.netResult, totalCollected: input.totals.totalCollected, totalExpenses: input.totals.totalExpenses },
+    module: 'Finanzas',
+  })
 
   return {
     ...payload,

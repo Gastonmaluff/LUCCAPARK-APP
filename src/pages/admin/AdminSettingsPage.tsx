@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Clock, Eye, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight, Clock, Eye, History, MessageCircle, MonitorPlay, Palette, Plus, Save, Settings, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { appConfig } from '../../config/app'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import { useUsers } from '../../hooks/useUsers'
+import { subscribeActivityLogs, type ActivityAction, type ActivityLogRecord } from '../../services/activityLogService'
 import { saveUserProfile } from '../../services/userService'
 import type { UserRole } from '../../types'
 
@@ -18,6 +19,33 @@ const roleOptions: Array<{ label: string; value: UserRole; detail: string }> = [
 
 const emptyForm = { displayName: '', email: '', isActive: true, role: 'recepcion' as UserRole, uid: '' }
 
+const activityActionLabels: Record<ActivityAction, string> = {
+  approval: 'Aprobación',
+  cancellation: 'Cancelación',
+  creation: 'Creación',
+  deletion: 'Eliminación',
+  edition: 'Edición',
+  status_change: 'Cambio de estado',
+}
+
+const activityTone = (action: ActivityAction) => {
+  if (action === 'creation' || action === 'approval') return 'available'
+  if (action === 'deletion' || action === 'cancellation') return 'blocked'
+  if (action === 'status_change') return 'warning'
+  return 'info'
+}
+
+const formatActivityDate = (date: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('es-PY', {
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(date)
+    : 'Sin fecha'
+
 export function AdminSettingsPage() {
   const { permissions } = useUserProfile()
   const usersResult = useUsers(permissions.canManageUsers)
@@ -27,6 +55,26 @@ export function AdminSettingsPage() {
   const [isEditingUser, setIsEditingUser] = useState(false)
   const [detailUid, setDetailUid] = useState<string | null>(null)
   const [isUsersOpen, setIsUsersOpen] = useState(false)
+  const [isActivityOpen, setIsActivityOpen] = useState(false)
+  const [activityLogs, setActivityLogs] = useState<ActivityLogRecord[]>([])
+  const [activityError, setActivityError] = useState<string | null>(null)
+  const [isActivityLoading, setIsActivityLoading] = useState(true)
+
+  useEffect(() => {
+    const unsubscribe = subscribeActivityLogs(
+      (logs) => {
+        setActivityLogs(logs)
+        setActivityError(null)
+        setIsActivityLoading(false)
+      },
+      (errorMessage) => {
+        setActivityError(errorMessage)
+        setIsActivityLoading(false)
+      },
+    )
+
+    return unsubscribe
+  }, [])
 
   const saveUser = async () => {
     setMessage(null)
@@ -249,6 +297,45 @@ export function AdminSettingsPage() {
           ) : null}
         </article>
       ) : null}
+
+      <article className="panel settings-activity-panel">
+        <button className="finance-collapsible-header" onClick={() => setIsActivityOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isActivityOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <History color="var(--turquoise)" size={20} />
+            <span>
+              <strong>Historial de actividad</strong>
+              <small>Registro de cambios importantes realizados por los usuarios.</small>
+            </span>
+          </span>
+          <strong>{activityLogs.length} recientes</strong>
+        </button>
+        {isActivityOpen ? (
+          <div className="settings-activity-body">
+            {isActivityLoading ? <div className="empty-state">Cargando actividad...</div> : null}
+            {activityError ? <div className="form-alert error">No se pudo cargar el historial: {activityError}</div> : null}
+            {!isActivityLoading && !activityError && activityLogs.length === 0 ? (
+              <div className="empty-state">Todavía no hay actividad registrada.</div>
+            ) : null}
+            <div className="settings-activity-list">
+              {activityLogs.map((log) => (
+                <article className="settings-activity-card" key={log.id}>
+                  <div className="settings-activity-main">
+                    <small>{formatActivityDate(log.createdAt)}</small>
+                    <strong>{log.userName}</strong>
+                    <p>{log.description || 'Actividad registrada'}</p>
+                    {log.entityName ? <small>Relacionado: {log.entityName}</small> : null}
+                  </div>
+                  <div className="settings-activity-meta">
+                    <StatusPill tone={activityTone(log.action)}>{activityActionLabels[log.action] ?? log.action}</StatusPill>
+                    <span>Módulo: {log.module}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </article>
     </>
   )
 }

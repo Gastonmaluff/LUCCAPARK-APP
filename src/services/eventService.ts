@@ -17,6 +17,7 @@ import { firebaseConfig, storage } from '../config/firebase'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { ensureReceptionSession } from './authSession'
 import { getCurrentUserAudit } from './userAudit'
+import { logActivity } from './activityLogService'
 import { parseCurrencyInput } from '../utils/money'
 import { formatEventTitle, formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
@@ -44,6 +45,15 @@ const optionalText = (value?: string) => {
 }
 
 const lowerKey = (value: string) => lowerSearchKey(value)
+
+const eventStatusLabel: Record<EventStatus, string> = {
+  active: 'activo',
+  cancelled: 'cancelado',
+  confirmed: 'confirmado',
+  finished: 'finalizado',
+  inquiry: 'consulta',
+  reserved: 'reservado',
+}
 
 const findCustomerByPhone = async (phone?: string) => {
   const normalizedPhone = optionalText(phone)
@@ -213,6 +223,15 @@ export const createEvent = async (input: CreateEventInput) => {
     updatedBy: userId,
   })
 
+  void logActivity({
+    action: 'creation',
+    description: `Creó una reserva para ${birthdayChildName || title}`,
+    entityId: eventRef.id,
+    entityName: birthdayChildName || title,
+    metadata: { customerName, date: input.date, totalAmount: parseCurrencyInput(input.totalAmount) },
+    module: 'Reservas',
+  })
+
   return eventRef.id
 }
 
@@ -232,6 +251,15 @@ export const updateEventStatus = async (eventId: string, status: EventStatus) =>
     status,
     updatedAt: serverTimestamp(),
     updatedBy: currentUserId(),
+  })
+
+  void logActivity({
+    action: status === 'cancelled' ? 'cancellation' : 'status_change',
+    description: `Cambió el estado de una reserva a ${eventStatusLabel[status]}`,
+    entityId: eventId,
+    entityName: eventId,
+    metadata: { status },
+    module: 'Reservas',
   })
 }
 
