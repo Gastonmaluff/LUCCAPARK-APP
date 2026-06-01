@@ -5049,6 +5049,97 @@ img {
   min-width: 0;
 }
 
+.report-collapsible-card.closed {
+  align-content: start;
+}
+
+.report-collapsible-header {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.report-collapsible-header span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.report-collapsible-header strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.report-collapsible-header small {
+  color: var(--muted);
+  font-weight: 720;
+}
+
+.report-collapse-icon {
+  color: var(--orange);
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
+}
+
+.report-collapsible-card.closed .report-collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.report-reactivation-filter {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-reactivation-filter button {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 9px 13px;
+}
+
+.report-reactivation-filter button.active {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+}
+
+.report-reactivation-filter label {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  font-weight: 760;
+  gap: 7px;
+  padding: 7px 12px;
+}
+
+.report-reactivation-filter input {
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 850;
+  outline: 0;
+  text-align: center;
+  width: 58px;
+}
+
 .report-wide-panel {
   min-height: 300px;
 }

@@ -2,6 +2,7 @@ import {
   BarChart3,
   CalendarHeart,
   Cake,
+  ChevronDown,
   Clock3,
   MessageCircle,
   TrendingUp,
@@ -74,6 +75,13 @@ const formatDateShort = (value?: Date | string | null) => {
   if (!value) return 'Sin fecha'
   const date = typeof value === 'string' ? parseDateKey(value) : value
   return new Intl.DateTimeFormat('es-PY', { day: '2-digit', month: 'short' }).format(date)
+}
+
+const daysSinceDate = (value: Date | null | undefined, today: Date) => {
+  if (!value || Number.isNaN(value.getTime())) return null
+  const todayStart = parseDateKey(dateKey(today))
+  const visitStart = parseDateKey(dateKey(value))
+  return Math.max(0, Math.floor((todayStart.getTime() - visitStart.getTime()) / 86400000))
 }
 
 const getWeekdayIndex = (date: Date) => (date.getDay() + 6) % 7
@@ -385,6 +393,9 @@ export function AdminReportsPage() {
   const [period, setPeriod] = useState<PeriodPreset>('month')
   const [customFrom, setCustomFrom] = useState(dateKey(startOfMonth(today)))
   const [customTo, setCustomTo] = useState(dateKey(today))
+  const [frequentOpen, setFrequentOpen] = useState(true)
+  const [reactivateOpen, setReactivateOpen] = useState(true)
+  const [reactivationDays, setReactivationDays] = useState(60)
 
   const range = useMemo(() => {
     if (period === 'today') return { from: dateKey(today), to: dateKey(today) }
@@ -604,13 +615,13 @@ export function AdminReportsPage() {
       visitCounts.set(child.id, current)
     })
     const frequent = Array.from(visitCounts.values()).filter((item) => item.count > 0).sort((a, b) => b.count - a.count).slice(0, 10)
-    const threshold = addDays(today, -60)
     const reactivate = Array.from(visitCounts.values())
-      .filter((item) => item.count >= 2 && item.last && item.last < threshold)
-      .sort((a, b) => (a.last?.getTime() ?? 0) - (b.last?.getTime() ?? 0))
+      .map((item) => ({ ...item, daysSinceLastVisit: daysSinceDate(item.last ?? null, today) }))
+      .filter((item) => item.daysSinceLastVisit !== null && item.daysSinceLastVisit >= reactivationDays)
+      .sort((a, b) => (b.daysSinceLastVisit ?? 0) - (a.daysSinceLastVisit ?? 0))
       .slice(0, 10)
     return { birthdays, frequent, reactivate }
-  }, [childById, children, today, visits])
+  }, [childById, children, reactivationDays, today, visits])
 
   const canteenConsumerTicket = metrics.consumedVisits.length ? metrics.canteenRevenue / metrics.consumedVisits.length : 0
 
@@ -798,46 +809,100 @@ export function AdminReportsPage() {
         </article>
 
         <div className="report-grid two">
-          <article className="panel report-panel">
-            <h3>Clientes más frecuentes</h3>
-            {opportunities.frequent.length === 0 ? <EmptyReportState>No hay visitas históricas suficientes.</EmptyReportState> : null}
-            <div className="report-action-list compact">
-              {opportunities.frequent.map(({ child, count, last }) => (
-                <article className="report-action-row compact" key={child.id}>
-                  <div>
-                    <strong>{child.name}</strong>
-                    <p>{child.mainCustomerName || child.customerName || 'Sin responsable'} · {count} visitas</p>
-                    <small>Última visita: {formatDate(last)}</small>
-                  </div>
-                  <StatusPill tone={child.eventReservationCount ? 'available' : 'info'}>
-                    {child.eventReservationCount ? 'Tuvo evento' : 'Sin evento'}
-                  </StatusPill>
-                </article>
-              ))}
-            </div>
+          <article className={`panel report-panel report-collapsible-card ${frequentOpen ? 'open' : 'closed'}`}>
+            <button
+              aria-expanded={frequentOpen}
+              className="report-collapsible-header"
+              onClick={() => setFrequentOpen((current) => !current)}
+              type="button"
+            >
+              <span>
+                <strong>Clientes más frecuentes</strong>
+                <small>Familias con más visitas registradas</small>
+              </span>
+              <ChevronDown className="report-collapse-icon" size={18} />
+            </button>
+            {frequentOpen ? (
+              <>
+                {opportunities.frequent.length === 0 ? <EmptyReportState>No hay visitas históricas suficientes.</EmptyReportState> : null}
+                <div className="report-action-list compact">
+                  {opportunities.frequent.map(({ child, count, last }) => (
+                    <article className="report-action-row compact" key={child.id}>
+                      <div>
+                        <strong>{child.name}</strong>
+                        <p>{child.mainCustomerName || child.customerName || 'Sin responsable'} · {count} visitas</p>
+                        <small>Última visita: {formatDate(last)}</small>
+                      </div>
+                      <StatusPill tone={child.eventReservationCount ? 'available' : 'info'}>
+                        {child.eventReservationCount ? 'Tuvo evento' : 'Sin evento'}
+                      </StatusPill>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </article>
-          <article className="panel report-panel">
-            <h3>Clientes para reactivar</h3>
-            {opportunities.reactivate.length === 0 ? <EmptyReportState>No hay clientes para reactivar con el criterio actual.</EmptyReportState> : null}
-            <div className="report-action-list compact">
-              {opportunities.reactivate.map(({ child, count, last }) => {
-                const phone = child.mainCustomerPhone || child.customerPhone
-                return (
-                  <article className="report-action-row compact" key={child.id}>
-                    <div>
-                      <strong>{child.name}</strong>
-                      <p>{count} visitas históricas · última: {formatDate(last)}</p>
-                      <small>{child.mainCustomerName || child.customerName || 'Sin responsable'}</small>
-                    </div>
-                    {whatsappHref(phone) ? (
-                      <a className="button whatsapp small-button" href={whatsappHref(phone)} rel="noreferrer" target="_blank">
-                        <MessageCircle size={16} /> WhatsApp
-                      </a>
-                    ) : null}
-                  </article>
-                )
-              })}
-            </div>
+          <article className={`panel report-panel report-collapsible-card ${reactivateOpen ? 'open' : 'closed'}`}>
+            <button
+              aria-expanded={reactivateOpen}
+              className="report-collapsible-header"
+              onClick={() => setReactivateOpen((current) => !current)}
+              type="button"
+            >
+              <span>
+                <strong>Clientes para reactivar</strong>
+                <small>Clientes que no visitan el parque hace cierto tiempo</small>
+              </span>
+              <ChevronDown className="report-collapse-icon" size={18} />
+            </button>
+            {reactivateOpen ? (
+              <>
+                <div className="report-reactivation-filter" aria-label="Filtro de días sin visita">
+                  {[30, 60, 90].map((days) => (
+                    <button
+                      className={reactivationDays === days ? 'active' : ''}
+                      key={days}
+                      onClick={() => setReactivationDays(days)}
+                      type="button"
+                    >
+                      {days} días
+                    </button>
+                  ))}
+                  <label>
+                    <span>Más de</span>
+                    <input
+                      min={1}
+                      onChange={(event) => setReactivationDays(Math.max(1, Number(event.target.value) || 1))}
+                      type="number"
+                      value={reactivationDays}
+                    />
+                    <span>días sin venir</span>
+                  </label>
+                </div>
+                {opportunities.reactivate.length === 0 ? <EmptyReportState>No hay clientes para reactivar con el criterio actual.</EmptyReportState> : null}
+                <div className="report-action-list compact">
+                  {opportunities.reactivate.map(({ child, count, daysSinceLastVisit, last }) => {
+                    const phone = child.mainCustomerPhone || child.customerPhone
+                    return (
+                      <article className="report-action-row compact" key={child.id}>
+                        <div>
+                          <strong>{child.name}</strong>
+                          <p>
+                            Responsable: {child.mainCustomerName || child.customerName || 'Sin responsable'} · Última visita: {formatDate(last)} · Hace {daysSinceLastVisit} días
+                          </p>
+                          <small>{phone ? formatParaguayanPhone(phone) : 'Sin teléfono'} · {count > 0 ? `${count} visitas históricas` : 'Visitas registradas'}</small>
+                        </div>
+                        {whatsappHref(phone) ? (
+                          <a className="button whatsapp small-button" href={whatsappHref(phone)} rel="noreferrer" target="_blank">
+                            <MessageCircle size={16} /> WhatsApp
+                          </a>
+                        ) : null}
+                      </article>
+                    )
+                  })}
+                </div>
+              </>
+            ) : null}
           </article>
         </div>
       </section>
