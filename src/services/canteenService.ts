@@ -1,6 +1,7 @@
 import {
   Timestamp,
   doc,
+  getDoc,
   increment,
   runTransaction,
   serverTimestamp,
@@ -12,8 +13,10 @@ import { auth } from '../config/firebase'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseConfig, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
+import { logActivity } from './activityLogService'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
+import { formatGuarani } from '../utils/money'
 import { formatPersonName, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CanteenOrder,
@@ -52,15 +55,19 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
   await ensureReceptionSession()
 
   const productRef = input.id ? getDocumentRef('canteenProducts', input.id) : doc(getCollectionRef('canteenProducts'))
+  const previousSnapshot = input.id ? await getDoc(productRef).catch(() => null) : null
+  const previousPrice = previousSnapshot?.exists() ? Number(previousSnapshot.data().price ?? previousSnapshot.data().salePrice ?? 0) : null
+  const nextPrice = Number(input.price)
+  const productName = normalizeWhitespace(input.name)
 
   await setDoc(
     productRef,
     {
       id: productRef.id,
-      name: normalizeWhitespace(input.name),
+      name: productName,
       category: input.category,
-      price: Number(input.price),
-      salePrice: Number(input.price),
+      price: nextPrice,
+      salePrice: nextPrice,
       unitCost: input.unitCost === undefined || input.unitCost === null || Number.isNaN(Number(input.unitCost)) ? null : Number(input.unitCost),
       stock: input.stock === undefined || input.stock === null || Number.isNaN(Number(input.stock)) ? null : Number(input.stock),
       minStock:
@@ -74,6 +81,20 @@ export const upsertCanteenProduct = async (input: UpsertCanteenProductInput) => 
     },
     { merge: true },
   )
+
+  if (input.id) {
+    const priceChanged = previousPrice !== null && previousPrice !== nextPrice
+    void logActivity({
+      action: 'update',
+      description: priceChanged
+        ? `Cambió precio de ${productName} de ${formatGuarani(previousPrice)} a ${formatGuarani(nextPrice)}`
+        : `Actualizó producto ${productName}`,
+      entityId: productRef.id,
+      entityName: productName,
+      metadata: { newPrice: nextPrice, previousPrice },
+      module: 'Cantina',
+    })
+  }
 
   return productRef.id
 }

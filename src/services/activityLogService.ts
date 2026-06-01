@@ -2,7 +2,7 @@ import { Timestamp, addDoc, collection, limit, onSnapshot, orderBy, query, serve
 import { db } from '../config/firebase'
 import { getCurrentUserAudit } from './userAudit'
 
-export type ActivityAction = 'creation' | 'edition' | 'deletion' | 'approval' | 'cancellation' | 'status_change'
+export type ActivityAction = 'create' | 'update' | 'creation' | 'edition' | 'deletion' | 'approval' | 'cancellation' | 'status_change'
 
 export type ActivityModule =
   | 'Recepción'

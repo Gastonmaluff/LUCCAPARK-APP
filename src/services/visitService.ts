@@ -15,6 +15,7 @@ import {
 import { auth } from '../config/firebase'
 import { getTimePlanById } from '../config/timePlans'
 import { ensureReceptionSession } from './authSession'
+import { logActivity } from './activityLogService'
 import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
 import { chargeLocalVisit, createLocalNormalVisit, finishLocalVisit } from './localVisitStore'
@@ -197,6 +198,20 @@ export const createNormalVisit = async (input: CreateVisitInput) => {
     })
   }
   await batch.commit()
+
+  void logActivity({
+    action: 'create',
+    description: `Registró ingreso de ${childName}`,
+    entityId: visitRef.id,
+    entityName: childName,
+    metadata: {
+      amount: amountCharged ?? input.defaultAmount ?? plan.defaultPrice ?? null,
+      plan: plan.name,
+      responsible: customerName,
+      phone: customerPhone ?? '',
+    },
+    module: 'Recepción',
+  })
 
   return visitRef.id
 }

@@ -22,14 +22,16 @@ const emptyForm = { displayName: '', email: '', isActive: true, role: 'recepcion
 const activityActionLabels: Record<ActivityAction, string> = {
   approval: 'Aprobación',
   cancellation: 'Cancelación',
+  create: 'Creación',
   creation: 'Creación',
   deletion: 'Eliminación',
   edition: 'Edición',
   status_change: 'Cambio de estado',
+  update: 'Edición',
 }
 
 const activityTone = (action: ActivityAction) => {
-  if (action === 'creation' || action === 'approval') return 'available'
+  if (action === 'create' || action === 'creation' || action === 'approval') return 'available'
   if (action === 'deletion' || action === 'cancellation') return 'blocked'
   if (action === 'status_change') return 'warning'
   return 'info'
