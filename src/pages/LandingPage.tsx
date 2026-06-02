@@ -1,10 +1,8 @@
-import { Baby, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Gift, MapPin, MessageCircle, PartyPopper, ShieldCheck, Star } from 'lucide-react'
+import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Gift, MapPin, MessageCircle } from 'lucide-react'
 import { useRef } from 'react'
 import { CalendarPreview } from '../components/CalendarPreview'
 import { SectionHeading } from '../components/SectionHeading'
-import { StatusPill } from '../components/StatusPill'
 import { buildGoogleMapsEmbedUrl, buildWhatsappLink, normalizeExternalUrl } from '../config/app'
-import { demoTimeSlots } from '../data/demoData'
 import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
 export function LandingPage() {
@@ -101,7 +99,7 @@ export function LandingPage() {
                       <li key={feature}>{feature}</li>
                     ))}
                   </ul>
-                  <strong className="package-price-text">{plan.priceText}</strong>
+                  {plan.priceText.trim().toLowerCase() !== 'consultar' ? <strong className="package-price-text">{plan.priceText}</strong> : null}
                   <a className="button ghost" href={whatsappHref(`Hola, quiero consultar el paquete ${plan.name}.`)} target="_blank" rel="noreferrer">
                     {plan.buttonText || 'Consultar'}
                   </a>
@@ -120,101 +118,47 @@ export function LandingPage() {
 
       <section className="section" id="disponibilidad">
         <div className="container">
-          <SectionHeading eyebrow="Disponibilidad" title="Calendario público preparado para Firestore">
-            Estados visuales para fechas disponibles, reservadas, bloqueadas o a consultar.
+          <SectionHeading eyebrow="Disponibilidad" title="Consultá nuestro calendario">
+            Revisá las fechas disponibles y escribinos para coordinar tu cumple.
           </SectionHeading>
-          <div className="availability-layout">
+          <div className="landing-calendar-wrap">
             <CalendarPreview />
-            <div className="side-stack">
-              <article className="availability-card">
-                <p className="eyebrow">Próximo cumpleaños reservado</p>
-                <h3>Mateo Rios</h3>
-                <p className="muted">Domingo 11 de mayo · 15:00 a 18:00 hs</p>
-                <StatusPill tone="reserved">Reservado</StatusPill>
-              </article>
-              <article className="availability-card">
-                <p className="eyebrow">Horarios disponibles</p>
-                {demoTimeSlots.map((slot) => (
-                  <div className="time-row" key={slot.time}>
-                    <span>{slot.time}</span>
-                    <StatusPill tone={slot.status === 'Reservado' ? 'reserved' : slot.status === 'Consultar' ? 'info' : 'available'}>
-                      {slot.status}
-                    </StatusPill>
-                  </div>
-                ))}
-                <a className="button whatsapp" href={whatsappHref('Hola, quiero consultar una fecha para mi cumple.')} target="_blank" rel="noreferrer">
-                  <MessageCircle size={18} />
-                  Consultar por WhatsApp
-                </a>
-              </article>
-            </div>
           </div>
         </div>
       </section>
 
       <section className="section contact-band" id="contacto">
-        <div className="container availability-layout">
+        <div className={`container landing-contact-layout ${googleMapsUrl ? 'with-map' : 'no-map'}`}>
           <div>
             <SectionHeading eyebrow="Contacto" title={config.contact.title}>
-              {config.contact.description}
+              Escribinos por WhatsApp y coordinamos la disponibilidad.
             </SectionHeading>
             <a className="button primary" href={whatsappHref()} target="_blank" rel="noreferrer">
               <MessageCircle size={19} />
               Escribir por WhatsApp
             </a>
           </div>
-          <div className="contact-page-cards">
-            <article className="contact-card">
-              <ShieldCheck color="var(--green)" size={32} />
-              <h3>Base profesional desde Fase 1</h3>
-              <p className="muted">Landing, admin, recepción y TV comparten marca, datos separados y arquitectura lista para crecer.</p>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <StatusPill tone="available">Seguro</StatusPill>
-                <StatusPill tone="info">Configurable</StatusPill>
-                <StatusPill tone="reserved">Eventos</StatusPill>
+          {googleMapsUrl ? (
+            <article className="contact-card map-contact-card">
+              <div>
+                <MapPin color="var(--green)" />
+                <h3>Ubicación</h3>
               </div>
+              {googleMapsEmbedUrl ? (
+                <iframe
+                  allowFullScreen
+                  className="contact-map-frame"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={googleMapsEmbedUrl}
+                  title="Ubicación de Lucca Park"
+                />
+              ) : null}
+              <a className="button ghost" href={googleMapsUrl} target="_blank" rel="noreferrer">
+                Ver ubicación en Google Maps
+              </a>
             </article>
-            {googleMapsUrl ? (
-              <article className="contact-card map-contact-card">
-                <div>
-                  <MapPin color="var(--green)" />
-                  <h3>Ubicación</h3>
-                </div>
-                {googleMapsEmbedUrl ? (
-                  <iframe
-                    allowFullScreen
-                    className="contact-map-frame"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    src={googleMapsEmbedUrl}
-                    title="Ubicación de Lucca Park"
-                  />
-                ) : null}
-                <a className="button ghost" href={googleMapsUrl} target="_blank" rel="noreferrer">
-                  Ver ubicación en Google Maps
-                </a>
-              </article>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="container grid-4">
-          {[
-            ['Diversión', Baby],
-            ['Cumpleaños', PartyPopper],
-            ['Reservas', CalendarCheck],
-            ['Experiencia', Star],
-          ].map(([label, Icon]) => (
-            <article className="package-card" key={String(label)}>
-              <span className="package-icon">
-                <Icon size={22} />
-              </span>
-              <h3>{String(label)}</h3>
-              <p className="muted">Módulo preparado para contenido real editable.</p>
-            </article>
-          ))}
+          ) : null}
         </div>
       </section>
     </main>

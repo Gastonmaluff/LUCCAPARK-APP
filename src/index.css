@@ -220,15 +220,16 @@ img {
 
 .hero {
   overflow: hidden;
-  padding: 54px 0 48px;
+  padding: 58px 0 54px;
   position: relative;
 }
 
 .hero-grid {
   align-items: center;
   display: grid;
-  gap: 44px;
-  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+  gap: 50px;
+  grid-template-columns: minmax(0, 1fr) minmax(500px, 1.05fr);
+  width: min(1240px, calc(100% - 32px));
 }
 
 .hero-copy {
@@ -259,16 +260,26 @@ img {
   gap: 14px;
 }
 
+.hero-buttons .button {
+  white-space: nowrap;
+}
+
+@media (min-width: 981px) {
+  .hero-buttons {
+    flex-wrap: nowrap;
+  }
+}
+
 .hero-media {
   border-radius: 8px 0 0 8px;
-  min-height: 470px;
+  min-height: 540px;
   overflow: hidden;
   position: relative;
 }
 
 .hero-media img {
   height: 100%;
-  min-height: 470px;
+  min-height: 540px;
   object-fit: cover;
   width: 100%;
 }
@@ -533,6 +544,24 @@ img {
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
 }
 
+.landing-calendar-wrap {
+  max-width: 760px;
+}
+
+.landing-contact-layout {
+  align-items: center;
+  display: grid;
+  gap: 28px;
+}
+
+.landing-contact-layout.with-map {
+  grid-template-columns: minmax(0, 0.86fr) minmax(360px, 1.14fr);
+}
+
+.landing-contact-layout.no-map {
+  max-width: 760px;
+}
+
 .calendar {
   padding: 20px;
 }
@@ -670,6 +699,7 @@ img {
 .contact-band {
   background: linear-gradient(135deg, rgba(255, 90, 19, 0.08), rgba(8, 169, 181, 0.1));
   border-block: 1px solid var(--line);
+  padding-bottom: 96px;
 }
 
 .footer {
@@ -6013,6 +6043,7 @@ img {
 
   .hero-grid,
   .availability-layout,
+  .landing-contact-layout.with-map,
   .dashboard-grid,
   .reception-grid,
   .reception-control-card,
@@ -6130,7 +6161,7 @@ img {
 
   .hero-media,
   .hero-media img {
-    min-height: 360px;
+    min-height: 430px;
   }
 
   .tv-normal-page {
@@ -6225,6 +6256,11 @@ img {
 
   .hero {
     padding-top: 34px;
+  }
+
+  .hero-media,
+  .hero-media img {
+    min-height: 340px;
   }
 
   .hero-buttons,
