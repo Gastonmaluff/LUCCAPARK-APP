@@ -24,6 +24,9 @@ export const firestoreCollections: Record<FirebaseCollectionName, FirebaseCollec
   financialClosures: 'financialClosures',
   tasks: 'tasks',
   settings: 'settings',
+  activityLogs: 'activityLogs',
+  backups: 'backups',
+  backupLocks: 'backupLocks',
 }
 
 export const getCollectionRef = (name: FirebaseCollectionName) =>

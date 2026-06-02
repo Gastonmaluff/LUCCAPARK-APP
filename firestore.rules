@@ -71,6 +71,10 @@ service cloud.firestore {
       return isAdmin() || isPartner();
     }
 
+    function canManageBackups() {
+      return isAdmin() || isPartner();
+    }
+
     function canOperateBase() {
       return signedIn();
     }
@@ -129,7 +133,8 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read: if canViewFinance();
       allow create: if canOperatePayments();
-      allow update, delete: if false;
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     match /expenses/{expenseId} {
@@ -146,7 +151,23 @@ service cloud.firestore {
 
     match /financialClosures/{closureId} {
       allow read, create: if canViewFinance();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /activityLogs/{logId} {
+      allow read, create: if canOperateBase();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /backups/{backupId} {
+      allow read, create: if canManageBackups();
       allow update, delete: if false;
+    }
+
+    match /backupLocks/{lockId} {
+      allow read, write: if canManageBackups();
     }
 
     match /tasks/{taskId} {

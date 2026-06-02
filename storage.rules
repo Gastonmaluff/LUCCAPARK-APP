@@ -6,6 +6,21 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function userRole() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+        : '';
+    }
+
+    function canManageBackups() {
+      return signedIn()
+        && (
+          request.auth.uid == 'SXaYNYcKFXP8FZDCk3DP38EyP903'
+          || userRole() in ['admin', 'owner', 'dueno', 'dueño', 'socio', 'partner']
+        );
+    }
+
     function validImage(maxMb) {
       return request.resource != null
         && request.resource.contentType.matches('image/.*')
@@ -57,6 +72,11 @@ service firebase.storage {
       allow read: if true;
       allow create, update: if signedIn() && validImage(8);
       allow delete: if false;
+    }
+
+    match /backups/{allPaths=**} {
+      allow read, create: if canManageBackups();
+      allow update, delete: if false;
     }
 
     match /decoration-images/{allPaths=**} {

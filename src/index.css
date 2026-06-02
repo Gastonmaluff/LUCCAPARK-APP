@@ -5008,6 +5008,12 @@ img {
   margin-top: 18px;
 }
 
+.settings-backup-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
 .settings-activity-body {
   display: grid;
   gap: 12px;
@@ -5146,6 +5152,132 @@ img {
 
 .danger-button {
   color: var(--red);
+}
+
+.settings-backup-body {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.backup-subsection {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.backup-subsection-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.backup-action-row {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.backup-action-row h3,
+.restore-summary h3 {
+  margin: 0 0 4px;
+}
+
+.backup-auto-status {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.backup-auto-status p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.backup-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.backup-summary-grid span {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.backup-summary-grid small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.backup-list {
+  display: grid;
+  gap: 10px;
+}
+
+.backup-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.backup-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.backup-card p {
+  margin: 4px 0 0;
+}
+
+.backup-card-actions {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.restore-summary {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.restore-summary p {
+  margin: 0;
+}
+
+.restore-collections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.restore-collections span {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 6px 10px;
 }
 
 .user-permission-grid {
@@ -6139,9 +6271,20 @@ img {
   }
 
   .public-editor-card-header,
-  .public-editor-actions {
+  .public-editor-actions,
+  .backup-action-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .backup-summary-grid,
+  .backup-card {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-card-actions {
+    align-items: flex-start;
+    justify-items: start;
   }
 
   .public-package-carousel {

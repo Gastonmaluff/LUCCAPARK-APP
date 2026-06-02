@@ -49,3 +49,6 @@ export type FirebaseCollectionName =
   | 'financialClosures'
   | 'tasks'
   | 'settings'
+  | 'activityLogs'
+  | 'backups'
+  | 'backupLocks'

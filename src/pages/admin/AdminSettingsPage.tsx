@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, Trash2, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
+import { BackupSettingsPanel } from '../../components/settings/BackupSettingsPanel'
 import { usePublicPageConfig } from '../../hooks/usePublicPageConfig'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import { useUsers } from '../../hooks/useUsers'
@@ -327,6 +328,7 @@ export function AdminSettingsPage() {
           <PublicPageEditor config={publicPage.config} error={publicPage.error} isLoading={publicPage.isLoading} />
         ) : null}
       </article>
+      <BackupSettingsPanel />
     </>
   )
 }

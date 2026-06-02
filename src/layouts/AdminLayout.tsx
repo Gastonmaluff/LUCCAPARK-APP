@@ -10,9 +10,11 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
+import { useUserProfile } from '../hooks/useUserProfile'
+import { runAutomaticBackupIfDue } from '../services/backupService'
 
 const adminNavItems = [
   { label: 'Control', to: '/admin/dashboard', icon: LayoutDashboard },
@@ -28,6 +30,13 @@ const adminNavItems = [
 
 export function AdminLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { isLoadingProfile, profile } = useUserProfile()
+
+  useEffect(() => {
+    if (isLoadingProfile || !profile?.isActive) return
+    if (profile.role !== 'admin' && profile.role !== 'socio') return
+    void runAutomaticBackupIfDue()
+  }, [isLoadingProfile, profile?.isActive, profile?.role])
 
   return (
     <main className="internal-page">
