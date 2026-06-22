@@ -1,7 +1,7 @@
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
-import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { getDocumentRef } from './firestoreCollections'
 import type { DailyClosing } from '../types'
 
 export const saveDailyClosing = async (closing: Omit<DailyClosing, 'id' | 'createdAt' | 'createdBy'>) => {
@@ -23,15 +23,6 @@ export const saveDailyClosing = async (closing: Omit<DailyClosing, 'id' | 'creat
 }
 
 export const createManualPaymentRecord = async (payload: Record<string, unknown>) => {
-  await ensureReceptionSession()
-
-  const paymentRef = doc(getCollectionRef('payments'))
-  await setDoc(paymentRef, {
-    id: paymentRef.id,
-    ...payload,
-    createdAt: serverTimestamp(),
-    createdBy: auth.currentUser?.uid ?? null,
-  })
-
-  return paymentRef.id
+  void payload
+  throw new Error('Los pagos manuales arbitrarios estan deshabilitados. Usa el cobro seguro de la operacion correspondiente.')
 }

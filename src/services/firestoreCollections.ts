@@ -28,6 +28,7 @@ export const firestoreCollections: Record<FirebaseCollectionName, FirebaseCollec
   activityLogs: 'activityLogs',
   backups: 'backups',
   backupLocks: 'backupLocks',
+  secureOperations: 'secureOperations',
 }
 
 export const getCollectionRef = (name: FirebaseCollectionName) =>

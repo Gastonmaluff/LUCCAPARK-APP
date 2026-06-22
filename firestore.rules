@@ -108,19 +108,6 @@ service cloud.firestore {
       return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen();
     }
 
-    function canAdministerCanteen() {
-      return isOwnerOrAdmin() || isPartner();
-    }
-
-    function canOperatePayments() {
-      return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen();
-    }
-
-    function canCreatePayment() {
-      return canOperatePayments()
-        || (isEventManager() && request.resource.data.source == 'event_payment');
-    }
-
     function canReadEventFinance() {
       return canViewFinance() || isEventManager();
     }
@@ -183,45 +170,47 @@ service cloud.firestore {
         );
     }
 
-    function operationalOrderUpdateIsSafe() {
-      return canOperateCanteen() && (
-        (
-          resource.data.status == 'open'
-          && request.resource.data.status == 'open'
-          && request.resource.data.items.size() >= resource.data.items.size()
-          && request.resource.data.total >= resource.data.total
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-            'items', 'total', 'costTotal', 'estimatedProfit', 'updatedAt', 'updatedBy'
-          ])
+    function clientVisitCreateIsSafe() {
+      return canCreateVisits()
+        && request.resource.data.status == 'active'
+        && request.resource.data.planId in ['one-hour', 'two-hours', 'unlimited']
+        && (!request.resource.data.keys().hasAny(['customAmount']) || request.resource.data.customAmount == false)
+        && (
+          request.resource.data.planId == 'one-hour'
+            && (!request.resource.data.keys().hasAny(['amountCharged']) || request.resource.data.amountCharged == 60000)
+            && (!request.resource.data.keys().hasAny(['parkChargeAmount']) || request.resource.data.parkChargeAmount == 60000)
+          || request.resource.data.planId == 'two-hours'
+            && (!request.resource.data.keys().hasAny(['amountCharged']) || request.resource.data.amountCharged == 100000)
+            && (!request.resource.data.keys().hasAny(['parkChargeAmount']) || request.resource.data.parkChargeAmount == 100000)
+          || request.resource.data.planId == 'unlimited'
+            && (!request.resource.data.keys().hasAny(['amountCharged']) || request.resource.data.amountCharged == null || request.resource.data.amountCharged == 0)
+            && (!request.resource.data.keys().hasAny(['parkChargeAmount']) || request.resource.data.parkChargeAmount == null || request.resource.data.parkChargeAmount == 0)
         )
-        || (
-          resource.data.status == 'open'
-          && resource.data.items.size() == 0
-          && resource.data.total == 0
-          && request.resource.data.status == 'closed_empty'
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-            'status', 'closedAt', 'closedBy', 'closedReason', 'updatedAt', 'updatedBy'
-          ])
-        )
-        || (
-          resource.data.status == 'open'
-          && request.resource.data.status == 'paid'
-          && request.resource.data.items == resource.data.items
-          && request.resource.data.total == resource.data.total
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-            'status', 'paymentStatus', 'paymentMethod', 'cardType', 'paidAt', 'updatedAt', 'updatedBy'
-          ])
-        )
-        || (
-          resource.data.status == 'open'
-          && request.resource.data.items == resource.data.items
-          && request.resource.data.total == resource.data.total
-          && request.resource.data.voidRequestStatus == 'pending'
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-            'pendingVoidRequestId', 'voidRequestStatus', 'updatedAt', 'updatedBy'
-          ])
-        )
-      );
+        && (!request.resource.data.keys().hasAny(['extensionChargeAmount']) || request.resource.data.extensionChargeAmount == 0)
+        && (!request.resource.data.keys().hasAny(['timeExtensions']) || request.resource.data.timeExtensions.size() == 0)
+        && (!request.resource.data.keys().hasAny(['paymentStatus']) || request.resource.data.paymentStatus != 'paid')
+        && (!request.resource.data.keys().hasAny(['paidParkAmount']) || request.resource.data.paidParkAmount == 0)
+        && (!request.resource.data.keys().hasAny(['parkPaymentStatus']) || request.resource.data.parkPaymentStatus == 'pending')
+        && (!request.resource.data.keys().hasAny(['parkPaidAt']) || request.resource.data.parkPaidAt == null)
+        && (!request.resource.data.keys().hasAny(['sourceIntegrity']));
+    }
+
+    function clientVisitUpdateIsSafe() {
+      return canUpdateVisits()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'amountCharged', 'parkChargeAmount', 'paidParkAmount', 'extensionChargeAmount',
+          'paymentStatus', 'paymentMethod', 'cardType', 'parkPaymentStatus', 'parkPaidAt',
+          'parkPaymentMethod', 'timeExtensions', 'expectedEndAt', 'durationMinutes',
+          'status', 'endedAt', 'realDurationMinutes', 'sourceIntegrity',
+          'groupEntryId', 'planId', 'planName', 'isUnlimited', 'defaultAmount',
+          'customAmount', 'startedAt'
+        ]);
+    }
+
+    function eventFinanceUpdateIsSafe() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'eventPaidAmount', 'pendingAmount', 'financialStatus', 'financialUpdatedByBackend'
+      ]);
     }
 
     match /users/{uid} {
@@ -249,22 +238,29 @@ service cloud.firestore {
 
     match /activeVisits/{visitId} {
       allow read: if canReadVisits();
-      allow create: if canCreateVisits();
-      allow update: if canUpdateVisits();
+      allow create: if clientVisitCreateIsSafe();
+      allow update: if clientVisitUpdateIsSafe();
       allow delete: if canDeleteActiveVisits();
+    }
+
+    function eventCreateIsSafe() {
+      return canManageEvents()
+        && (!request.resource.data.keys().hasAny(['eventPaidAmount']) || request.resource.data.eventPaidAmount == 0)
+        && (!request.resource.data.keys().hasAny(['financialStatus']) || request.resource.data.financialStatus != 'paid')
+        && (!request.resource.data.keys().hasAny(['financialUpdatedByBackend']));
     }
 
     match /visits/{visitId} {
       allow read: if canReadVisits();
-      allow create: if canCreateVisits();
-      allow update: if canUpdateVisits();
+      allow create: if clientVisitCreateIsSafe();
+      allow update: if clientVisitUpdateIsSafe();
       allow delete: if false;
     }
 
     match /events/{eventId} {
       allow read: if canReadEvents();
-      allow create: if canManageEvents();
-      allow update: if canManageEvents() || receptionEventCounterUpdateIsSafe();
+      allow create: if eventCreateIsSafe();
+      allow update: if (canManageEvents() && eventFinanceUpdateIsSafe()) || receptionEventCounterUpdateIsSafe();
       allow delete: if false;
     }
 
@@ -276,34 +272,22 @@ service cloud.firestore {
 
     match /canteenProducts/{productId} {
       allow read: if canReadCanteen();
-      allow create: if canAdministerCanteen();
-      allow update: if canAdministerCanteen()
-        || (canOperateCanteen()
-          && request.resource.data.stock <= resource.data.stock
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'updatedAt']));
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /canteenOrders/{orderId} {
       allow read: if canReadCanteen();
-      allow create: if canOperateCanteen();
-      allow update: if isOwnerOrAdmin() || operationalOrderUpdateIsSafe();
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /canteenVoidRequests/{requestId} {
       allow read: if canOperateCanteen();
-      allow create: if canOperateCanteen()
-        && request.resource.data.status == 'pending'
-        && request.resource.data.requestedByUid == request.auth.uid;
-      allow update: if isOwnerOrAdmin();
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /canteenInventoryMovements/{movementId} {
       allow read: if isOwnerOrAdmin() || isPartner() || isCanteen();
-      allow create: if isOwnerOrAdmin();
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /dailyClosings/{closingId} {
@@ -313,11 +297,7 @@ service cloud.firestore {
 
     match /payments/{paymentId} {
       allow read: if canReadEventFinance();
-      allow create: if canCreatePayment()
-        && request.resource.data.createdBy == request.auth.uid
-        && (request.resource.data.totalPaid >= 0 || isOwnerOrAdmin());
-      allow update: if isOwnerOrAdmin();
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /expenses/{expenseId} {
@@ -344,6 +324,10 @@ service cloud.firestore {
       allow create: if canOperateBase()
         && request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    match /secureOperations/{operationId} {
+      allow read, write: if false;
     }
 
     match /backups/{backupId} {

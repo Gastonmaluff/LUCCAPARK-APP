@@ -95,8 +95,8 @@ describe('permisos de recepción', () => {
     const db = dbFor('recepcion')
     await assertSucceeds(setDoc(doc(db, 'customers', 'customer-r'), { name: 'Responsable' }))
     await assertSucceeds(setDoc(doc(db, 'children', 'child-r'), { name: 'Niño' }))
-    await assertSucceeds(setDoc(doc(db, 'visits', 'visit-r'), { status: 'active' }))
-    await assertSucceeds(setDoc(doc(db, 'activeVisits', 'visit-r'), { status: 'active' }))
+    await assertSucceeds(setDoc(doc(db, 'visits', 'visit-r'), { status: 'active', planId: 'one-hour', parkChargeAmount: 60000 }))
+    await assertSucceeds(setDoc(doc(db, 'activeVisits', 'visit-r'), { status: 'active', planId: 'one-hour', parkChargeAmount: 60000 }))
     await assertSucceeds(getDoc(doc(db, 'events', 'event-1')))
   })
 
@@ -116,9 +116,9 @@ describe('permisos de recepción', () => {
     await assertFails(setDoc(doc(db, 'eventBudgets', 'budget-r'), { status: 'draft' }))
   })
 
-  test('recepción puede crear pagos propios pero no leer el historial financiero', async () => {
+  test('recepción no puede crear pagos directos ni leer el historial financiero', async () => {
     const db = dbFor('recepcion')
-    await assertSucceeds(setDoc(doc(db, 'payments', 'payment-r'), { source: 'reception_exit', totalPaid: 60000, createdBy: 'recepcion' }))
+    await assertFails(setDoc(doc(db, 'payments', 'payment-r'), { source: 'reception_exit', totalPaid: 60000, createdBy: 'recepcion' }))
     await assertFails(setDoc(doc(db, 'payments', 'payment-forged'), { source: 'reception_exit', totalPaid: 60000, createdBy: 'admin' }))
     await assertFails(getDoc(doc(db, 'payments', 'payment-1')))
   })
@@ -169,13 +169,13 @@ describe('borrado de visitas activas', () => {
 })
 
 describe('permisos de cantina', () => {
-  test('cantina puede leer y operar cuentas, productos, visitas y eventos', async () => {
+  test('cantina puede leer la operación pero las escrituras críticas requieren backend', async () => {
     const db = dbFor('cantina')
     await assertSucceeds(getDoc(doc(db, 'canteenProducts', 'product-1')))
     await assertSucceeds(getDoc(doc(db, 'activeVisits', 'visit-1')))
     await assertSucceeds(getDoc(doc(db, 'events', 'event-1')))
-    await assertSucceeds(setDoc(doc(db, 'canteenOrders', 'order-c'), { status: 'open', items: [], total: 0 }))
-    await assertSucceeds(setDoc(doc(db, 'payments', 'payment-c'), { source: 'canteen', totalPaid: 15000, createdBy: 'cantina' }))
+    await assertFails(setDoc(doc(db, 'canteenOrders', 'order-c'), { status: 'open', items: [], total: 0 }))
+    await assertFails(setDoc(doc(db, 'payments', 'payment-c'), { source: 'canteen', totalPaid: 15000, createdBy: 'cantina' }))
   })
 
   test('cantina no puede modificar clientes, reservas, configuración o usuarios', async () => {
@@ -203,7 +203,7 @@ describe('permisos de eventos y administración', () => {
     await assertSucceeds(setDoc(doc(db, 'events', 'event-e'), { title: 'Cumpleaños', registeredGuestsCount: 0 }))
     await assertSucceeds(setDoc(doc(db, 'eventGuests', 'guest-e'), { eventId: 'event-e' }))
     await assertSucceeds(setDoc(doc(db, 'eventBudgets', 'budget-e'), { status: 'draft' }))
-    await assertSucceeds(setDoc(doc(db, 'payments', 'payment-e'), { source: 'event_payment', totalPaid: 100000, createdBy: 'eventos' }))
+    await assertFails(setDoc(doc(db, 'payments', 'payment-e'), { source: 'event_payment', totalPaid: 100000, createdBy: 'eventos' }))
   })
 
   test('encargado de eventos no puede crear pagos ajenos al evento ni tocar configuración', async () => {
@@ -254,5 +254,62 @@ describe('permisos de eventos y administración', () => {
     await assertSucceeds(setDoc(doc(receptionDb, 'activityLogs', 'log-r'), { userId: 'recepcion', description: 'Ingreso' }))
     await assertFails(setDoc(doc(receptionDb, 'activityLogs', 'log-falso'), { userId: 'admin', description: 'Falso' }))
     await assertFails(updateDoc(doc(adminDb, 'activityLogs', 'log-1'), { description: 'Editado' }))
+  })
+})
+
+describe('integridad financiera del cliente', () => {
+  test('ningun cliente autenticado puede crear o borrar payments directamente', async () => {
+    for (const uid of ['admin', 'socio', 'recepcion', 'cantina', 'eventos']) {
+      const db = dbFor(uid)
+      await assertFails(setDoc(doc(db, 'payments', `direct-${uid}`), {
+        source: 'canteen', totalPaid: 999999999, createdBy: uid,
+      }))
+      await assertFails(deleteDoc(doc(db, 'payments', 'payment-1')))
+    }
+  })
+
+  test('ningun cliente puede cambiar stock ni crear movimientos directamente', async () => {
+    for (const uid of ['admin', 'socio', 'recepcion', 'cantina']) {
+      const db = dbFor(uid)
+      await assertFails(updateDoc(doc(db, 'canteenProducts', 'product-1'), { stock: 999 }))
+      await assertFails(setDoc(doc(db, 'canteenInventoryMovements', `movement-${uid}`), {
+        productId: 'product-1', quantity: 999, type: 'manual_adjustment',
+      }))
+    }
+  })
+
+  test('ningun cliente puede alterar totales, lineas o estado final de una cuenta', async () => {
+    for (const uid of ['admin', 'socio', 'recepcion', 'cantina']) {
+      const db = dbFor(uid)
+      await assertFails(updateDoc(doc(db, 'canteenOrders', 'order-1'), {
+        items: [{ productId: 'product-1', quantity: 1, unitPrice: 1 }],
+        total: 1,
+        status: 'paid',
+      }))
+    }
+  })
+
+  test('los campos financieros de visitas y eventos no pueden cambiarse directamente', async () => {
+    await assertFails(updateDoc(doc(dbFor('recepcion'), 'activeVisits', 'visit-1'), {
+      parkChargeAmount: 1,
+      paidParkAmount: 1,
+      paymentStatus: 'paid',
+    }))
+    await assertFails(updateDoc(doc(dbFor('eventos'), 'events', 'event-1'), {
+      eventPaidAmount: 1000000,
+      pendingAmount: 0,
+      financialStatus: 'paid',
+    }))
+  })
+
+  test('una visita creada por cliente no puede inventar plan, precio o pago', async () => {
+    const db = dbFor('recepcion')
+    await assertFails(setDoc(doc(db, 'activeVisits', 'forged-price'), {
+      status: 'active', planId: 'one-hour', parkChargeAmount: 1, paymentStatus: 'pending',
+    }))
+    await assertFails(setDoc(doc(db, 'visits', 'forged-payment'), {
+      status: 'active', planId: 'one-hour', parkChargeAmount: 60000,
+      paymentStatus: 'paid', paidParkAmount: 60000,
+    }))
   })
 })

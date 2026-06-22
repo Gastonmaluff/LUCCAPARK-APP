@@ -18,6 +18,7 @@ import { getCollectionRef, getDocumentRef } from './firestoreCollections'
 import { ensureReceptionSession } from './authSession'
 import { getCurrentUserAudit } from './userAudit'
 import { logActivity } from './activityLogService'
+import { callSecureFunction } from './secureFunctions'
 import { parseCurrencyInput } from '../utils/money'
 import { formatEventTitle, formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
@@ -271,74 +272,16 @@ export const registerEventPayment = async ({
   notes,
   paymentMethod,
 }: RegisterEventPaymentInput) => {
-  await ensureReceptionSession()
-
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('Ingresa un monto valido para registrar el cobro.')
   }
 
-  const eventRef = getDocumentRef('events', eventId)
-  const paymentRef = doc(getCollectionRef('payments'))
-  const now = new Date()
-  const userAudit = await getCurrentUserAudit()
-  const userId = userAudit.uid
-  const conceptLabel = {
-    balance: 'Saldo final',
-    deposit: 'Seña',
-    other: 'Otro cobro',
-    partial: 'Pago parcial',
-  }[concept]
-
-  await runTransaction(eventRef.firestore, async (transaction) => {
-    const eventSnapshot = await transaction.get(eventRef)
-    if (!eventSnapshot.exists()) {
-      throw new Error('La reserva seleccionada ya no existe.')
-    }
-
-    const eventData = eventSnapshot.data()
-    const totalAmount = parseCurrencyInput(eventData.totalAmount ?? 0)
-    const previousPaid = parseCurrencyInput(eventData.eventPaidAmount ?? 0)
-    const nextPaid = previousPaid + amount
-    const nextPending = Math.max(0, totalAmount - nextPaid)
-    const financialStatus =
-      totalAmount > 0 && nextPending <= 0
-        ? 'paid'
-        : nextPaid <= 0
-          ? 'unpaid'
-          : concept === 'deposit'
-            ? 'deposit'
-            : 'partial'
-
-    transaction.set(paymentRef, {
-      id: paymentRef.id,
-      eventId,
-      eventName: String(eventData.title ?? ''),
-      customerName: String(eventData.customerName ?? ''),
-      source: 'event_payment',
-      concepts: 'event',
-      status: 'paid',
-      eventAmountPaid: amount,
-      totalPaid: amount,
-      paymentMethod,
-      cardType,
-      description: `${conceptLabel} - ${String(eventData.title ?? 'Evento')}`,
-      notes: optionalText(notes),
-      paidAt: Timestamp.fromDate(now),
-      createdAt: serverTimestamp(),
-      createdBy: userId,
-      createdByName: userAudit.name,
-    })
-
-    transaction.update(eventRef, {
-      eventPaidAmount: nextPaid,
-      financialStatus,
-      pendingAmount: totalAmount > 0 ? nextPending : parseCurrencyInput(eventData.pendingAmount ?? 0),
-      updatedAt: serverTimestamp(),
-      updatedBy: userId,
-    })
-  })
-
-  return paymentRef.id
+  const result = await callSecureFunction<{ paymentId: string }>(
+    'registerEventPaymentSecure',
+    { amount, cardType, concept, eventId, notes: notes ?? '', paymentMethod },
+    `event-payment:${eventId}:${amount}:${paymentMethod}:${cardType}:${concept}`,
+  )
+  return result.paymentId
 }
 
 export const updateEventTvSettings = async (eventId: string, input: UpdateEventTvInput) => {
