@@ -18,8 +18,30 @@ const dateFromTimestamp = (value: unknown): Date | null => {
   return null
 }
 
+const mapTimeExtensions = (value: unknown): ActiveVisit['timeExtensions'] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.map((item) => {
+    const record = item as Record<string, unknown>
+    return {
+      id: String(record.id ?? ''),
+      type: 'time_extension',
+      minutes: Number(record.minutes ?? 30) === 60 ? 60 : 30,
+      amount: Number(record.amount ?? 0),
+      previousEndTime: dateFromTimestamp(record.previousEndTime),
+      newEndTime: dateFromTimestamp(record.newEndTime) ?? new Date(),
+      createdAt: dateFromTimestamp(record.createdAt),
+      createdBy: record.createdBy ? String(record.createdBy) : null,
+      createdByName: String(record.createdByName ?? ''),
+    }
+  })
+}
+
 const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   id,
+  groupEntryId: data.groupEntryId ? String(data.groupEntryId) : undefined,
   childId: String(data.childId ?? ''),
   childName: String(data.childName ?? ''),
   childBirthDate: String(data.childBirthDate ?? ''),
@@ -31,6 +53,11 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   customerName: String(data.customerName ?? ''),
   customerPhone: String(data.customerPhone ?? ''),
   customerRelation: String(data.customerRelation ?? ''),
+  customerDocumentNumber: String(data.customerDocumentNumber ?? data.guardianDocumentNumber ?? ''),
+  customerDocumentNumberNormalized: String(data.customerDocumentNumberNormalized ?? data.guardianDocumentNumberNormalized ?? ''),
+  guardianId: String(data.guardianId ?? data.customerId ?? ''),
+  guardianDocumentNumber: String(data.guardianDocumentNumber ?? data.customerDocumentNumber ?? ''),
+  guardianDocumentNumberNormalized: String(data.guardianDocumentNumberNormalized ?? data.customerDocumentNumberNormalized ?? ''),
   childrenCount: Number(data.childrenCount ?? 1),
   planId: (data.planId as ActiveVisit['planId']) ?? 'one-hour',
   planName: String(data.planName ?? '1 hora'),
@@ -43,12 +70,15 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   cardType: (data.cardType as ActiveVisit['cardType']) ?? '',
   amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : Number(data.amountCharged),
   parkChargeAmount: data.parkChargeAmount === null || data.parkChargeAmount === undefined ? null : Number(data.parkChargeAmount),
+  paidParkAmount: data.paidParkAmount === null || data.paidParkAmount === undefined ? null : Number(data.paidParkAmount),
+  extensionChargeAmount: data.extensionChargeAmount === null || data.extensionChargeAmount === undefined ? null : Number(data.extensionChargeAmount),
   parkPaymentStatus: (data.parkPaymentStatus as ActiveVisit['parkPaymentStatus']) ?? (data.paymentStatus === 'paid' ? 'paid' : 'pending'),
   parkPaidAt: dateFromTimestamp(data.parkPaidAt),
   parkPaymentMethod: (data.parkPaymentMethod as ActiveVisit['parkPaymentMethod']) ?? '',
   defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
   customAmount: Boolean(data.customAmount),
   notes: String(data.notes ?? ''),
+  timeExtensions: mapTimeExtensions(data.timeExtensions),
   status: 'active',
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),

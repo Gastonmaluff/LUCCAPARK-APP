@@ -33,17 +33,28 @@ export const normalizeExternalUrl = (value: string) => {
   }
 }
 
-export const buildGoogleMapsEmbedUrl = (value: string) => {
+export const isGoogleMapsEmbedUrl = (value: string) => {
   const url = extractGoogleMapsUrl(value)
   if (!url) return ''
 
   try {
     const parsedUrl = new URL(url)
-    const isGoogleMapsUrl = /(^|\.)google\./i.test(parsedUrl.hostname) || parsedUrl.hostname === 'maps.app.goo.gl'
-    if (!isGoogleMapsUrl) return ''
-    if (parsedUrl.pathname.includes('/maps/embed') || parsedUrl.searchParams.get('output') === 'embed') return url
-    return `https://www.google.com/maps?q=${encodeURIComponent(url)}&output=embed`
+    return /(^|\.)google\./i.test(parsedUrl.hostname)
+      && (parsedUrl.pathname.includes('/maps/embed') || parsedUrl.searchParams.get('output') === 'embed')
   } catch {
-    return ''
+    return false
   }
+}
+
+export const buildGoogleMapsEmbedUrl = (value: string) => {
+  const url = extractGoogleMapsUrl(value)
+  return isGoogleMapsEmbedUrl(url) ? url : ''
+}
+
+export const parseGoogleMapsInput = (value: string) => {
+  const url = normalizeExternalUrl(value)
+  if (!url) return { googleMapsEmbedUrl: '', googleMapsUrl: '' }
+  return isGoogleMapsEmbedUrl(url)
+    ? { googleMapsEmbedUrl: url, googleMapsUrl: '' }
+    : { googleMapsEmbedUrl: '', googleMapsUrl: url }
 }

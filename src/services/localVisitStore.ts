@@ -15,6 +15,8 @@ const optionalText = (value?: string) => {
   return normalized.length > 0 ? normalized : ''
 }
 
+const normalizeDocumentNumber = (value?: string) => String(value ?? '').replace(/\D/g, '')
+
 const makeId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
@@ -22,6 +24,12 @@ const reviveVisit = (visit: ActiveVisit): ActiveVisit => ({
   ...visit,
   startedAt: new Date(visit.startedAt),
   expectedEndAt: visit.expectedEndAt ? new Date(visit.expectedEndAt) : null,
+  timeExtensions: (visit.timeExtensions ?? []).map((extension) => ({
+    ...extension,
+    previousEndTime: extension.previousEndTime ? new Date(extension.previousEndTime) : null,
+    newEndTime: new Date(extension.newEndTime),
+    createdAt: extension.createdAt ? new Date(extension.createdAt) : null,
+  })),
   createdAt: visit.createdAt ? new Date(visit.createdAt) : null,
   updatedAt: visit.updatedAt ? new Date(visit.updatedAt) : null,
 })
@@ -80,6 +88,7 @@ export const createLocalNormalVisit = async (input: CreateVisitInput) => {
 
   const visit: ActiveVisit = {
     id: visitId,
+    groupEntryId: input.groupEntryId,
     childId,
     childName: formatPersonName(input.childName),
     childBirthDate: optionalText(input.childBirthDate),
@@ -91,6 +100,11 @@ export const createLocalNormalVisit = async (input: CreateVisitInput) => {
     customerName: formatPersonName(input.customerName),
     customerPhone: optionalText(input.customerPhone),
     customerRelation: optionalText(input.customerRelation),
+    customerDocumentNumber: optionalText(input.customerDocumentNumber),
+    customerDocumentNumberNormalized: normalizeDocumentNumber(input.customerDocumentNumber),
+    guardianId: customerId,
+    guardianDocumentNumber: optionalText(input.customerDocumentNumber),
+    guardianDocumentNumberNormalized: normalizeDocumentNumber(input.customerDocumentNumber),
     childrenCount: input.childrenCount,
     planId: plan.id,
     planName: plan.name,
@@ -102,12 +116,15 @@ export const createLocalNormalVisit = async (input: CreateVisitInput) => {
     paymentMethod: input.paymentMethod ?? '',
     amountCharged: input.amountCharged ?? null,
     parkChargeAmount: input.amountCharged ?? input.defaultAmount ?? plan.defaultPrice ?? null,
+    paidParkAmount: input.paymentStatus === 'paid' ? input.amountCharged ?? input.defaultAmount ?? plan.defaultPrice ?? null : 0,
+    extensionChargeAmount: 0,
     parkPaymentStatus: input.paymentStatus === 'paid' ? 'paid' : 'pending',
     parkPaidAt: input.paymentStatus === 'paid' ? startedAt : null,
     parkPaymentMethod: input.paymentStatus === 'paid' ? input.paymentMethod ?? '' : '',
     defaultAmount: input.defaultAmount ?? plan.defaultPrice ?? null,
     customAmount: Boolean(input.customAmount),
     notes: optionalText(input.notes),
+    timeExtensions: [],
     status: 'active',
     createdAt: now,
     updatedAt: now,
@@ -129,12 +146,56 @@ export const chargeLocalVisit = async (visit: ActiveVisit, input: ChargeVisitInp
     paymentStatus: 'paid' as const,
     paymentMethod: input.paymentMethod,
     amountCharged: input.amountCharged ?? visit.amountCharged ?? null,
+    paidParkAmount: input.amountCharged ?? visit.amountCharged ?? visit.parkChargeAmount ?? null,
+    parkPaymentStatus: 'paid' as const,
+    parkPaidAt: new Date(),
+    parkPaymentMethod: input.paymentMethod,
     updatedAt: new Date(),
     updatedBy: 'local',
   }
 
   const activeVisits = getLocalActiveVisits().map((item) => (item.id === visit.id ? updatedVisit : item))
   writeJson(activeVisitsKey, activeVisits)
+  writeJson(
+    visitsHistoryKey,
+    readJson<ActiveVisit[]>(visitsHistoryKey, []).map((item) => (item.id === visit.id ? updatedVisit : item)),
+  )
+  emit()
+}
+
+export const extendLocalVisitTime = async (visit: ActiveVisit, input: { minutes: 30 | 60; amount: number }) => {
+  const now = new Date()
+  const baseEndTime = visit.expectedEndAt && visit.expectedEndAt.getTime() > now.getTime() ? visit.expectedEndAt : now
+  const newEndTime = new Date(baseEndTime.getTime() + input.minutes * 60 * 1000)
+  const currentParkCharge = Number(visit.parkChargeAmount ?? visit.amountCharged ?? visit.defaultAmount ?? 0)
+  const extensionRecord = {
+    id: makeId('extension'),
+    type: 'time_extension' as const,
+    minutes: input.minutes,
+    amount: input.amount,
+    previousEndTime: visit.expectedEndAt ?? null,
+    newEndTime,
+    createdAt: now,
+    createdBy: 'local',
+    createdByName: 'Local',
+  }
+  const updatedVisit: ActiveVisit = {
+    ...visit,
+    expectedEndAt: newEndTime,
+    durationMinutes: visit.durationMinutes === null ? null : Number(visit.durationMinutes ?? 0) + input.minutes,
+    parkChargeAmount: currentParkCharge + input.amount,
+    extensionChargeAmount: Number(visit.extensionChargeAmount ?? 0) + input.amount,
+    paymentStatus: 'payAtExit',
+    parkPaymentStatus: 'pending',
+    timeExtensions: [...(visit.timeExtensions ?? []), extensionRecord],
+    updatedAt: now,
+    updatedBy: 'local',
+  }
+
+  writeJson(
+    activeVisitsKey,
+    getLocalActiveVisits().map((item) => (item.id === visit.id ? updatedVisit : item)),
+  )
   writeJson(
     visitsHistoryKey,
     readJson<ActiveVisit[]>(visitsHistoryKey, []).map((item) => (item.id === visit.id ? updatedVisit : item)),

@@ -196,6 +196,26 @@ export function BackupSettingsPanel() {
               {automaticError ? <div className="form-alert error">No se pudo leer estado automático: {automaticError}</div> : null}
               {automaticState.errorMessage ? <div className="form-alert error">{automaticState.errorMessage}</div> : null}
             </div>
+            <div className="backup-native-card">
+              <div className="backup-native-card-heading">
+                <div>
+                  <h3>Backup nativo de Firestore</h3>
+                  <p className="muted">Administrado por Firebase/Google Cloud.</p>
+                </div>
+                <StatusPill tone="available">Activo</StatusPill>
+              </div>
+              <p>
+                Además del backup manual y el backup automático por uso del sistema, este proyecto tiene activo Firestore Scheduled Backups: copia diaria de la base de datos con retención de 30 días.
+              </p>
+              <div className="backup-native-facts">
+                <span><small>Frecuencia</small><strong>Diaria</strong></span>
+                <span><small>Retención</small><strong>30 días</strong></span>
+                <span><small>Base de datos</small><strong>(default)</strong></span>
+              </div>
+              <p className="backup-native-note">
+                Estos backups nativos se restauran desde Firebase o Google Cloud; el botón Restaurar desde JSON solo usa backups generados por el sistema.
+              </p>
+            </div>
             <div className="backup-summary-grid">
               <span><small>Último automático</small><strong>{formatDateTime(lastAutomatic?.createdAt ?? automaticState.lastSuccessAt)}</strong></span>
               <span><small>Próximo estimado</small><strong>{formatDateTime(nextAutomatic)}</strong></span>

@@ -8,10 +8,22 @@ import { useClientsData, type ClientVisitHistoryItem } from '../../hooks/useClie
 import { formatShortTime, getLocalDateKey } from '../../utils/date'
 import { formatGuarani } from '../../utils/money'
 import { lowerSearchKey } from '../../utils/textFormat'
-import type { CanteenOrder, ChildProfile, EventGuest, LuccaEvent } from '../../types'
+import type { CanteenOrder, ChildProfile, CustomerProfile, EventGuest, LuccaEvent } from '../../types'
 
 type ClientFilter = 'all' | 'birthday' | 'thisMonth' | 'visit' | 'event' | 'frequent'
 type ClientSort = 'birthdaySoon' | 'birthdayFar' | 'visits' | 'recent' | 'alpha'
+
+interface ResponsibleRecord {
+  key: string
+  name: string
+  documentNumber: string
+  documentNumberNormalized: string
+  phone: string
+  relation: string
+  children: ChildProfile[]
+  visitCount: number
+  lastVisitAt: Date | null
+}
 
 const filters: Array<{ id: ClientFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
@@ -60,6 +72,8 @@ const formatBirthday = (date: Date | null | undefined) =>
     : 'Sin dato'
 
 const normalizeDigits = (value?: string) => (value ?? '').replace(/\D/g, '')
+
+const formatDocument = (value?: string) => value || 'Sin cédula'
 
 const getTotalActivity = (child: ChildProfile) => child.visitCount + child.eventGuestCount + (child.eventReservationCount ?? 0)
 
@@ -125,13 +139,137 @@ const buildWhatsAppUrl = (child: ChildProfile) => {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 }
 
+const buildResponsibleWhatsAppUrl = (responsible: ResponsibleRecord) => {
+  const phone = normalizePhoneForWhatsApp(responsible.phone)
+  if (!phone) return ''
+  const text = `Hola! Te escribimos de Lucca Park para compartir información de tu familia.`
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+}
+
+const getResponsibleKey = (input: { id?: string; name?: string; documentNumber?: string; documentNumberNormalized?: string; phone?: string }) => {
+  const documentNumber = normalizeDigits(input.documentNumberNormalized || input.documentNumber)
+  if (documentNumber) return `doc:${documentNumber}`
+  const phone = normalizeDigits(input.phone)
+  if (phone) return `phone:${phone}`
+  const name = lowerSearchKey(input.name ?? '')
+  if (name) return `name:${name}`
+  return `id:${input.id ?? 'sin-dato'}`
+}
+
+const buildResponsibleRecords = (
+  customers: CustomerProfile[],
+  children: ChildProfile[],
+  visits: ClientVisitHistoryItem[],
+): ResponsibleRecord[] => {
+  const records = new Map<string, ResponsibleRecord>()
+  const customerById = new Map(customers.map((customer) => [customer.id, customer]))
+  const childById = new Map(children.map((child) => [child.id, child]))
+
+  const upsert = (
+    input: {
+      id?: string
+      name?: string
+      documentNumber?: string
+      documentNumberNormalized?: string
+      phone?: string
+      relation?: string
+      child?: ChildProfile | null
+      visitDate?: Date | null
+      visitIncrement?: number
+    },
+  ) => {
+    const key = getResponsibleKey(input)
+    const current =
+      records.get(key) ??
+      {
+        key,
+        name: '',
+        documentNumber: '',
+        documentNumberNormalized: '',
+        phone: '',
+        relation: '',
+        children: [],
+        visitCount: 0,
+        lastVisitAt: null,
+      }
+
+    current.name = current.name || input.name || ''
+    current.documentNumber = current.documentNumber || input.documentNumber || ''
+    current.documentNumberNormalized = current.documentNumberNormalized || input.documentNumberNormalized || normalizeDigits(input.documentNumber)
+    current.phone = current.phone || input.phone || ''
+    current.relation = current.relation || input.relation || ''
+    if (input.child && !current.children.some((child) => child.id === input.child?.id)) {
+      current.children.push(input.child)
+    }
+    current.visitCount += input.visitIncrement ?? 0
+    if (input.visitDate && (!current.lastVisitAt || input.visitDate > current.lastVisitAt)) {
+      current.lastVisitAt = input.visitDate
+    }
+    records.set(key, current)
+  }
+
+  customers.forEach((customer) => {
+    upsert({
+      id: customer.id,
+      name: customer.name,
+      documentNumber: customer.documentNumber,
+      documentNumberNormalized: customer.documentNumberNormalized,
+      phone: customer.phone,
+      relation: customer.relation,
+    })
+  })
+
+  children.forEach((child) => {
+    const customer = customerById.get(child.guardianId || child.mainCustomerId || child.customerId || '')
+    upsert({
+      id: customer?.id,
+      name: child.guardianName || child.mainCustomerName || child.customerName || customer?.name,
+      documentNumber: child.guardianDocumentNumber || customer?.documentNumber,
+      documentNumberNormalized: child.guardianDocumentNumberNormalized || customer?.documentNumberNormalized,
+      phone: child.guardianPhone || child.mainCustomerPhone || child.customerPhone || customer?.phone,
+      relation: customer?.relation,
+      child,
+      visitDate: child.lastVisitAt,
+      visitIncrement: 0,
+    })
+  })
+
+  visits.forEach((visit) => {
+    const child = childById.get(visit.childId)
+    const customer = customerById.get(visit.customerId || child?.guardianId || child?.mainCustomerId || child?.customerId || '')
+    upsert({
+      id: customer?.id || visit.customerId,
+      name: child?.guardianName || child?.mainCustomerName || visit.customerName || customer?.name,
+      documentNumber: child?.guardianDocumentNumber || visit.customerDocumentNumber || customer?.documentNumber,
+      documentNumberNormalized: child?.guardianDocumentNumberNormalized || visit.customerDocumentNumberNormalized || customer?.documentNumberNormalized,
+      phone: child?.guardianPhone || child?.mainCustomerPhone || child?.customerPhone || visit.customerPhone || customer?.phone,
+      relation: visit.customerRelation || customer?.relation,
+      child,
+      visitDate: visit.startedAt ?? visit.createdAt ?? null,
+      visitIncrement: 1,
+    })
+  })
+
+  return Array.from(records.values())
+    .filter((responsible) => responsible.name || responsible.phone || responsible.documentNumber || responsible.children.length > 0)
+    .map((responsible) => ({
+      ...responsible,
+      children: [...responsible.children].sort((a, b) => a.name.localeCompare(b.name, 'es-PY')),
+    }))
+    .sort((a, b) => (b.lastVisitAt?.getTime() ?? 0) - (a.lastVisitAt?.getTime() ?? 0) || a.name.localeCompare(b.name, 'es-PY'))
+}
+
 export function AdminClientsPage() {
-  const { canteenOrders, children, error, eventGuests, events, isLoading, visits } = useClientsData()
+  const { canteenOrders, children, customers, error, eventGuests, events, isLoading, visits } = useClientsData()
   const [search, setSearch] = useState('')
+  const [responsibleSearch, setResponsibleSearch] = useState('')
   const [filter, setFilter] = useState<ClientFilter>('all')
   const [sortBy, setSortBy] = useState<ClientSort>('birthdaySoon')
+  const [isBirthdaysOpen, setIsBirthdaysOpen] = useState(true)
   const [isChildrenOpen, setIsChildrenOpen] = useState(true)
+  const [isResponsiblesOpen, setIsResponsiblesOpen] = useState(false)
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
+  const [selectedResponsibleKey, setSelectedResponsibleKey] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [now] = useState(() => new Date())
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -178,7 +316,31 @@ export function AdminClientsPage() {
       })
   }, [children, currentMonth, filter, now, search, sortBy])
 
+  const responsibles = useMemo(
+    () => buildResponsibleRecords(customers, children, visits),
+    [children, customers, visits],
+  )
+
+  const filteredResponsibles = useMemo(() => {
+    const normalizedSearch = responsibleSearch.trim().toLocaleLowerCase('es-PY')
+    if (!normalizedSearch) return responsibles
+    const searchDigits = normalizeDigits(normalizedSearch)
+    return responsibles.filter((responsible) => {
+      const text = [
+        responsible.name,
+        responsible.documentNumber,
+        responsible.documentNumberNormalized,
+        responsible.phone,
+        responsible.relation,
+        responsible.children.map((child) => child.name).join(' '),
+      ].join(' ').toLocaleLowerCase('es-PY')
+      const digits = normalizeDigits([responsible.documentNumber, responsible.documentNumberNormalized, responsible.phone].join(' '))
+      return text.includes(normalizedSearch) || Boolean(searchDigits && digits.includes(searchDigits))
+    })
+  }, [responsibleSearch, responsibles])
+
   const selectedChild = children.find((child) => child.id === selectedChildId) ?? null
+  const selectedResponsible = responsibles.find((responsible) => responsible.key === selectedResponsibleKey) ?? null
   const selectedVisits = selectedChild ? getChildVisits(selectedChild, visits) : []
   const selectedGuests = selectedChild ? getChildGuests(selectedChild, eventGuests) : []
   const selectedOrders = selectedChild ? getChildOrders(selectedChild, canteenOrders, visits) : []
@@ -192,6 +354,10 @@ export function AdminClientsPage() {
 
   const closeProfile = () => {
     setSearchParams({})
+  }
+
+  const closeResponsibleDetail = () => {
+    setSelectedResponsibleKey(null)
   }
 
   return (
@@ -222,14 +388,15 @@ export function AdminClientsPage() {
       </div>
 
       <section className="panel upcoming-panel clients-full-panel">
-        <div className="panel-header">
-          <h2 className="panel-title">
-            <Gift color="var(--yellow)" />
+        <button className="finance-collapsible-header" onClick={() => setIsBirthdaysOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isBirthdaysOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <Gift color="var(--yellow)" size={20} />
             Cumpleaños próximos
-          </h2>
+          </span>
           <StatusPill tone="warning">{upcomingBirthdays.length} en 30 días</StatusPill>
-        </div>
-        <div className="birthday-wide-list">
+        </button>
+        {isBirthdaysOpen ? <div className="birthday-wide-list client-collapsible-body">
           {upcomingBirthdays.map(({ birthday, child }) => {
             const whatsappUrl = buildWhatsAppUrl(child)
             return (
@@ -259,7 +426,7 @@ export function AdminClientsPage() {
             )
           })}
           {upcomingBirthdays.length === 0 ? <div className="empty-state">No hay cumpleaños próximos cargados.</div> : null}
-        </div>
+        </div> : null}
       </section>
 
       <section className="panel clients-list-panel clients-full-panel">
@@ -349,6 +516,169 @@ export function AdminClientsPage() {
           </div>
         ) : null}
       </section>
+
+      <section className="panel clients-list-panel clients-full-panel">
+        <button className="finance-collapsible-header" onClick={() => setIsResponsiblesOpen((current) => !current)} type="button">
+          <span className="finance-collapsible-title">
+            {isResponsiblesOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <Users color="var(--turquoise)" size={20} />
+            <span>
+              <strong>Responsables registrados</strong>
+              <small>Padres, tutores o encargados vinculados a los niños.</small>
+            </span>
+          </span>
+          <strong>{responsibles.length} responsables</strong>
+        </button>
+
+        {isResponsiblesOpen ? (
+          <div className="client-collapsible-body">
+            <div className="clients-controls-grid">
+              <label className="field search-field">
+                <span>
+                  <Search size={16} /> Buscar
+                </span>
+                <input
+                  onChange={(event) => setResponsibleSearch(event.target.value)}
+                  placeholder="Buscar por nombre, cédula o teléfono"
+                  value={responsibleSearch}
+                />
+              </label>
+            </div>
+
+            {isLoading ? <div className="empty-state">Cargando responsables...</div> : null}
+            {error ? <div className="form-alert error">No se pudieron cargar responsables: {error}</div> : null}
+            {!isLoading && !error && filteredResponsibles.length === 0 ? <div className="empty-state">No hay responsables para esta búsqueda.</div> : null}
+
+            <div className="responsible-grid">
+              {filteredResponsibles.map((responsible) => {
+                const whatsappUrl = buildResponsibleWhatsAppUrl(responsible)
+                return (
+                  <article className="responsible-card" key={responsible.key}>
+                    <div className="responsible-card-main">
+                      <strong>{responsible.name || 'Responsable sin nombre'}</strong>
+                      <p>{formatDocument(responsible.documentNumber)}</p>
+                      <p>{responsible.phone || 'Sin teléfono'}{responsible.relation ? ` · ${responsible.relation}` : ''}</p>
+                    </div>
+                    <div className="responsible-card-meta">
+                      <span>{responsible.children.length} niños vinculados</span>
+                      <span>{responsible.visitCount} visitas asociadas</span>
+                      <span>Última visita: {formatDate(responsible.lastVisitAt)}</span>
+                    </div>
+                    <div className="responsible-child-chips">
+                      {responsible.children.slice(0, 4).map((child) => (
+                        <span key={child.id}>{child.name}</span>
+                      ))}
+                      {responsible.children.length > 4 ? <span>+{responsible.children.length - 4}</span> : null}
+                    </div>
+                    <div className="client-row-actions">
+                      <button className="button ghost small-button" onClick={() => setSelectedResponsibleKey(responsible.key)} type="button">
+                        Ver detalle
+                      </button>
+                      {whatsappUrl ? (
+                        <a className="button whatsapp small-button" href={whatsappUrl} rel="noreferrer" target="_blank">
+                          WhatsApp
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      {selectedResponsible ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card client-profile-modal" role="dialog" aria-modal="true" aria-label={`Responsable ${selectedResponsible.name}`}>
+            <div className="modal-header">
+              <div className="client-profile-header">
+                <div>
+                  <p className="eyebrow">Responsable registrado</p>
+                  <h2>{selectedResponsible.name || 'Responsable sin nombre'}</h2>
+                  <p className="muted">
+                    {formatDocument(selectedResponsible.documentNumber)} · {selectedResponsible.phone || 'Sin teléfono'}
+                    {selectedResponsible.relation ? ` · ${selectedResponsible.relation}` : ''}
+                  </p>
+                </div>
+                <StatusPill tone="info">{selectedResponsible.children.length} niños vinculados</StatusPill>
+              </div>
+              <button className="icon-button modal-close" onClick={closeResponsibleDetail} type="button" aria-label="Cerrar responsable">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="client-profile-grid">
+              <span>
+                <strong>{formatDocument(selectedResponsible.documentNumber)}</strong>
+                Cédula / documento
+              </span>
+              <span>
+                <strong>{selectedResponsible.phone || 'Sin teléfono'}</strong>
+                Teléfono
+              </span>
+              <span>
+                <strong>{selectedResponsible.relation || 'Sin relación'}</strong>
+                Relación
+              </span>
+              <span>
+                <strong>{selectedResponsible.visitCount}</strong>
+                Visitas asociadas
+              </span>
+              <span>
+                <strong>{formatDate(selectedResponsible.lastVisitAt)}</strong>
+                Última visita
+              </span>
+              <span>
+                <strong>{selectedResponsible.children.length}</strong>
+                Niños vinculados
+              </span>
+            </div>
+
+            <div className="client-action-row">
+              {buildResponsibleWhatsAppUrl(selectedResponsible) ? (
+                <a className="button whatsapp" href={buildResponsibleWhatsAppUrl(selectedResponsible)} rel="noreferrer" target="_blank">
+                  <Phone size={17} />
+                  WhatsApp
+                </a>
+              ) : null}
+            </div>
+
+            <div className="client-history-section">
+              <h3>Niños vinculados</h3>
+              <div className="module-list">
+                {selectedResponsible.children.map((child) => {
+                  const birthday = nextBirthdayInfo(child.birthDate, now)
+                  return (
+                    <article className="child-history-card" key={child.id}>
+                      <div className="child-history-main">
+                        <strong>{child.name}</strong>
+                        <p className="muted">
+                          {birthday ? `Cumple: ${formatBirthday(birthday.date)} · Faltan ${birthday.daysUntil} días` : 'Cumpleaños: Sin fecha registrada'}
+                        </p>
+                        <p className="muted">Visitas/registros: {getTotalActivity(child)}</p>
+                      </div>
+                      <div className="child-history-side">
+                        <button
+                          className="button ghost small-button"
+                          onClick={() => {
+                            closeResponsibleDetail()
+                            openProfile(child.id)
+                          }}
+                          type="button"
+                        >
+                          Ver niño
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+                {selectedResponsible.children.length === 0 ? <div className="empty-state">Sin niños vinculados.</div> : null}
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {selectedChild ? (
         <div className="modal-backdrop" role="presentation">

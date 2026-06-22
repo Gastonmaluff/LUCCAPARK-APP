@@ -9,8 +9,8 @@ export function LandingPage() {
   const { config } = usePublicPageConfig()
   const packageScrollerRef = useRef<HTMLDivElement | null>(null)
   const whatsappHref = (message = config.contact.whatsappMessage) => buildWhatsappLink(config.contact.whatsappNumber, message)
-  const googleMapsUrl = normalizeExternalUrl(config.contact.googleMapsUrl)
-  const googleMapsEmbedUrl = buildGoogleMapsEmbedUrl(config.contact.googleMapsUrl)
+  const googleMapsEmbedUrl = buildGoogleMapsEmbedUrl(config.contact.googleMapsEmbedUrl || config.contact.googleMapsUrl)
+  const googleMapsUrl = normalizeExternalUrl(config.contact.googleMapsUrl) || normalizeExternalUrl(config.contact.googleMapsEmbedUrl)
   const activeInstallations = config.installations.items.filter((item) => item.isActive)
   const activePackages = config.birthday.packages.filter((item) => item.isActive)
   const scrollPackages = (direction: -1 | 1) => {
@@ -128,7 +128,7 @@ export function LandingPage() {
       </section>
 
       <section className="section contact-band" id="contacto">
-        <div className={`container landing-contact-layout ${googleMapsUrl ? 'with-map' : 'no-map'}`}>
+        <div className={`container landing-contact-layout ${googleMapsUrl || googleMapsEmbedUrl ? 'with-map' : 'no-map'}`}>
           <div>
             <SectionHeading eyebrow="Contacto" title={config.contact.title}>
               Escribinos por WhatsApp y coordinamos la disponibilidad.
@@ -138,7 +138,7 @@ export function LandingPage() {
               Escribir por WhatsApp
             </a>
           </div>
-          {googleMapsUrl ? (
+          {googleMapsUrl || googleMapsEmbedUrl ? (
             <article className="contact-card map-contact-card">
               <div>
                 <MapPin color="var(--green)" />
@@ -154,9 +154,11 @@ export function LandingPage() {
                   title="Ubicación de Lucca Park"
                 />
               ) : null}
-              <a className="button ghost" href={googleMapsUrl} target="_blank" rel="noreferrer">
-                Ver ubicación en Google Maps
-              </a>
+              {googleMapsUrl || googleMapsEmbedUrl ? (
+                <a className="button ghost" href={googleMapsUrl || googleMapsEmbedUrl} target="_blank" rel="noreferrer">
+                  Ver ubicación en Google Maps
+                </a>
+              ) : null}
             </article>
           ) : null}
         </div>

@@ -11,6 +11,10 @@ export interface ClientVisitHistoryItem {
   childGender?: string
   customerId?: string
   customerName?: string
+  customerPhone?: string
+  customerRelation?: string
+  customerDocumentNumber?: string
+  customerDocumentNumberNormalized?: string
   startedAt?: Date | null
   endedAt?: Date | null
   createdAt?: Date | null
@@ -39,6 +43,10 @@ const mapCustomer = (id: string, data: Record<string, unknown>): CustomerProfile
   id,
   name: String(data.name ?? ''),
   phone: String(data.phone ?? ''),
+  relation: String(data.relation ?? ''),
+  documentNumber: String(data.documentNumber ?? ''),
+  documentNumberNormalized: String(data.documentNumberNormalized ?? ''),
+  childrenIds: Array.isArray(data.childrenIds) ? data.childrenIds.map(String) : [],
   email: String(data.email ?? ''),
   notes: String(data.notes ?? ''),
   marketingConsent: Boolean(data.marketingConsent),
@@ -56,6 +64,11 @@ const mapChild = (id: string, data: Record<string, unknown>): ChildProfile => ({
   mainCustomerId: String(data.mainCustomerId ?? data.customerId ?? ''),
   mainCustomerName: String(data.mainCustomerName ?? data.customerName ?? ''),
   mainCustomerPhone: String(data.mainCustomerPhone ?? data.customerPhone ?? ''),
+  guardianId: String(data.guardianId ?? data.mainCustomerId ?? data.customerId ?? ''),
+  guardianDocumentNumber: String(data.guardianDocumentNumber ?? ''),
+  guardianDocumentNumberNormalized: String(data.guardianDocumentNumberNormalized ?? ''),
+  guardianName: String(data.guardianName ?? data.mainCustomerName ?? data.customerName ?? ''),
+  guardianPhone: String(data.guardianPhone ?? data.mainCustomerPhone ?? data.customerPhone ?? ''),
   customerId: String(data.customerId ?? ''),
   customerName: String(data.customerName ?? ''),
   customerPhone: String(data.customerPhone ?? ''),
@@ -117,8 +130,13 @@ const mapVisit = (id: string, data: Record<string, unknown>): ClientVisitHistory
   id,
   childId: String(data.childId ?? ''),
   childName: String(data.childName ?? ''),
+  childGender: String(data.childGender ?? ''),
   customerId: String(data.customerId ?? ''),
   customerName: String(data.customerName ?? ''),
+  customerPhone: String(data.customerPhone ?? ''),
+  customerRelation: String(data.customerRelation ?? ''),
+  customerDocumentNumber: String(data.customerDocumentNumber ?? data.guardianDocumentNumber ?? ''),
+  customerDocumentNumberNormalized: String(data.customerDocumentNumberNormalized ?? data.guardianDocumentNumberNormalized ?? ''),
   startedAt: dateFromTimestamp(data.startedAt),
   endedAt: dateFromTimestamp(data.endedAt),
   createdAt: dateFromTimestamp(data.createdAt),

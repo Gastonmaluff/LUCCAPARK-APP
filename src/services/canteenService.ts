@@ -2,12 +2,15 @@ import {
   Timestamp,
   doc,
   getDoc,
+  getDocs,
   increment,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
   writeBatch,
+  where,
 } from 'firebase/firestore'
 import { auth } from '../config/firebase'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
@@ -21,12 +24,29 @@ import { formatPersonName, normalizeWhitespace, phoneDigits } from '../utils/tex
 import type {
   CanteenOrder,
   CanteenOrderItem,
+  CanteenLineStatus,
+  CanteenVoidRequest,
   CreateCanteenOrderInput,
   PaymentMethod,
   UpsertCanteenProductInput,
 } from '../types'
 
 const currentUserId = () => auth.currentUser?.uid ?? null
+
+const isAdminRole = (role: string) => role === 'admin'
+
+const requireAuthenticatedAudit = async () => {
+  await ensureReceptionSession()
+  const audit = await getCurrentUserAudit()
+  if (!audit.uid) throw new Error('Necesitás iniciar sesión para continuar.')
+  return audit
+}
+
+const requireAdminAudit = async () => {
+  const audit = await requireAuthenticatedAudit()
+  if (!isAdminRole(audit.role)) throw new Error('Esta acción requiere autorización del dueño o administrador.')
+  return audit
+}
 
 const totalFromItems = (items: CanteenOrderItem[]) =>
   items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
@@ -37,10 +57,14 @@ const costFromItems = (items: CanteenOrderItem[]) =>
 const normalizeItems = (items: CanteenOrderItem[]) =>
   items.map((item) => ({
     ...item,
+    lineItemId: item.lineItemId || item.productId,
     quantity: Number(item.quantity),
     subtotal: Number(item.unitPrice) * Number(item.quantity),
     costSubtotal: Number(item.unitCost ?? 0) * Number(item.quantity),
+    status: item.status || 'active',
   }))
+
+const activeItems = (items: CanteenOrderItem[]) => items.filter((item) => !['voided', 'courtesy', 'waste'].includes(item.status || 'active'))
 
 const applyStockDelta = (batch: ReturnType<typeof writeBatch>, items: CanteenOrderItem[], direction: -1 | 1) => {
   items.forEach((item) => {
@@ -196,10 +220,15 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
     id: orderRef.id,
     type: input.type,
     visitId: input.visitId ?? '',
+    visitIds: input.visitIds ?? (input.visitId ? [input.visitId] : []),
+    groupEntryId: input.groupEntryId ?? '',
     eventId: input.eventId ?? '',
     childId: input.childId ?? '',
+    childIds: input.childIds ?? (input.childId ? [input.childId] : []),
     childName: formatPersonName(input.childName ?? ''),
+    childNames: (input.childNames ?? (input.childName ? [input.childName] : [])).map(formatPersonName),
     customerId: input.customerId ?? '',
+    guardianId: input.guardianId ?? input.customerId ?? '',
     accountName: formatPersonName(input.accountName),
     customerName: formatPersonName(input.customerName ?? ''),
     customerPhone: phoneDigits(input.customerPhone ?? ''),
@@ -225,38 +254,44 @@ export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {
 }
 
 export const addItemsToCanteenOrder = async (order: CanteenOrder, newItems: CanteenOrderItem[]) => {
-  await ensureReceptionSession()
-
+  const audit = await requireAuthenticatedAudit()
   const normalizedNewItems = normalizeItems(newItems)
-  const mergedItems = [...order.items]
+  await runTransaction(getDocumentRef('canteenOrders', order.id).firestore, async (transaction) => {
+    const orderRef = getDocumentRef('canteenOrders', order.id)
+    const snapshot = await transaction.get(orderRef)
+    if (!snapshot.exists()) throw new Error('La cuenta ya no existe.')
+    const data = snapshot.data()
+    if (data.status !== 'open' || data.voidRequestStatus === 'pending') throw new Error('La cuenta no admite nuevos consumos en este estado.')
+    const mergedItems = normalizeItems(Array.isArray(data.items) ? (data.items as CanteenOrderItem[]) : [])
 
-  normalizedNewItems.forEach((newItem) => {
-    const existing = mergedItems.find((item) => item.productId === newItem.productId)
+    normalizedNewItems.forEach((newItem) => {
+      const existing = mergedItems.find((item) => item.productId === newItem.productId && (item.status || 'active') === 'active')
+      if (existing) {
+        existing.quantity += newItem.quantity
+        existing.subtotal = existing.quantity * existing.unitPrice
+        existing.costSubtotal = existing.quantity * Number(existing.unitCost ?? 0)
+      } else {
+        mergedItems.push(newItem)
+      }
+    })
 
-    if (existing) {
-      existing.quantity += newItem.quantity
-      existing.subtotal = existing.quantity * existing.unitPrice
-      return
-    }
-
-    mergedItems.push(newItem)
+    transaction.update(orderRef, {
+      items: mergedItems,
+      total: totalFromItems(activeItems(mergedItems)),
+      costTotal: costFromItems(activeItems(mergedItems)),
+      estimatedProfit: totalFromItems(activeItems(mergedItems)) - costFromItems(activeItems(mergedItems)),
+      updatedAt: serverTimestamp(),
+      updatedBy: audit.uid,
+    })
+    normalizedNewItems.forEach((item) => transaction.update(getDocumentRef('canteenProducts', item.productId), {
+      stock: increment(-item.quantity),
+      updatedAt: serverTimestamp(),
+    }))
   })
-
-  const batch = writeBatch(getDocumentRef('canteenOrders', order.id).firestore)
-  batch.update(getDocumentRef('canteenOrders', order.id), {
-    items: mergedItems,
-    total: totalFromItems(mergedItems),
-    costTotal: costFromItems(mergedItems),
-    estimatedProfit: totalFromItems(mergedItems) - costFromItems(mergedItems),
-    updatedAt: serverTimestamp(),
-    updatedBy: currentUserId(),
-  })
-  applyStockDelta(batch, normalizedNewItems, -1)
-  await batch.commit()
 }
 
 export const updateCanteenOrderItems = async (order: CanteenOrder, items: CanteenOrderItem[]) => {
-  await ensureReceptionSession()
+  await requireAdminAudit()
 
   const normalizedItems = normalizeItems(items)
   const productIds = new Set([...order.items.map((item) => item.productId), ...normalizedItems.map((item) => item.productId)])
@@ -320,6 +355,8 @@ export const chargeCanteenOrder = async (
     canteenOrderId: order.id,
     canteenOrderIds: [order.id],
     visitId: order.visitId ?? '',
+    visitIds: order.visitIds ?? (order.visitId ? [order.visitId] : []),
+    groupEntryId: order.groupEntryId ?? '',
     eventId: order.eventId ?? '',
     accountType: order.type,
     paymentMethod,
@@ -336,33 +373,166 @@ export const chargeCanteenOrder = async (
   await batch.commit()
 }
 
-export const cancelCanteenOrder = async (order: CanteenOrder) => {
-  await ensureReceptionSession()
+export const closeEmptyCanteenOrder = async (order: CanteenOrder, reason = '') => {
+  const audit = await requireAuthenticatedAudit()
+  await runTransaction(getDocumentRef('canteenOrders', order.id).firestore, async (transaction) => {
+    const orderRef = getDocumentRef('canteenOrders', order.id)
+    const snapshot = await transaction.get(orderRef)
+    if (!snapshot.exists()) throw new Error('La cuenta ya no existe.')
+    const data = snapshot.data()
+    if (data.status !== 'open' || Number(data.total ?? 0) !== 0 || (data.items ?? []).length > 0) {
+      throw new Error('Solo se puede cerrar una cuenta vacía y sin pagos.')
+    }
+    transaction.update(orderRef, {
+      status: 'closed_empty',
+      closedAt: serverTimestamp(),
+      closedBy: audit.uid,
+      closedReason: normalizeWhitespace(reason),
+      updatedAt: serverTimestamp(),
+      updatedBy: audit.uid,
+    })
+  })
+  void logActivity({ action: 'status_change', module: 'Cantina', description: `Cerró cuenta vacía ${order.accountName}`, entityId: order.id, entityName: order.accountName, metadata: { reason } })
+}
+
+export const cancelCanteenOrder = closeEmptyCanteenOrder
+
+export const requestCanteenVoid = async (input: {
+  order: CanteenOrder
+  scope: 'line' | 'account'
+  lineItemId?: string
+  reason: string
+  notes?: string
+}) => {
+  const audit = await requireAuthenticatedAudit()
+  const requestId = `${input.order.id}-${input.scope}-${input.lineItemId || 'all'}`
+  const requestRef = getDocumentRef('canteenVoidRequests', requestId)
+  const orderRef = getDocumentRef('canteenOrders', input.order.id)
+  let createdRequest: CanteenVoidRequest | null = null
+
+  await runTransaction(orderRef.firestore, async (transaction) => {
+    const [orderSnapshot, requestSnapshot] = await Promise.all([transaction.get(orderRef), transaction.get(requestRef)])
+    if (!orderSnapshot.exists()) throw new Error('La cuenta ya no existe.')
+    if (requestSnapshot.exists() && requestSnapshot.data().status === 'pending') throw new Error('Ya existe una solicitud pendiente para este consumo.')
+    const data = orderSnapshot.data()
+    if (data.status !== 'open') throw new Error('Solo se pueden solicitar anulaciones sobre cuentas abiertas.')
+    const items = normalizeItems((data.items ?? []) as CanteenOrderItem[])
+    const affectedItems = input.scope === 'line' ? items.filter((item) => item.lineItemId === input.lineItemId) : activeItems(items)
+    if (!affectedItems.length) throw new Error('No se encontró el consumo solicitado.')
+    const amount = totalFromItems(affectedItems)
+    createdRequest = {
+      id: requestId, accountId: input.order.id, scope: input.scope, lineItemId: input.lineItemId, amount, items: affectedItems, reason: normalizeWhitespace(input.reason), notes: normalizeWhitespace(input.notes ?? ''), requestedByUid: audit.uid, requestedByName: audit.name, requestedAt: new Date(), status: 'pending',
+    }
+
+    transaction.set(requestRef, {
+      id: requestId,
+      accountId: input.order.id,
+      scope: input.scope,
+      lineItemId: input.lineItemId ?? '',
+      amount,
+      items: affectedItems,
+      reason: normalizeWhitespace(input.reason),
+      notes: normalizeWhitespace(input.notes ?? ''),
+      requestedByUid: audit.uid,
+      requestedByName: audit.name,
+      requestedAt: serverTimestamp(),
+      status: 'pending',
+    })
+    transaction.update(orderRef, {
+      pendingVoidRequestId: requestId,
+      voidRequestStatus: 'pending',
+      updatedAt: serverTimestamp(),
+      updatedBy: audit.uid,
+    })
+  })
+  void logActivity({ action: 'cancellation', module: 'Cantina', description: `Solicitó anulación de ${input.order.accountName}`, entityId: input.order.id, entityName: input.order.accountName, metadata: { reason: input.reason, scope: input.scope, lineItemId: input.lineItemId ?? '', requestedBy: audit.uid } })
+  return createdRequest
+}
+
+export const reviewCanteenVoidRequest = async (request: CanteenVoidRequest, input: {
+  decision: 'approved' | 'rejected'
+  productsDelivered?: boolean
+  deliveredDisposition?: 'courtesy' | 'waste' | 'unpaid_consumption'
+  reviewNotes?: string
+}) => {
+  const audit = await requireAdminAudit()
+  const requestRef = getDocumentRef('canteenVoidRequests', request.id)
+  const orderRef = getDocumentRef('canteenOrders', request.accountId)
+
+  await runTransaction(orderRef.firestore, async (transaction) => {
+    const [requestSnapshot, orderSnapshot] = await Promise.all([transaction.get(requestRef), transaction.get(orderRef)])
+    if (!requestSnapshot.exists() || requestSnapshot.data().status !== 'pending') throw new Error('La solicitud ya fue procesada.')
+    if (!orderSnapshot.exists()) throw new Error('La cuenta ya no existe.')
+    const orderData = orderSnapshot.data()
+
+    if (input.decision === 'rejected') {
+      transaction.update(requestRef, { status: 'rejected', reviewedByUid: audit.uid, reviewedByName: audit.name, reviewedAt: serverTimestamp(), reviewNotes: normalizeWhitespace(input.reviewNotes ?? '') })
+      transaction.update(orderRef, { pendingVoidRequestId: '', voidRequestStatus: '', updatedAt: serverTimestamp(), updatedBy: audit.uid })
+      return
+    }
+
+    const items = normalizeItems((orderData.items ?? []) as CanteenOrderItem[])
+    const affectedIds = new Set(request.items.map((item) => item.lineItemId || item.productId))
+    const finalStatus: CanteenLineStatus = input.productsDelivered ? (input.deliveredDisposition === 'waste' ? 'waste' : 'courtesy') : 'voided'
+    const nextItems = items.map((item) => affectedIds.has(item.lineItemId || item.productId) ? { ...item, status: finalStatus, voidedAt: new Date(), voidedBy: audit.uid, voidReason: request.reason } : item)
+    const remainingItems = activeItems(nextItems)
+
+    affectedIds.forEach((lineItemId) => {
+      const item = items.find((candidate) => (candidate.lineItemId || candidate.productId) === lineItemId)
+      if (!item) return
+      if (!input.productsDelivered) transaction.update(getDocumentRef('canteenProducts', item.productId), { stock: increment(item.quantity), updatedAt: serverTimestamp() })
+      const movementRef = doc(getCollectionRef('canteenInventoryMovements'))
+      transaction.set(movementRef, {
+        id: movementRef.id,
+        type: input.productsDelivered ? input.deliveredDisposition || 'unpaid_consumption' : 'void_return',
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        accountId: request.accountId,
+        requestId: request.id,
+        reason: request.reason,
+        createdAt: serverTimestamp(),
+        createdBy: audit.uid,
+        createdByName: audit.name,
+      })
+    })
+
+    transaction.update(orderRef, {
+      items: nextItems,
+      total: totalFromItems(remainingItems),
+      costTotal: costFromItems(remainingItems),
+      estimatedProfit: totalFromItems(remainingItems) - costFromItems(remainingItems),
+      status: request.scope === 'account' || remainingItems.length === 0 ? 'voided' : 'open',
+      pendingVoidRequestId: '',
+      voidRequestStatus: '',
+      voidedAt: serverTimestamp(),
+      voidedBy: audit.uid,
+      updatedAt: serverTimestamp(),
+      updatedBy: audit.uid,
+    })
+    transaction.update(requestRef, {
+      status: 'approved', productsDelivered: input.productsDelivered === true, deliveredDisposition: input.deliveredDisposition ?? '', reviewedByUid: audit.uid, reviewedByName: audit.name, reviewedAt: serverTimestamp(), reviewNotes: normalizeWhitespace(input.reviewNotes ?? ''),
+    })
+  })
+  void logActivity({ action: input.decision === 'approved' ? 'approval' : 'cancellation', module: 'Cantina', description: `${input.decision === 'approved' ? 'Aprobó' : 'Rechazó'} anulación de cuenta ${request.accountId}`, entityId: request.accountId, metadata: { requestId: request.id, productsDelivered: input.productsDelivered ?? null, disposition: input.deliveredDisposition ?? '', reason: request.reason } })
+}
+
+export const refundCanteenOrder = async (order: CanteenOrder, input: { reason: string; paymentMethod: string; reference?: string }) => {
+  const audit = await requireAdminAudit()
+  const paymentQuery = query(getCollectionRef('payments'), where('canteenOrderIds', 'array-contains', order.id))
+  const payments = await getDocs(paymentQuery)
+  const originalPayment = payments.docs.find((item) => Number(item.data().canteenAmountPaid ?? 0) > 0 && item.data().status !== 'refunded')
+  if (!originalPayment) throw new Error('No se encontró el pago original de esta cuenta.')
 
   await runTransaction(getDocumentRef('canteenOrders', order.id).firestore, async (transaction) => {
     const orderRef = getDocumentRef('canteenOrders', order.id)
     const snapshot = await transaction.get(orderRef)
-
-    if (!snapshot.exists()) {
-      throw new Error('La cuenta ya no existe.')
-    }
-
-    if (snapshot.data().status === 'cancelled') {
-      return
-    }
-
-    transaction.update(orderRef, {
-      status: 'cancelled',
-      paymentStatus: 'pending',
-      updatedAt: serverTimestamp(),
-      updatedBy: currentUserId(),
+    if (!snapshot.exists() || snapshot.data().status !== 'paid') throw new Error('La cuenta no admite reembolso.')
+    const refundRef = doc(getCollectionRef('payments'))
+    transaction.set(refundRef, {
+      id: refundRef.id, source: 'canteen_refund', concepts: 'canteen', status: 'paid', totalPaid: -order.total, canteenAmountPaid: -order.total, parkAmountPaid: 0, canteenOrderId: order.id, canteenOrderIds: [order.id], originalPaymentId: originalPayment.id, paymentMethod: input.paymentMethod, refundReference: normalizeWhitespace(input.reference ?? ''), description: `Reembolso Cantina - ${order.accountName}`, refundReason: normalizeWhitespace(input.reason), paidAt: Timestamp.now(), createdAt: serverTimestamp(), createdBy: audit.uid, createdByName: audit.name,
     })
-
-    order.items.forEach((item) => {
-      transaction.update(getDocumentRef('canteenProducts', item.productId), {
-        stock: increment(item.quantity),
-        updatedAt: serverTimestamp(),
-      })
-    })
+    transaction.update(orderRef, { status: 'refunded', paymentStatus: 'paid', refundedAt: serverTimestamp(), refundedBy: audit.uid, refundReason: normalizeWhitespace(input.reason), refundPaymentId: refundRef.id, updatedAt: serverTimestamp(), updatedBy: audit.uid })
   })
+  void logActivity({ action: 'cancellation', module: 'Cantina', description: `Registró reembolso de ${order.accountName}`, entityId: order.id, entityName: order.accountName, metadata: { amount: order.total, reason: input.reason, method: input.paymentMethod, originalPaymentId: originalPayment.id } })
 }

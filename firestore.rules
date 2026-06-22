@@ -183,6 +183,47 @@ service cloud.firestore {
         );
     }
 
+    function operationalOrderUpdateIsSafe() {
+      return canOperateCanteen() && (
+        (
+          resource.data.status == 'open'
+          && request.resource.data.status == 'open'
+          && request.resource.data.items.size() >= resource.data.items.size()
+          && request.resource.data.total >= resource.data.total
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'items', 'total', 'costTotal', 'estimatedProfit', 'updatedAt', 'updatedBy'
+          ])
+        )
+        || (
+          resource.data.status == 'open'
+          && resource.data.items.size() == 0
+          && resource.data.total == 0
+          && request.resource.data.status == 'closed_empty'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status', 'closedAt', 'closedBy', 'closedReason', 'updatedAt', 'updatedBy'
+          ])
+        )
+        || (
+          resource.data.status == 'open'
+          && request.resource.data.status == 'paid'
+          && request.resource.data.items == resource.data.items
+          && request.resource.data.total == resource.data.total
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status', 'paymentStatus', 'paymentMethod', 'cardType', 'paidAt', 'updatedAt', 'updatedBy'
+          ])
+        )
+        || (
+          resource.data.status == 'open'
+          && request.resource.data.items == resource.data.items
+          && request.resource.data.total == resource.data.total
+          && request.resource.data.voidRequestStatus == 'pending'
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'pendingVoidRequestId', 'voidRequestStatus', 'updatedAt', 'updatedBy'
+          ])
+        )
+      );
+    }
+
     match /users/{uid} {
       allow read: if signedIn()
         && (
@@ -246,7 +287,16 @@ service cloud.firestore {
     match /canteenOrders/{orderId} {
       allow read: if canReadCanteen();
       allow create: if canOperateCanteen();
-      allow update: if canOperateCanteen();
+      allow update: if isOwnerOrAdmin() || operationalOrderUpdateIsSafe();
+      allow delete: if false;
+    }
+
+    match /canteenVoidRequests/{requestId} {
+      allow read: if canOperateCanteen();
+      allow create: if canOperateCanteen()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedByUid == request.auth.uid;
+      allow update: if isOwnerOrAdmin();
       allow delete: if false;
     }
 

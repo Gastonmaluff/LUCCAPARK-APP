@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, Trash2,
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { BackupSettingsPanel } from '../../components/settings/BackupSettingsPanel'
+import { parseGoogleMapsInput } from '../../config/app'
 import { usePublicPageConfig } from '../../hooks/usePublicPageConfig'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import { useUsers } from '../../hooks/useUsers'
@@ -165,6 +166,9 @@ export function AdminSettingsPage() {
                   <Plus size={17} />
                   Agregar usuario
                 </button>
+              </div>
+              <div className="form-alert info">
+                Creación automática requiere Cloud Function segura. El flujo actual por UID queda disponible como fallback.
               </div>
               <details className="user-help-box">
                 <summary>Como crear un usuario?</summary>
@@ -439,11 +443,26 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
   const saveHome = () => persist(draft, { action: 'update', description: 'Editó Inicio de la página pública', entityName: 'Inicio' })
   const saveInstallations = () => persist(draft, { action: 'update', description: 'Editó Instalaciones de la página pública', entityName: 'Instalaciones' })
   const saveBirthday = () => persist(draft, { action: 'update', description: 'Editó Cumpleaños de la página pública', entityName: 'Cumpleaños' })
-  const saveContact = () =>
-    persist(draft, {
+  const saveContact = () => {
+    const mapsInput = draft.contact.googleMapsEmbedUrl || draft.contact.googleMapsUrl
+    const mapsFields = parseGoogleMapsInput(mapsInput)
+    const preservedExternalUrl =
+      mapsFields.googleMapsEmbedUrl && draft.contact.googleMapsUrl && draft.contact.googleMapsUrl !== mapsInput
+        ? draft.contact.googleMapsUrl
+        : mapsFields.googleMapsUrl
+    const nextConfig = {
+      ...draft,
+      contact: {
+        ...draft.contact,
+        googleMapsEmbedUrl: mapsFields.googleMapsEmbedUrl,
+        googleMapsUrl: preservedExternalUrl,
+      },
+    }
+    return persist(nextConfig, {
       action: 'update',
       description:
-        draft.contact.googleMapsUrl !== config.contact.googleMapsUrl
+        nextConfig.contact.googleMapsUrl !== config.contact.googleMapsUrl ||
+        nextConfig.contact.googleMapsEmbedUrl !== config.contact.googleMapsEmbedUrl
           ? 'Cambió link de Google Maps público'
           : draft.contact.whatsappNumber !== config.contact.whatsappNumber
             ? 'Cambió número de WhatsApp público'
@@ -451,11 +470,14 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
       entityName: 'Contacto',
       metadata: {
         googleMapsAnterior: config.contact.googleMapsUrl,
-        googleMapsNuevo: draft.contact.googleMapsUrl,
+        googleMapsEmbedAnterior: config.contact.googleMapsEmbedUrl,
+        googleMapsEmbedNuevo: nextConfig.contact.googleMapsEmbedUrl,
+        googleMapsNuevo: nextConfig.contact.googleMapsUrl,
         whatsappAnterior: config.contact.whatsappNumber,
         whatsappNuevo: draft.contact.whatsappNumber,
       },
     })
+  }
 
   if (isLoading) return <div className="settings-public-page-body"><div className="empty-state">Cargando contenido publico...</div></div>
 
@@ -635,12 +657,13 @@ function PublicPageEditor({ config, error, isLoading }: { config: PublicPageConf
             <input onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, whatsappNumber: event.target.value } }))} value={draft.contact.whatsappNumber} />
           </label>
           <label className="field public-editor-full">
-            <span>Link de Google Maps</span>
+            <span>Ubicación / Google Maps</span>
             <input
-              onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, googleMapsUrl: event.target.value } }))}
+              onChange={(event) => setDraft((current) => ({ ...current, contact: { ...current.contact, googleMapsEmbedUrl: '', googleMapsUrl: event.target.value } }))}
               placeholder="Pegá un link normal, compartido o iframe de Google Maps"
-              value={draft.contact.googleMapsUrl}
+              value={draft.contact.googleMapsEmbedUrl || draft.contact.googleMapsUrl}
             />
+            <small>Podés pegar un link de Google Maps o el código iframe de insertar mapa.</small>
           </label>
           <label className="field public-editor-full">
             <span>Descripcion</span>

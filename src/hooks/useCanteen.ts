@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
 import { isSameLocalDate } from '../utils/date'
-import type { CanteenCategory, CanteenOrder, CanteenOrderStatus, CanteenProduct, PaymentMethod, ProductImageFit } from '../types'
+import type { CanteenCategory, CanteenOrder, CanteenOrderStatus, CanteenProduct, CanteenVoidRequest, PaymentMethod, ProductImageFit } from '../types'
 
 const dateFromTimestamp = (value: unknown): Date | null => {
   if (value instanceof Timestamp) {
@@ -47,14 +47,21 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   id,
   type: (data.type as CanteenOrder['type']) ?? 'free',
   visitId: String(data.visitId ?? ''),
+  visitIds: Array.isArray(data.visitIds) ? data.visitIds.map(String) : [],
+  groupEntryId: String(data.groupEntryId ?? ''),
   eventId: String(data.eventId ?? ''),
   childId: String(data.childId ?? ''),
+  childIds: Array.isArray(data.childIds) ? data.childIds.map(String) : [],
   childName: String(data.childName ?? ''),
+  childNames: Array.isArray(data.childNames) ? data.childNames.map(String) : [],
   customerId: String(data.customerId ?? ''),
+  guardianId: String(data.guardianId ?? ''),
   accountName: String(data.accountName ?? ''),
   customerName: String(data.customerName ?? ''),
   customerPhone: String(data.customerPhone ?? ''),
-  items: Array.isArray(data.items) ? (data.items as CanteenOrder['items']) : [],
+  items: Array.isArray(data.items)
+    ? (data.items as CanteenOrder['items']).map((item) => ({ ...item, lineItemId: item.lineItemId || item.productId, status: item.status || 'active' }))
+    : [],
   total: Number(data.total ?? 0),
   costTotal: data.costTotal === null || data.costTotal === undefined ? undefined : Number(data.costTotal),
   estimatedProfit:
@@ -69,6 +76,34 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   paidAt: dateFromTimestamp(data.paidAt),
   createdBy: data.createdBy ? String(data.createdBy) : null,
   updatedBy: data.updatedBy ? String(data.updatedBy) : null,
+  pendingVoidRequestId: String(data.pendingVoidRequestId ?? ''),
+  voidRequestStatus: data.voidRequestStatus === 'pending' ? 'pending' : '',
+  closedAt: dateFromTimestamp(data.closedAt),
+  closedBy: data.closedBy ? String(data.closedBy) : null,
+  closedReason: String(data.closedReason ?? ''),
+  refundedAt: dateFromTimestamp(data.refundedAt),
+  refundedBy: data.refundedBy ? String(data.refundedBy) : null,
+})
+
+const mapVoidRequest = (id: string, data: Record<string, unknown>): CanteenVoidRequest => ({
+  id,
+  accountId: String(data.accountId ?? ''),
+  scope: data.scope === 'line' ? 'line' : 'account',
+  lineItemId: data.lineItemId ? String(data.lineItemId) : undefined,
+  amount: Number(data.amount ?? 0),
+  items: Array.isArray(data.items) ? (data.items as CanteenVoidRequest['items']) : [],
+  reason: String(data.reason ?? ''),
+  notes: String(data.notes ?? ''),
+  status: data.status === 'approved' || data.status === 'rejected' ? data.status : 'pending',
+  requestedByUid: String(data.requestedByUid ?? ''),
+  requestedByName: String(data.requestedByName ?? ''),
+  requestedAt: dateFromTimestamp(data.requestedAt),
+  reviewedByUid: data.reviewedByUid ? String(data.reviewedByUid) : undefined,
+  reviewedByName: data.reviewedByName ? String(data.reviewedByName) : undefined,
+  reviewedAt: dateFromTimestamp(data.reviewedAt),
+  reviewNotes: String(data.reviewNotes ?? ''),
+  productsDelivered: data.productsDelivered === true,
+  deliveredDisposition: data.deliveredDisposition as CanteenVoidRequest['deliveredDisposition'],
 })
 
 export function useCanteenProducts() {
@@ -166,6 +201,30 @@ export function useOpenCanteenOrders() {
   const openOrders = useMemo(() => result.orders.filter((order) => order.status === 'open'), [result.orders])
 
   return { ...result, orders: openOrders }
+}
+
+export function useCanteenVoidRequests() {
+  const [requests, setRequests] = useState<CanteenVoidRequest[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      getCollectionRef('canteenVoidRequests'),
+      (snapshot) => {
+        setRequests(snapshot.docs.map((item) => mapVoidRequest(item.id, item.data())).sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0)))
+        setIsLoading(false)
+        setError(null)
+      },
+      (snapshotError) => {
+        setError(snapshotError.message)
+        setIsLoading(false)
+      },
+    )
+    return unsubscribe
+  }, [])
+
+  return { requests, isLoading, error }
 }
 
 export function usePaidCanteenOrdersForDate(dateKey: string) {

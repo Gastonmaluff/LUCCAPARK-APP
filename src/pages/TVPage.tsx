@@ -1,4 +1,5 @@
 import { Check, CircleAlert, Clock3, CreditCard, Infinity as InfinityIcon, RefreshCw } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { BrandLogo } from '../components/BrandLogo'
 import { TvEventView } from '../components/events/TvEventView'
 import { useActiveVisits } from '../hooks/useActiveVisits'
@@ -16,6 +17,8 @@ const priorityOrder: Record<VisitTimeStatus, number> = {
 
 const maxVisibleRows = 12
 const rotationIntervalMs = 15000
+const warningMotionThresholdMs = 5 * 60 * 1000
+const urgentMotionThresholdMs = 2 * 60 * 1000
 
 const paymentIcon: Record<PaymentStatus, typeof Check> = {
   paid: Check,
@@ -46,6 +49,28 @@ const formatTvTime = (visit: ActiveVisit, now: Date) => {
   }
 
   return `${pad(minutes)}:${pad(seconds)}`
+}
+
+const getTvTimeMotionState = (visit: ActiveVisit, now: Date) => {
+  const remainingMs = calculateRemainingMs(visit, now)
+
+  if (remainingMs === null) {
+    return ''
+  }
+
+  if (remainingMs <= 0) {
+    return 'time-expired'
+  }
+
+  if (remainingMs <= urgentMotionThresholdMs) {
+    return 'time-urgent'
+  }
+
+  if (remainingMs <= warningMotionThresholdMs) {
+    return 'time-warning'
+  }
+
+  return ''
 }
 
 const sortVisitsForTv = (visits: ActiveVisit[], now: Date) =>
@@ -156,18 +181,23 @@ export function TVPage() {
             <div className="tv-visit-list">
               {visibleVisits.map((visit, index) => {
                 const timeStatus = getVisitTimeStatus(visit, now)
+                const motionState = getTvTimeMotionState(visit, now)
                 const PaymentIcon = paymentIcon[visit.paymentStatus]
                 const TimeIcon = timeStatus === 'unlimited' ? InfinityIcon : Clock3
+                const rowStyle = { '--tv-row-delay': `${(index % 6) * 0.75}s` } as CSSProperties
 
                 return (
-                  <article className={`tv-list-row ${timeStatus}`} key={visit.id}>
+                  <article className={`tv-list-row ${timeStatus} ${motionState}`.trim()} key={visit.id} style={rowStyle}>
                     <span className="tv-priority-number">
                       <span>{index + 1}</span>
                     </span>
                     <strong className="tv-child-name">{visit.childName}</strong>
                     <span className="tv-responsible-name">{visit.customerName || 'Responsable'}</span>
                     <TimeIcon className="tv-time-icon" size={34} strokeWidth={3} />
-                    <strong className="tv-row-time">{formatTvTime(visit, now)}</strong>
+                    <span className="tv-time-block">
+                      <strong className="tv-row-time">{formatTvTime(visit, now)}</strong>
+                      {motionState === 'time-expired' ? <span className="tv-expired-label">TIEMPO FINALIZADO</span> : null}
+                    </span>
                     <span
                       aria-label={`Estado de pago ${visit.paymentStatus}`}
                       className={`tv-payment-icon ${visit.paymentStatus}`}

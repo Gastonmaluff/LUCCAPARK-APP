@@ -1,7 +1,7 @@
-import { Clock3, Eye, LogOut, Receipt, WalletCards } from 'lucide-react'
+import { Clock3, Eye, LogOut, Receipt, TimerReset, WalletCards } from 'lucide-react'
 import { useState } from 'react'
 import { ConsolidatedCheckoutModal } from './ConsolidatedCheckoutModal'
-import { finishVisit } from '../../services/visitService'
+import { extendVisitTime, finishVisit } from '../../services/visitService'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
 import { getVisitBillingSummary } from '../../utils/visitBilling'
@@ -44,12 +44,14 @@ const statusLabel = (status: ReturnType<typeof getVisitTimeStatus>, visit: Activ
 export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }: VisitCardProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [isExtensionOpen, setIsExtensionOpen] = useState(false)
   const [isSavingAction, setIsSavingAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const timeStatus = getVisitTimeStatus(visit, now)
   const timeCopy = statusLabel(timeStatus, visit, now)
   const billing = getVisitBillingSummary(visit, canteenOrders)
   const hasPendingBalance = billing.totalPendingAmount > 0
+  const canExtendTime = !visit.isUnlimited
 
   const finishWithoutDebt = async () => {
     if (hasPendingBalance) {
@@ -66,6 +68,20 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
       await finishVisit(visit)
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'No se pudo finalizar la visita.')
+    } finally {
+      setIsSavingAction(false)
+    }
+  }
+
+  const handleExtendTime = async (minutes: 30 | 60) => {
+    const amount = minutes === 30 ? 30000 : 60000
+    setActionError(null)
+    setIsSavingAction(true)
+    try {
+      await extendVisitTime(visit, { minutes, amount })
+      setIsExtensionOpen(false)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'No se pudo extender el tiempo.')
     } finally {
       setIsSavingAction(false)
     }
@@ -135,8 +151,31 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
             <Eye size={16} />
             Ver detalle
           </button>
+          {canExtendTime ? (
+            <button className="button ghost" disabled={isSavingAction} onClick={() => setIsExtensionOpen((current) => !current)} type="button">
+              <TimerReset size={16} />
+              Extender tiempo
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {isExtensionOpen ? (
+        <div className="visit-extension-panel">
+          <div>
+            <strong>Extender tiempo</strong>
+            <p>Si ya venció, el nuevo tiempo corre desde este momento.</p>
+          </div>
+          <div className="visit-extension-options">
+            <button className="button secondary" disabled={isSavingAction} onClick={() => handleExtendTime(30)} type="button">
+              +30 min · {formatGuarani(30000)}
+            </button>
+            <button className="button primary" disabled={isSavingAction} onClick={() => handleExtendTime(60)} type="button">
+              +1 hora · {formatGuarani(60000)}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {isDetailOpen ? (
         <div className="visit-detail-grid reception-detail-grid">

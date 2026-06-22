@@ -42,6 +42,7 @@ export type FirebaseCollectionName =
   | 'landingContent'
   | 'canteenProducts'
   | 'canteenOrders'
+  | 'canteenVoidRequests'
   | 'canteenInventoryMovements'
   | 'dailyClosings'
   | 'payments'

@@ -5,8 +5,8 @@ import { usePublicPageConfig } from '../hooks/usePublicPageConfig'
 
 export function ContactPage() {
   const { config } = usePublicPageConfig()
-  const googleMapsUrl = normalizeExternalUrl(config.contact.googleMapsUrl)
-  const googleMapsEmbedUrl = buildGoogleMapsEmbedUrl(config.contact.googleMapsUrl)
+  const googleMapsEmbedUrl = buildGoogleMapsEmbedUrl(config.contact.googleMapsEmbedUrl || config.contact.googleMapsUrl)
+  const googleMapsUrl = normalizeExternalUrl(config.contact.googleMapsUrl) || normalizeExternalUrl(config.contact.googleMapsEmbedUrl)
 
   return (
     <main className="section">
@@ -29,7 +29,7 @@ export function ContactPage() {
               <MapPin size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> {appConfig.address}
             </p>
           </article>
-          {googleMapsUrl ? (
+          {googleMapsUrl || googleMapsEmbedUrl ? (
             <article className="contact-card map-contact-card">
               <div>
                 <MapPin color="var(--green)" />
@@ -45,9 +45,11 @@ export function ContactPage() {
                   title="Ubicación de Lucca Park"
                 />
               ) : null}
-              <a className="button ghost" href={googleMapsUrl} target="_blank" rel="noreferrer">
-                Ver ubicación en Google Maps
-              </a>
+              {googleMapsUrl || googleMapsEmbedUrl ? (
+                <a className="button ghost" href={googleMapsUrl || googleMapsEmbedUrl} target="_blank" rel="noreferrer">
+                  Ver ubicación en Google Maps
+                </a>
+              ) : null}
             </article>
           ) : null}
         </div>

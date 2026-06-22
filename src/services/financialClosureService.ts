@@ -396,7 +396,7 @@ const paymentConcept = (payment: PaymentRecord) => safe(payment.description || p
 const groupTopProducts = (orders: CanteenOrder[]) => {
   const map = new Map<string, { name: string; quantity: number; revenue: number }>()
   orders.forEach((order) => {
-    order.items.forEach((item) => {
+    order.items.filter((item) => !['voided', 'courtesy', 'waste'].includes(item.status || 'active')).forEach((item) => {
       const current = map.get(item.productId || item.productName) ?? { name: item.productName, quantity: 0, revenue: 0 }
       current.quantity += item.quantity
       current.revenue += item.subtotal

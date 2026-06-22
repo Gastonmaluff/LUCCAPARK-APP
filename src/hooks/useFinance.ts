@@ -171,7 +171,7 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
 })
 
 const paymentIsValid = (payment: PaymentRecord) =>
-  payment.totalPaid > 0 && !['void', 'voided', 'cancelled', 'refunded'].includes(String(payment.status ?? '').toLowerCase())
+  payment.totalPaid !== 0 && !['void', 'voided', 'cancelled', 'refunded'].includes(String(payment.status ?? '').toLowerCase())
 
 const eventPaymentPredicate = (payment: PaymentRecord, eventId: string) =>
   payment.eventId === eventId && (payment.source === 'event_payment' || payment.concepts === 'event')

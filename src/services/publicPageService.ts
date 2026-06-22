@@ -32,6 +32,7 @@ export interface PublicPageConfig {
   }
   contact: {
     description: string
+    googleMapsEmbedUrl: string
     googleMapsUrl: string
     title: string
     whatsappMessage: string
@@ -93,6 +94,7 @@ export const publicPageConfigDefaults: PublicPageConfig = {
   },
   contact: {
     description: 'Dejá preparada la conversación por WhatsApp y coordinamos la disponibilidad.',
+    googleMapsEmbedUrl: '',
     googleMapsUrl: '',
     title: 'Consultá disponibilidad para tu cumple',
     whatsappMessage: 'Hola Lucca Park, quiero consultar disponibilidad para un cumple.',
@@ -144,6 +146,7 @@ const mergePublicPageConfig = (data: Record<string, unknown> | undefined): Publi
     },
     contact: {
       description: stringValue(contact.description, publicPageConfigDefaults.contact.description),
+      googleMapsEmbedUrl: stringValue(contact.googleMapsEmbedUrl, ''),
       googleMapsUrl: stringValue(contact.googleMapsUrl, publicPageConfigDefaults.contact.googleMapsUrl),
       title: stringValue(contact.title, publicPageConfigDefaults.contact.title),
       whatsappMessage: stringValue(contact.whatsappMessage, publicPageConfigDefaults.contact.whatsappMessage),

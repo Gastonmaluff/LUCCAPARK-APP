@@ -37,6 +37,8 @@ const emptyGender = 'sin especificar'
 
 const normalizeGender = (value?: string) => {
   const text = String(value ?? '').trim().toLocaleLowerCase('es-PY')
+  if (text === 'male') return 'male'
+  if (text === 'female') return 'female'
   if (['m', 'masculino', 'nino', 'niño', 'varon', 'varón'].includes(text)) return 'male'
   if (['f', 'femenino', 'nina', 'niña', 'mujer'].includes(text)) return 'female'
   return emptyGender
@@ -100,7 +102,7 @@ const visitAmount = (visit: ClientVisitHistoryItem) => Number(visit.amountCharge
 
 const orderDate = (order: CanteenOrder) => order.paidAt ?? order.createdAt ?? order.updatedAt ?? null
 
-const orderCountsAsConsumption = (order: CanteenOrder) => order.status !== 'cancelled' && order.total > 0 && order.items.length > 0
+const orderCountsAsConsumption = (order: CanteenOrder) => !['cancelled', 'voided', 'refunded', 'closed_empty'].includes(order.status) && order.total > 0 && order.items.some((item) => !['voided', 'courtesy', 'waste'].includes(item.status || 'active'))
 
 const orderCountsAsPaidSale = (order: CanteenOrder) => order.status === 'paid'
 
@@ -422,7 +424,10 @@ export function AdminReportsPage() {
     visitsInPeriod.forEach((visit) => {
       const child = childById.get(visit.childId)
       const count = getVisitChildrenCount(visit)
-      const normalized = normalizeGender(visit.childGender ?? child?.gender)
+      const genderValue = visit.childGender ?? child?.gender
+      const normalized = normalizeGender(genderValue)
+      const finalCategory = normalized === 'male' ? 'niño' : normalized === 'female' ? 'niña' : 'sin especificar'
+      void finalCategory
       if (normalized === 'male') gender.male += count
       else if (normalized === 'female') gender.female += count
       else gender.unknown += count
@@ -554,7 +559,7 @@ export function AdminReportsPage() {
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; quantity: number; revenue: number }>()
     paidCanteenOrders.forEach((order) => {
-      order.items.forEach((item) => {
+      order.items.filter((item) => !['voided', 'courtesy', 'waste'].includes(item.status || 'active')).forEach((item) => {
         const key = item.productId || item.productName
         const current = map.get(key) ?? { name: item.productName, quantity: 0, revenue: 0 }
         current.quantity += item.quantity
@@ -824,21 +829,21 @@ export function AdminReportsPage() {
             </button>
             {frequentOpen ? (
               <>
-                {opportunities.frequent.length === 0 ? <EmptyReportState>No hay visitas históricas suficientes.</EmptyReportState> : null}
-                <div className="report-action-list compact">
-                  {opportunities.frequent.map(({ child, count, last }) => (
-                    <article className="report-action-row compact" key={child.id}>
-                      <div>
-                        <strong>{child.name}</strong>
-                        <p>{child.mainCustomerName || child.customerName || 'Sin responsable'} · {count} visitas</p>
-                        <small>Última visita: {formatDate(last)}</small>
-                      </div>
-                      <StatusPill tone={child.eventReservationCount ? 'available' : 'info'}>
-                        {child.eventReservationCount ? 'Tuvo evento' : 'Sin evento'}
-                      </StatusPill>
-                    </article>
-                  ))}
-                </div>
+            {opportunities.frequent.length === 0 ? <EmptyReportState>No hay visitas históricas suficientes.</EmptyReportState> : null}
+            <div className="report-action-list compact">
+              {opportunities.frequent.map(({ child, count, last }) => (
+                <article className="report-action-row compact" key={child.id}>
+                  <div>
+                    <strong>{child.name}</strong>
+                    <p>{child.mainCustomerName || child.customerName || 'Sin responsable'} · {count} visitas</p>
+                    <small>Última visita: {formatDate(last)}</small>
+                  </div>
+                  <StatusPill tone={child.eventReservationCount ? 'available' : 'info'}>
+                    {child.eventReservationCount ? 'Tuvo evento' : 'Sin evento'}
+                  </StatusPill>
+                </article>
+              ))}
+            </div>
               </>
             ) : null}
           </article>
@@ -857,50 +862,50 @@ export function AdminReportsPage() {
             </button>
             {reactivateOpen ? (
               <>
-                <div className="report-reactivation-filter" aria-label="Filtro de días sin visita">
-                  {[30, 60, 90].map((days) => (
-                    <button
-                      className={reactivationDays === days ? 'active' : ''}
-                      key={days}
-                      onClick={() => setReactivationDays(days)}
-                      type="button"
-                    >
-                      {days} días
-                    </button>
-                  ))}
-                  <label>
-                    <span>Más de</span>
-                    <input
-                      min={1}
-                      onChange={(event) => setReactivationDays(Math.max(1, Number(event.target.value) || 1))}
-                      type="number"
-                      value={reactivationDays}
-                    />
-                    <span>días sin venir</span>
-                  </label>
-                </div>
-                {opportunities.reactivate.length === 0 ? <EmptyReportState>No hay clientes para reactivar con el criterio actual.</EmptyReportState> : null}
-                <div className="report-action-list compact">
-                  {opportunities.reactivate.map(({ child, count, daysSinceLastVisit, last }) => {
-                    const phone = child.mainCustomerPhone || child.customerPhone
-                    return (
-                      <article className="report-action-row compact" key={child.id}>
-                        <div>
-                          <strong>{child.name}</strong>
-                          <p>
-                            Responsable: {child.mainCustomerName || child.customerName || 'Sin responsable'} · Última visita: {formatDate(last)} · Hace {daysSinceLastVisit} días
-                          </p>
-                          <small>{phone ? formatParaguayanPhone(phone) : 'Sin teléfono'} · {count > 0 ? `${count} visitas históricas` : 'Visitas registradas'}</small>
-                        </div>
-                        {whatsappHref(phone) ? (
-                          <a className="button whatsapp small-button" href={whatsappHref(phone)} rel="noreferrer" target="_blank">
-                            <MessageCircle size={16} /> WhatsApp
-                          </a>
-                        ) : null}
-                      </article>
-                    )
-                  })}
-                </div>
+            <div className="report-reactivation-filter" aria-label="Filtro de días sin visita">
+              {[30, 60, 90].map((days) => (
+                <button
+                  className={reactivationDays === days ? 'active' : ''}
+                  key={days}
+                  onClick={() => setReactivationDays(days)}
+                  type="button"
+                >
+                  {days} días
+                </button>
+              ))}
+              <label>
+                <span>Más de</span>
+                <input
+                  min={1}
+                  onChange={(event) => setReactivationDays(Math.max(1, Number(event.target.value) || 1))}
+                  type="number"
+                  value={reactivationDays}
+                />
+                <span>días sin venir</span>
+              </label>
+            </div>
+            {opportunities.reactivate.length === 0 ? <EmptyReportState>No hay clientes para reactivar con el criterio actual.</EmptyReportState> : null}
+            <div className="report-action-list compact">
+              {opportunities.reactivate.map(({ child, count, daysSinceLastVisit, last }) => {
+                const phone = child.mainCustomerPhone || child.customerPhone
+                return (
+                  <article className="report-action-row compact" key={child.id}>
+                    <div>
+                      <strong>{child.name}</strong>
+                      <p>
+                        Responsable: {child.mainCustomerName || child.customerName || 'Sin responsable'} · Última visita: {formatDate(last)} · Hace {daysSinceLastVisit} días
+                      </p>
+                      <small>{phone ? formatParaguayanPhone(phone) : 'Sin teléfono'} · {count > 0 ? `${count} visitas históricas` : 'Visitas registradas'}</small>
+                    </div>
+                    {whatsappHref(phone) ? (
+                      <a className="button whatsapp small-button" href={whatsappHref(phone)} rel="noreferrer" target="_blank">
+                        <MessageCircle size={16} /> WhatsApp
+                      </a>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </div>
               </>
             ) : null}
           </article>

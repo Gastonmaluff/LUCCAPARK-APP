@@ -9,7 +9,8 @@ export type EventType = 'birthday' | 'private_event' | 'other'
 export type EventCapacityStatus = 'ok' | 'near-limit' | 'over-limit'
 export type CanteenCategory = 'Bebidas' | 'Snacks' | 'Comidas' | 'Combos' | 'Helados' | 'Otros'
 export type CanteenAccountType = 'visit' | 'event' | 'free'
-export type CanteenOrderStatus = 'open' | 'paid' | 'cancelled'
+export type CanteenOrderStatus = 'open' | 'paid' | 'cancelled' | 'closed_empty' | 'void_requested' | 'voided' | 'refunded'
+export type CanteenLineStatus = 'active' | 'void_requested' | 'voided' | 'courtesy' | 'waste'
 
 export interface PackagePlan {
   name: string
@@ -79,6 +80,8 @@ export interface TimePlan {
 }
 
 export interface CreateVisitInput {
+  groupEntryId?: string
+  childId?: string
   childName: string
   childBirthDate?: string
   childAgeRange?: string
@@ -86,9 +89,12 @@ export interface CreateVisitInput {
   childAgeCalculated?: number | null
   childGender?: string
   childNotes?: string
+  customerId?: string
   customerName: string
   customerPhone?: string
   customerRelation?: string
+  customerDocumentNumber?: string
+  customerDocumentNumberNormalized?: string
   childrenCount: number
   planId: TimePlan['id']
   startedAt: Date
@@ -105,8 +111,21 @@ export interface CreateVisitInput {
   notes?: string
 }
 
+export interface VisitTimeExtension {
+  id: string
+  type: 'time_extension'
+  minutes: 30 | 60
+  amount: number
+  previousEndTime?: Date | null
+  newEndTime: Date
+  createdAt?: Date | null
+  createdBy?: string | null
+  createdByName?: string
+}
+
 export interface ActiveVisit {
   id: string
+  groupEntryId?: string
   childId: string
   childName: string
   childBirthDate?: string
@@ -118,6 +137,11 @@ export interface ActiveVisit {
   customerName: string
   customerPhone?: string
   customerRelation?: string
+  customerDocumentNumber?: string
+  customerDocumentNumberNormalized?: string
+  guardianId?: string
+  guardianDocumentNumber?: string
+  guardianDocumentNumberNormalized?: string
   childrenCount: number
   planId: TimePlan['id']
   planName: string
@@ -130,12 +154,15 @@ export interface ActiveVisit {
   cardType?: 'debit' | 'credit' | ''
   amountCharged?: number | null
   parkChargeAmount?: number | null
+  paidParkAmount?: number | null
+  extensionChargeAmount?: number | null
   parkPaymentStatus?: 'pending' | 'paid'
   parkPaidAt?: Date | null
   parkPaymentMethod?: PaymentMethod
   defaultAmount?: number | null
   customAmount?: boolean
   notes?: string
+  timeExtensions?: VisitTimeExtension[]
   status: 'active'
   createdAt?: Date | null
   updatedAt?: Date | null
@@ -148,6 +175,10 @@ export interface CustomerProfile {
   id: string
   name: string
   phone?: string
+  relation?: string
+  documentNumber?: string
+  documentNumberNormalized?: string
+  childrenIds?: string[]
   email?: string
   notes?: string
   marketingConsent: boolean
@@ -165,6 +196,11 @@ export interface ChildProfile {
   mainCustomerId?: string
   mainCustomerName?: string
   mainCustomerPhone?: string
+  guardianId?: string
+  guardianDocumentNumber?: string
+  guardianDocumentNumberNormalized?: string
+  guardianName?: string
+  guardianPhone?: string
   customerId?: string
   customerName?: string
   customerPhone?: string
@@ -435,6 +471,7 @@ export interface ProductImageFit {
 }
 
 export interface CanteenOrderItem {
+  lineItemId?: string
   productId: string
   productName: string
   category: CanteenCategory
@@ -443,16 +480,46 @@ export interface CanteenOrderItem {
   quantity: number
   subtotal: number
   costSubtotal?: number
+  status?: CanteenLineStatus
+  voidedAt?: Date | null
+  voidedBy?: string | null
+  voidReason?: string
+}
+
+export interface CanteenVoidRequest {
+  id: string
+  accountId: string
+  scope: 'line' | 'account'
+  lineItemId?: string
+  amount: number
+  items: CanteenOrderItem[]
+  reason: string
+  notes?: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedByUid: string
+  requestedByName: string
+  requestedAt?: Date | null
+  reviewedByUid?: string
+  reviewedByName?: string
+  reviewedAt?: Date | null
+  reviewNotes?: string
+  productsDelivered?: boolean
+  deliveredDisposition?: 'courtesy' | 'waste' | 'unpaid_consumption'
 }
 
 export interface CanteenOrder {
   id: string
   type: CanteenAccountType
   visitId?: string
+  visitIds?: string[]
+  groupEntryId?: string
   eventId?: string
   childId?: string
+  childIds?: string[]
   childName?: string
+  childNames?: string[]
   customerId?: string
+  guardianId?: string
   accountName: string
   customerName?: string
   customerPhone?: string
@@ -470,6 +537,13 @@ export interface CanteenOrder {
   paidAt?: Date | null
   createdBy?: string | null
   updatedBy?: string | null
+  pendingVoidRequestId?: string
+  voidRequestStatus?: 'pending' | ''
+  closedAt?: Date | null
+  closedBy?: string | null
+  closedReason?: string
+  refundedAt?: Date | null
+  refundedBy?: string | null
 }
 
 export interface UpsertCanteenProductInput {
@@ -488,10 +562,15 @@ export interface UpsertCanteenProductInput {
 export interface CreateCanteenOrderInput {
   type: CanteenAccountType
   visitId?: string
+  visitIds?: string[]
+  groupEntryId?: string
   eventId?: string
   childId?: string
+  childIds?: string[]
   childName?: string
+  childNames?: string[]
   customerId?: string
+  guardianId?: string
   accountName: string
   customerName?: string
   customerPhone?: string

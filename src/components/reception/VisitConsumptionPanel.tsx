@@ -9,9 +9,11 @@ interface VisitConsumptionPanelProps {
   visit: ActiveVisit
   orders: CanteenOrder[]
   canteenPath: string
+  groupEntryId?: string
+  title?: string
 }
 
-export function VisitConsumptionPanel({ canteenPath, orders, visit }: VisitConsumptionPanelProps) {
+export function VisitConsumptionPanel({ canteenPath, groupEntryId, orders, title, visit }: VisitConsumptionPanelProps) {
   const openOrders = orders.filter((order) => order.status === 'open')
   const paidOrders = orders.filter((order) => order.status === 'paid')
   const pendingTotal = openOrders.reduce((sum, order) => sum + order.total, 0)
@@ -24,7 +26,7 @@ export function VisitConsumptionPanel({ canteenPath, orders, visit }: VisitConsu
       <div className="panel-header">
         <h3 className="panel-title">
           <ShoppingCart color="var(--orange)" />
-          Consumo de {visit.childName}
+          {title ?? `Consumo de ${visit.childName}`}
         </h3>
         <StatusPill tone={openOrders.length ? 'warning' : paidOrders.length ? 'available' : 'info'}>
           {openOrders.length ? 'Abierta' : paidOrders.length ? 'Pagada' : 'Sin consumo'}
@@ -74,7 +76,7 @@ export function VisitConsumptionPanel({ canteenPath, orders, visit }: VisitConsu
         </div>
       </div>
 
-      <Link className="button primary" to={`${canteenPath}?visitId=${visit.id}`}>
+      <Link className="button primary" to={groupEntryId ? `${canteenPath}?groupEntryId=${groupEntryId}` : `${canteenPath}?visitId=${visit.id}`}>
         <ExternalLink size={17} />+ Agregar producto
       </Link>
     </div>
