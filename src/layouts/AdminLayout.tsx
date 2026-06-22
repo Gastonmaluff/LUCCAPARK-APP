@@ -12,25 +12,27 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { canAccessAdminModule, type AdminModule } from '../auth/accessControl'
 import { BrandLogo } from '../components/BrandLogo'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { runAutomaticBackupIfDue } from '../services/backupService'
 
-const adminNavItems = [
-  { label: 'Control', to: '/admin/dashboard', icon: LayoutDashboard },
-  { label: 'Recepcion', to: '/admin/recepcion', icon: ClipboardList },
-  { label: 'Cantina', to: '/admin/cantina', icon: ChefHat },
-  { label: 'Reservas', to: '/admin/reservas', icon: CalendarDays },
-  { label: 'Finanzas', to: '/admin/finanzas', icon: WalletCards },
-  { label: 'Reportes', to: '/admin/reportes', icon: BarChart3 },
-  { label: 'Clientes', to: '/admin/clientes', icon: UserRound },
-  { label: 'Tareas', to: '/admin/tareas', icon: ClipboardList },
-  { label: 'Configuracion', to: '/admin/configuracion', icon: Settings },
+const adminNavItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard; module: AdminModule }> = [
+  { label: 'Control', to: '/admin/dashboard', icon: LayoutDashboard, module: 'dashboard' },
+  { label: 'Recepción', to: '/admin/recepcion', icon: ClipboardList, module: 'reception' },
+  { label: 'Cantina', to: '/admin/cantina', icon: ChefHat, module: 'canteen' },
+  { label: 'Reservas', to: '/admin/reservas', icon: CalendarDays, module: 'reservations' },
+  { label: 'Finanzas', to: '/admin/finanzas', icon: WalletCards, module: 'finance' },
+  { label: 'Reportes', to: '/admin/reportes', icon: BarChart3, module: 'reports' },
+  { label: 'Clientes', to: '/admin/clientes', icon: UserRound, module: 'clients' },
+  { label: 'Tareas', to: '/admin/tareas', icon: ClipboardList, module: 'tasks' },
+  { label: 'Configuración', to: '/admin/configuracion', icon: Settings, module: 'settings' },
 ]
 
 export function AdminLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { isLoadingProfile, profile } = useUserProfile()
+  const visibleNavItems = profile ? adminNavItems.filter((item) => canAccessAdminModule(profile.role, item.module)) : []
 
   useEffect(() => {
     if (isLoadingProfile || !profile?.isActive) return
@@ -52,7 +54,7 @@ export function AdminLayout() {
             {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
           <nav className={`internal-nav ${isMenuOpen ? 'open' : ''}`} aria-label="Admin">
-            {adminNavItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <NavLink
                 className={({ isActive }) => `nav-chip ${isActive ? 'active' : ''}`}
                 key={item.label}

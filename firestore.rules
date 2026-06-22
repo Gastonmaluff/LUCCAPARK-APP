@@ -6,144 +6,278 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isBootstrapOwner() {
-      return signedIn() && request.auth.uid == 'SXaYNYcKFXP8FZDCk3DP38EyP903';
+    function hasUserProfile() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function hasProfile() {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    function role() {
+      return hasUserProfile() ? userDoc().data.role : '';
     }
 
-    function role() {
-      return hasProfile() ? userDoc().data.role : '';
+    function isKnownRole(value) {
+      return value in ['admin', 'socio', 'encargado_eventos', 'recepcion', 'cantina'];
     }
 
     function isActiveUser() {
-      return hasProfile() && userDoc().data.isActive != false;
+      return hasUserProfile()
+        && userDoc().data.isActive == true
+        && isKnownRole(role());
     }
 
-    function isAdmin() {
-      return isBootstrapOwner()
-        || (isActiveUser() && role() in ['admin', 'owner', 'dueno', 'dueño']);
+    function hasRole(allowedRoles) {
+      return isActiveUser() && role() in allowedRoles;
+    }
+
+    function isOwnerOrAdmin() {
+      return hasRole(['admin']);
     }
 
     function isPartner() {
-      return isActiveUser() && role() in ['socio', 'partner'];
+      return hasRole(['socio']);
     }
 
     function isEventManager() {
-      return isActiveUser() && role() in ['encargado_eventos', 'event_manager'];
+      return hasRole(['encargado_eventos']);
     }
 
     function isReception() {
-      return isActiveUser() && role() in ['recepcion', 'reception'];
+      return hasRole(['recepcion']);
     }
 
     function isCanteen() {
-      return isActiveUser() && role() in ['cantina', 'canteen'];
-    }
-
-    function canViewFinance() {
-      return isAdmin() || isPartner();
-    }
-
-    function canRegisterExpense() {
-      return isAdmin() || isActiveUser();
-    }
-
-    function canManageTasks() {
-      return isAdmin() || isPartner() || isEventManager();
-    }
-
-    function canOperatePayments() {
-      return isAdmin() || isPartner() || isReception() || isCanteen();
-    }
-
-    function canManageEventBudgets() {
-      return isAdmin() || isPartner() || isEventManager();
-    }
-
-    function canManageBudgetConfig() {
-      return isAdmin() || isPartner();
-    }
-
-    function canManageBackups() {
-      return isAdmin() || isPartner();
+      return hasRole(['cantina']);
     }
 
     function canOperateBase() {
-      return signedIn();
+      return isActiveUser();
+    }
+
+    function canViewFinance() {
+      return isOwnerOrAdmin() || isPartner();
+    }
+
+    function canManageClients() {
+      return isOwnerOrAdmin() || isPartner() || isReception() || isEventManager();
+    }
+
+    function canReadVisits() {
+      return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen() || isEventManager();
+    }
+
+    function canCreateVisits() {
+      return isOwnerOrAdmin() || isPartner() || isReception();
+    }
+
+    function canUpdateVisits() {
+      return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen();
+    }
+
+    function canDeleteActiveVisits() {
+      return isOwnerOrAdmin() || isPartner() || isReception();
+    }
+
+    function canReadEvents() {
+      return isOwnerOrAdmin() || isPartner() || isEventManager() || isReception() || isCanteen();
+    }
+
+    function canManageEvents() {
+      return isOwnerOrAdmin() || isPartner() || isEventManager();
+    }
+
+    function canRegisterEventGuests() {
+      return canManageEvents() || isReception();
+    }
+
+    function receptionEventCounterUpdateIsSafe() {
+      return isReception()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'registeredGuestsCount', 'updatedAt', 'updatedBy'
+        ]);
+    }
+
+    function canReadCanteen() {
+      return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen() || isEventManager();
+    }
+
+    function canOperateCanteen() {
+      return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen();
+    }
+
+    function canAdministerCanteen() {
+      return isOwnerOrAdmin() || isPartner();
+    }
+
+    function canOperatePayments() {
+      return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen();
+    }
+
+    function canCreatePayment() {
+      return canOperatePayments()
+        || (isEventManager() && request.resource.data.source == 'event_payment');
+    }
+
+    function canReadEventFinance() {
+      return canViewFinance() || isEventManager();
+    }
+
+    function canRegisterExpense() {
+      return isActiveUser();
+    }
+
+    function canManageTasks() {
+      return isOwnerOrAdmin() || isPartner() || isEventManager();
+    }
+
+    function canManageEventBudgets() {
+      return isOwnerOrAdmin() || isPartner() || isEventManager();
+    }
+
+    function canManageBudgetConfig() {
+      return isOwnerOrAdmin() || isPartner();
+    }
+
+    function canManageBackups() {
+      return isOwnerOrAdmin() || isPartner();
     }
 
     function isAssignedTask() {
-      return signedIn()
+      return isActiveUser()
         && (
           resource.data.assignedTo == request.auth.uid
           || resource.data.assignedTo == request.auth.token.email
         );
     }
 
+    function validUserProfile(uid) {
+      return request.resource.data.uid == uid
+        && request.resource.data.isActive is bool
+        && isKnownRole(request.resource.data.role);
+    }
+
+    function validNewUserProfile(uid) {
+      return validUserProfile(uid)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'role', 'isActive',
+          'createdAt', 'createdByUid', 'createdByName',
+          'updatedAt', 'updatedBy', 'updatedByName'
+        ]);
+    }
+
+    function adminUserUpdateIsSafe(uid) {
+      return isOwnerOrAdmin()
+        && validUserProfile(uid)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'displayName', 'email', 'role', 'isActive',
+          'updatedAt', 'updatedBy', 'updatedByName'
+        ])
+        && (
+          request.auth.uid != uid
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'displayName', 'email', 'updatedAt', 'updatedBy', 'updatedByName'
+          ])
+        );
+    }
+
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || canViewFinance() || canManageTasks());
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if signedIn()
+        && (
+          request.auth.uid == uid
+          || isOwnerOrAdmin()
+          || isPartner()
+          || isEventManager()
+        );
+      allow create: if isOwnerOrAdmin() && validNewUserProfile(uid);
+      allow update: if adminUserUpdateIsSafe(uid);
+      allow delete: if false;
     }
 
-    match /customers/{document=**} {
-      allow read, write: if canOperateBase();
+    match /customers/{customerId} {
+      allow read, create, update: if canManageClients();
+      allow delete: if false;
     }
 
-    match /children/{document=**} {
-      allow read, write: if canOperateBase();
+    match /children/{childId} {
+      allow read, create, update: if canManageClients();
+      allow delete: if false;
     }
 
-    match /activeVisits/{document=**} {
-      allow read, write: if canOperateBase();
+    match /activeVisits/{visitId} {
+      allow read: if canReadVisits();
+      allow create: if canCreateVisits();
+      allow update: if canUpdateVisits();
+      allow delete: if canDeleteActiveVisits();
     }
 
-    match /visits/{document=**} {
-      allow read, write: if canOperateBase();
+    match /visits/{visitId} {
+      allow read: if canReadVisits();
+      allow create: if canCreateVisits();
+      allow update: if canUpdateVisits();
+      allow delete: if false;
     }
 
-    match /events/{document=**} {
-      allow read: if canOperateBase();
-      allow write: if canOperateBase();
+    match /events/{eventId} {
+      allow read: if canReadEvents();
+      allow create: if canManageEvents();
+      allow update: if canManageEvents() || receptionEventCounterUpdateIsSafe();
+      allow delete: if false;
     }
 
-    match /eventGuests/{document=**} {
-      allow read, write: if canOperateBase();
+    match /eventGuests/{guestId} {
+      allow read: if canReadEvents();
+      allow create, update: if canRegisterEventGuests();
+      allow delete: if false;
     }
 
-    match /canteenProducts/{document=**} {
-      allow read, write: if canOperateBase();
+    match /canteenProducts/{productId} {
+      allow read: if canReadCanteen();
+      allow create: if canAdministerCanteen();
+      allow update: if canAdministerCanteen()
+        || (canOperateCanteen()
+          && request.resource.data.stock <= resource.data.stock
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['stock', 'updatedAt']));
+      allow delete: if false;
     }
 
-    match /canteenOrders/{document=**} {
-      allow read, write: if canOperateBase();
+    match /canteenOrders/{orderId} {
+      allow read: if canReadCanteen();
+      allow create: if canOperateCanteen();
+      allow update: if canOperateCanteen();
+      allow delete: if false;
     }
 
-    match /dailyClosings/{document=**} {
-      allow read, write: if canViewFinance();
+    match /canteenInventoryMovements/{movementId} {
+      allow read: if isOwnerOrAdmin() || isPartner() || isCanteen();
+      allow create: if isOwnerOrAdmin();
+      allow update, delete: if false;
+    }
+
+    match /dailyClosings/{closingId} {
+      allow read, create, update: if canViewFinance();
+      allow delete: if false;
     }
 
     match /payments/{paymentId} {
-      allow read: if canViewFinance();
-      allow create: if canOperatePayments();
-      allow update: if isAdmin();
+      allow read: if canReadEventFinance();
+      allow create: if canCreatePayment()
+        && request.resource.data.createdBy == request.auth.uid
+        && (request.resource.data.totalPaid >= 0 || isOwnerOrAdmin());
+      allow update: if isOwnerOrAdmin();
       allow delete: if false;
     }
 
     match /expenses/{expenseId} {
-      allow read: if canViewFinance()
-        || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow create: if canRegisterExpense();
-      allow update: if isAdmin()
+      allow read: if canReadEventFinance()
+        || (isActiveUser() && resource.data.createdBy == request.auth.uid);
+      allow create: if canRegisterExpense()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isOwnerOrAdmin()
         || isPartner()
-        || (signedIn()
+        || (isActiveUser()
           && resource.data.createdBy == request.auth.uid
           && request.resource.data.createdBy == resource.data.createdBy);
       allow delete: if false;
@@ -151,14 +285,15 @@ service cloud.firestore {
 
     match /financialClosures/{closureId} {
       allow read, create: if canViewFinance();
-      allow update: if isAdmin();
+      allow update: if isOwnerOrAdmin();
       allow delete: if false;
     }
 
     match /activityLogs/{logId} {
-      allow read, create: if canOperateBase();
-      allow update: if isAdmin();
-      allow delete: if false;
+      allow read: if isOwnerOrAdmin() || isPartner();
+      allow create: if canOperateBase()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
     }
 
     match /backups/{backupId} {
@@ -167,12 +302,12 @@ service cloud.firestore {
     }
 
     match /backupLocks/{lockId} {
-      allow read, write: if canManageBackups();
+      allow read, create, update: if canManageBackups();
+      allow delete: if false;
     }
 
     match /tasks/{taskId} {
-      allow read: if canManageTasks()
-        || isAssignedTask();
+      allow read: if canManageTasks() || isAssignedTask();
       allow create: if canManageTasks();
       allow update: if canManageTasks()
         || (
@@ -190,43 +325,43 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /settings/{document=**} {
-      allow read: if canOperateBase();
-      allow write: if isAdmin() || isPartner();
+    match /settings/{settingId} {
+      allow read, create, update: if isOwnerOrAdmin() || isPartner();
+      allow delete: if false;
     }
 
-    match /landingContent/{document=**} {
+    match /landingContent/{contentId} {
       allow read: if true;
-      allow write: if isAdmin() || isPartner();
+      allow create, update: if isOwnerOrAdmin() || isPartner();
+      allow delete: if false;
     }
 
-    match /eventBudgets/{document=**} {
+    match /eventBudgets/{budgetId} {
+      allow read, create, update: if canManageEventBudgets();
+      allow delete: if false;
+    }
+
+    match /budgetGuestPackages/{packageId} {
+      allow read: if canManageEventBudgets();
+      allow create, update: if canManageBudgetConfig();
+      allow delete: if false;
+    }
+
+    match /budgetAddons/{addonId} {
+      allow read: if canManageEventBudgets();
+      allow create, update: if canManageBudgetConfig();
+      allow delete: if false;
+    }
+
+    match /budgetDecorations/{decorationId} {
+      allow read: if canManageEventBudgets();
+      allow create, update, delete: if canManageBudgetConfig();
+    }
+
+    match /tvDisplaySettings/{settingId} {
       allow read: if canOperateBase();
-      allow write: if canManageEventBudgets();
-    }
-
-    match /budgetGuestPackages/{document=**} {
-      allow read: if canOperateBase();
-      allow write: if canManageBudgetConfig();
-    }
-
-    match /budgetAddons/{document=**} {
-      allow read: if canOperateBase();
-      allow write: if canManageBudgetConfig();
-    }
-
-    match /budgetDecorations/{document=**} {
-      allow read: if canOperateBase();
-      allow write: if canManageBudgetConfig();
-    }
-
-    match /tvDisplaySettings/{document=**} {
-      allow read: if canOperateBase();
-      allow write: if isAdmin() || isPartner() || isEventManager();
-    }
-
-    match /canteenInventoryMovements/{document=**} {
-      allow read, write: if canOperateBase();
+      allow create, update: if canManageEvents();
+      allow delete: if false;
     }
 
     match /{document=**} {

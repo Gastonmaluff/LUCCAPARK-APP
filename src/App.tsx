@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoadingScreen } from './components/LoadingScreen'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { RoleHomeRedirect } from './components/RoleHomeRedirect'
 import { AdminLayout } from './layouts/AdminLayout'
 import { PublicLayout } from './layouts/PublicLayout'
 import { AdminCanteenPage } from './pages/admin/AdminCanteenPage'
@@ -46,7 +47,7 @@ function App() {
         </Route>
         <Route element={<ProtectedRoute />}>
           <Route path="admin" element={<AdminLayout />}>
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route index element={<RoleHomeRedirect />} />
             <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="recepcion" element={<AdminReceptionPage />} />
             <Route path="reservas" element={<AdminReservationsPage />} />

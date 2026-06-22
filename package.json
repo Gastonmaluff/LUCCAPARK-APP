@@ -10,6 +10,7 @@
     "predeploy": "npm run build:pages",
     "deploy": "gh-pages -d dist",
     "lint": "eslint .",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-luccapark-rules \"node --test tests/firestore.rules.test.mjs\"",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

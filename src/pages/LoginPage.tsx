@@ -30,7 +30,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/admin/dashboard'
+  const from = (location.state as { from?: string } | null)?.from ?? '/admin'
 
   if (!isCheckingAuth && user) {
     return <Navigate replace to={from} />

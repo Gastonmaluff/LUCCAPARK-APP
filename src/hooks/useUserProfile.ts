@@ -1,70 +1,69 @@
-import type { User } from 'firebase/auth'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { useEffect, useMemo, useState } from 'react'
+import { getRolePermissions, isUserRole } from '../auth/accessControl'
 import { db } from '../config/firebase'
 import { useAuthUser } from './useAuthUser'
-import type { AppUserProfile, UserRole } from '../types'
+import type { AppUserProfile } from '../types'
 
-const bootstrapOwnerUid = 'SXaYNYcKFXP8FZDCk3DP38EyP903'
-
-const roleLabel: Record<UserRole, string> = {
-  admin: 'Dueño / Administrador',
-  socio: 'Socio',
-  encargado_eventos: 'Encargado de eventos',
-  recepcion: 'Recepción',
-  cantina: 'Cantina',
-}
-
-function buildFallbackProfile(user: User): AppUserProfile {
-  const isBootstrapOwner = user.uid === bootstrapOwnerUid
-
-  return {
-    id: user.uid,
-    uid: user.uid,
-    displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Usuario',
-    email: user.email ?? '',
-    role: isBootstrapOwner ? 'admin' : 'recepcion',
-    isActive: isBootstrapOwner,
-  }
-}
+export type UserProfileStatus = 'loading' | 'ready' | 'missing' | 'invalid' | 'inactive' | 'error' | 'unauthenticated'
 
 export function useUserProfile() {
   const { isCheckingAuth, user } = useAuthUser()
   const [profile, setProfile] = useState<AppUserProfile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [profileStatus, setProfileStatus] = useState<UserProfileStatus>('loading')
+  const [profileError, setProfileError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isCheckingAuth) return undefined
     if (!user) {
       setProfile(null)
       setIsLoadingProfile(false)
+      setProfileStatus('unauthenticated')
+      setProfileError(null)
       return undefined
     }
+
+    setProfile(null)
+    setIsLoadingProfile(true)
+    setProfileStatus('loading')
+    setProfileError(null)
 
     const unsubscribe = onSnapshot(
       doc(db, 'users', user.uid),
       (snapshot) => {
         const data = snapshot.data()
         if (!snapshot.exists()) {
-          setProfile(buildFallbackProfile(user))
+          setProfile(null)
           setIsLoadingProfile(false)
+          setProfileStatus('missing')
           return
         }
 
-        const isBootstrapOwner = user.uid === bootstrapOwnerUid
-        setProfile({
+        if (!isUserRole(data?.role)) {
+          setProfile(null)
+          setIsLoadingProfile(false)
+          setProfileStatus('invalid')
+          return
+        }
+
+        const nextProfile: AppUserProfile = {
           id: user.uid,
           uid: user.uid,
           displayName: String(data?.displayName ?? user.displayName ?? user.email?.split('@')[0] ?? 'Usuario'),
           email: String(data?.email ?? user.email ?? ''),
-          role: isBootstrapOwner ? 'admin' : (data?.role as UserRole) ?? 'admin',
-          isActive: isBootstrapOwner ? true : data?.isActive !== false,
-        })
+          role: data.role,
+          isActive: data?.isActive === true,
+        }
+        setProfile(nextProfile)
         setIsLoadingProfile(false)
+        setProfileStatus(nextProfile.isActive ? 'ready' : 'inactive')
       },
-      () => {
-        setProfile(buildFallbackProfile(user))
+      (error) => {
+        setProfile(null)
         setIsLoadingProfile(false)
+        setProfileStatus('error')
+        setProfileError(error.message)
       },
     )
 
@@ -72,17 +71,8 @@ export function useUserProfile() {
   }, [isCheckingAuth, user])
 
   const permissions = useMemo(() => {
-    const role = profile?.role ?? 'recepcion'
-    const isActive = profile?.isActive === true
-    return {
-      canViewFinance: isActive && (role === 'admin' || role === 'socio'),
-      canRegisterExpenses: isActive,
-      canManageTasks: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
-      canAssignTasks: isActive && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
-      canManageUsers: isActive && role === 'admin',
-      roleLabel: roleLabel[role],
-    }
+    return getRolePermissions(profile?.role ?? null, profile?.isActive === true)
   }, [profile?.isActive, profile?.role])
 
-  return { isLoadingProfile, permissions, profile, user }
+  return { isLoadingProfile, permissions, profile, profileError, profileStatus, user }
 }
