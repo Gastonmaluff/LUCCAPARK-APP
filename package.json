@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test:finance": "tsc -p tests/tsconfig.finance.json && node --test ./.finance-test-build/tests/financeCalculations.test.js",
     "test:rules": "firebase emulators:exec --only firestore --project demo-luccapark-rules \"node --test tests/firestore.rules.test.mjs\"",
+    "test:storage": "firebase emulators:exec --only firestore,storage --project demo-luccapark-storage \"node --test tests/storage.rules.test.mjs\"",
     "test:functions": "npm --prefix functions run build && firebase emulators:exec --only firestore --project demo-luccapark-functions \"node --test functions/test/financial-integrity.test.cjs\"",
     "typecheck:functions": "npm --prefix functions run typecheck",
     "build:functions": "npm --prefix functions run build",
