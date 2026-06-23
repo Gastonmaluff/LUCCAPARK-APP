@@ -251,6 +251,8 @@ export interface PaymentRecord {
   customerName?: string
   eventName?: string
   visitId?: string
+  visitIds?: string[]
+  groupEntryId?: string
   canteenOrderId?: string
   canteenOrderIds?: string[]
   eventId?: string

@@ -7,6 +7,7 @@ import { getCollectionRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
 import { logActivity } from './activityLogService'
 import { getEventPaidAmount, getEventPendingAmount } from '../utils/eventFinance'
+import type { PendingVisitOperation } from '../utils/financeCalculations'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentRecord } from '../types'
 
 interface ClosurePdfInput {
@@ -19,9 +20,10 @@ interface ClosurePdfInput {
   methodTotals: Record<string, number>
   payments: PaymentRecord[]
   pendingAmount: number
+  pendingEventAmounts?: Record<string, number>
   pendingEvents?: LuccaEvent[]
   pendingOrders?: CanteenOrder[]
-  pendingVisits?: ActiveVisit[]
+  pendingVisits?: PendingVisitOperation[]
   totals: {
     canteenCollected: number
     eventCollected: number
@@ -461,6 +463,7 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   const visits = input.visits ?? []
   const pendingOrders = input.pendingOrders ?? []
   const pendingEvents = input.pendingEvents ?? []
+  const pendingEventAmounts = input.pendingEventAmounts ?? {}
   const pendingVisits = input.pendingVisits ?? []
   const topProducts = groupTopProducts(canteenOrders)
   const expenseCategories = groupExpenses(input.expenses)
@@ -694,9 +697,9 @@ const buildPremiumPdf = async (input: ClosurePdfInput, generatedAt: Date) => {
   page4.drawLine({ start: { x: marginX, y: 478 }, end: { x: pageWidth - marginX, y: 478 }, color: lineGray, thickness: 0.7 })
   drawSectionTitle(page4, fonts, 'P', 'Cuentas pendientes y conciliación', 448)
   const pendingRows = [
-    ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - visita activa`, origin: 'Recepción', state: 'Pendiente de cobro', total: Number(visit.amountCharged ?? visit.defaultAmount ?? 0) })),
+    ...pendingVisits.map((visit) => ({ date: formatDate(visit.startedAt), detail: `${safe(visit.childName)} - ${visit.isGroup ? `${visit.visitIds.length} visitas` : 'visita'}`, origin: 'Recepción', state: 'Pendiente de cobro', total: visit.pendingAmount })),
     ...pendingOrders.map((order) => ({ date: formatDate(order.createdAt), detail: safe(order.accountName), origin: 'Cantina', state: 'Pendiente de cobro', total: order.total })),
-    ...pendingEvents.map((event) => ({ date: formatDateKey(event.date), detail: safe(event.title || event.birthdayChildName), origin: 'Evento', state: 'Pendiente de cobro', total: getEventPendingAmount(event, input.payments) })),
+    ...pendingEvents.map((event) => ({ date: formatDateKey(event.date), detail: safe(event.title || event.birthdayChildName), origin: 'Evento', state: 'Pendiente de cobro', total: pendingEventAmounts[event.id] ?? getEventPendingAmount(event, input.payments) })),
     ...(input.methodTotals.missing ? [{ date: formatDateKey(input.dateTo), detail: 'Movimientos sin método registrado', origin: 'Finanzas', state: 'Pendiente de revisión', total: input.methodTotals.missing }] : []),
   ].slice(0, 4)
   drawDataTable(page4, fonts, 32, 420, [

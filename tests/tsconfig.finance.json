@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": "../.finance-test-build",
+    "rootDir": "..",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": [
+    "financeCalculations.test.ts",
+    "../src/types.ts",
+    "../src/utils/financeCalculations.ts"
+  ]
+}

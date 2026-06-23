@@ -137,6 +137,7 @@ export function AdminFinancePage() {
         methodTotals: finance.methodTotals,
         payments: finance.payments,
         pendingAmount: finance.totals.pendingAmount,
+        pendingEventAmounts: finance.pendingEventAmounts,
         pendingEvents: finance.pendingEventItems,
         pendingOrders: finance.openCanteen,
         pendingVisits: finance.pendingVisits,
@@ -346,8 +347,8 @@ export function AdminFinancePage() {
           {finance.totals.pendingAmount <= 0 ? <div className="empty-state">No existen cuentas pendientes actualmente.</div> : null}
           {finance.pendingVisits.map((visit) => (
             <Link className="pending-card" key={visit.id} to="/admin/recepcion">
-              <span>{visit.childName} - Visita activa</span>
-              <strong>{formatGuarani(visit.amountCharged ?? visit.defaultAmount ?? 0)}</strong>
+              <span>{visit.childName} - {visit.isGroup ? `${visit.visitIds.length} visitas` : 'Visita'}</span>
+              <strong>{formatGuarani(visit.pendingAmount)}</strong>
               <small>Ir a cobrar</small>
             </Link>
           ))}

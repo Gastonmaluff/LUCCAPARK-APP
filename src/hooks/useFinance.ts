@@ -2,9 +2,8 @@ import { Timestamp, onSnapshot } from 'firebase/firestore'
 import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
-import { getEventPendingAmount } from '../utils/eventFinance'
 import { parseCurrencyInput } from '../utils/money'
-import { getVisitBillingSummary } from '../utils/visitBilling'
+import { calculateFinanceOperations, isDateInFinanceRange, type FinanceVisit } from '../utils/financeCalculations'
 import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentMethod, PaymentRecord } from '../types'
 
 export interface DateRange {
@@ -24,12 +23,6 @@ const inRange = (date: Date | null | undefined, range: DateRange) => {
   return dateKey >= range.from && dateKey <= range.to
 }
 
-const eventDateInRange = (dateKey: string, range: DateRange) => Boolean(dateKey && dateKey >= range.from && dateKey <= range.to)
-const todayKey = () => {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
-
 const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord => ({
   id,
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
@@ -45,6 +38,8 @@ const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord =>
   customerName: String(data.customerName ?? ''),
   eventName: String(data.eventName ?? ''),
   visitId: String(data.visitId ?? ''),
+  visitIds: Array.isArray(data.visitIds) ? data.visitIds.map(String) : [],
+  groupEntryId: String(data.groupEntryId ?? ''),
   canteenOrderId: String(data.canteenOrderId ?? ''),
   canteenOrderIds: Array.isArray(data.canteenOrderIds) ? data.canteenOrderIds.map(String) : [],
   eventId: String(data.eventId ?? ''),
@@ -105,9 +100,13 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   id,
   type: (data.type as CanteenOrder['type']) ?? 'free',
   visitId: String(data.visitId ?? ''),
+  visitIds: Array.isArray(data.visitIds) ? data.visitIds.map(String) : [],
+  groupEntryId: String(data.groupEntryId ?? ''),
   eventId: String(data.eventId ?? ''),
   childId: String(data.childId ?? ''),
+  childIds: Array.isArray(data.childIds) ? data.childIds.map(String) : [],
   childName: String(data.childName ?? ''),
+  childNames: Array.isArray(data.childNames) ? data.childNames.map(String) : [],
   customerId: String(data.customerId ?? ''),
   accountName: String(data.accountName ?? ''),
   customerName: String(data.customerName ?? ''),
@@ -118,10 +117,12 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
   paidAt: dateFromTimestamp(data.paidAt),
   createdAt: dateFromTimestamp(data.createdAt),
+  updatedAt: dateFromTimestamp(data.updatedAt),
 })
 
-const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
+const mapVisit = (id: string, data: Record<string, unknown>): FinanceVisit => ({
   id,
+  groupEntryId: data.groupEntryId ? String(data.groupEntryId) : undefined,
   childId: String(data.childId ?? ''),
   childName: String(data.childName ?? ''),
   customerId: String(data.customerId ?? ''),
@@ -137,8 +138,16 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
   amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : parseCurrencyInput(data.amountCharged),
   parkChargeAmount: data.parkChargeAmount === null || data.parkChargeAmount === undefined ? null : parseCurrencyInput(data.parkChargeAmount),
+  paidParkAmount: data.paidParkAmount === null || data.paidParkAmount === undefined ? null : parseCurrencyInput(data.paidParkAmount),
+  extensionChargeAmount: data.extensionChargeAmount === null || data.extensionChargeAmount === undefined ? null : parseCurrencyInput(data.extensionChargeAmount),
+  parkPaymentStatus: (data.parkPaymentStatus as ActiveVisit['parkPaymentStatus']) ?? (data.paymentStatus === 'paid' ? 'paid' : 'pending'),
+  parkPaidAt: dateFromTimestamp(data.parkPaidAt),
+  parkPaymentMethod: (data.parkPaymentMethod as PaymentMethod) ?? '',
   defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : parseCurrencyInput(data.defaultAmount),
   status: 'active',
+  financeStatus: String(data.status ?? 'active'),
+  createdAt: dateFromTimestamp(data.createdAt),
+  updatedAt: dateFromTimestamp(data.updatedAt),
 })
 
 const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
@@ -169,15 +178,6 @@ const mapEvent = (id: string, data: Record<string, unknown>): LuccaEvent => ({
   showEventNameOnTv: data.showEventNameOnTv !== false,
   hideSensitiveInfoOnTv: Boolean(data.hideSensitiveInfoOnTv),
 })
-
-const paymentIsValid = (payment: PaymentRecord) =>
-  payment.totalPaid !== 0 && !['void', 'voided', 'cancelled', 'refunded'].includes(String(payment.status ?? '').toLowerCase())
-
-const eventPaymentPredicate = (payment: PaymentRecord, eventId: string) =>
-  payment.eventId === eventId && (payment.source === 'event_payment' || payment.concepts === 'event')
-
-const sumEventPayments = (eventId: string, payments: PaymentRecord[]) =>
-  payments.filter((payment) => eventPaymentPredicate(payment, eventId)).reduce((sum, payment) => sum + payment.totalPaid, 0)
 
 function useCollection<T>(name: Parameters<typeof getCollectionRef>[0], mapper: (id: string, data: Record<string, unknown>) => T) {
   const [items, setItems] = useState<T[]>([])
@@ -221,83 +221,19 @@ export function useFinanceData(range: DateRange) {
   const events = useCollection('events', mapEvent)
 
   return useMemo(() => {
-    const validPayments = payments.items.filter(paymentIsValid)
-    const paymentItems = validPayments.filter((payment) => inRange(payment.paidAt ?? payment.createdAt, range))
-    const paymentVisitIds = new Set(paymentItems.map((payment) => payment.visitId).filter(Boolean))
-    const paymentOrderIds = new Set(paymentItems.flatMap((payment) => [payment.canteenOrderId, ...(payment.canteenOrderIds ?? [])]).filter(Boolean))
-    const legacyVisitPayments = visits.items
-      .filter((visit) => visit.paymentStatus === 'paid' && !paymentVisitIds.has(visit.id) && inRange(visit.startedAt, range))
-      .map((visit): PaymentRecord => ({
-        id: `legacy-visit-${visit.id}`,
-        source: 'legacy',
-        concepts: 'park',
-        totalPaid: parseCurrencyInput(visit.amountCharged ?? visit.defaultAmount ?? 0),
-        paymentMethod: visit.paymentMethod ?? '',
-        paidAt: visit.startedAt,
-        visitId: visit.id,
-        childName: visit.childName,
-        customerName: visit.customerName,
-        description: `Entrada ${visit.planName}`,
-      }))
-    const legacyCanteenPayments = canteen.items
-      .filter((order) => order.status === 'paid' && !paymentOrderIds.has(order.id) && inRange(order.paidAt, range))
-      .map((order): PaymentRecord => ({
-        id: `legacy-canteen-${order.id}`,
-        source: 'legacy',
-        concepts: 'canteen',
-        totalPaid: order.total,
-        paymentMethod: order.paymentMethod ?? '',
-        paidAt: order.paidAt,
-        canteenOrderId: order.id,
-        eventId: order.eventId,
-        childName: order.childName || order.accountName,
-        customerName: order.customerName,
-        description: `Cantina - ${order.accountName}`,
-      }))
-    const allPayments = [...paymentItems, ...legacyVisitPayments, ...legacyCanteenPayments]
+    const calculation = calculateFinanceOperations({
+      activeVisits: activeVisits.items,
+      canteenOrders: canteen.items,
+      events: events.items,
+      payments: payments.items,
+      range,
+      visits: visits.items,
+    })
+    const allPayments = calculation.payments
     const expenseItems = expenses.items.filter((expense) => expense.status !== 'void' && inRange(expense.spentAt ?? expense.createdAt, range))
-    const canteenOrdersInRange = canteen.items.filter((order) => order.status === 'paid' && inRange(order.paidAt, range))
+    const canteenOrdersInRange = canteen.items.filter((order) => order.status === 'paid' && isDateInFinanceRange(order.paidAt, range))
     const visitsInRange = visits.items.filter((visit) => inRange(visit.startedAt, range))
     const closuresInRange = closures.items.filter((closure) => closure.dateFrom >= range.from && closure.dateTo <= range.to)
-    const allVisits = [...activeVisits.items, ...visits.items]
-    const liveVisitIds = new Set(activeVisits.items.map((visit) => visit.id))
-    const eventById = new Map(events.items.map((event) => [event.id, event]))
-    const currentDay = todayKey()
-    const pendingVisits = allVisits.filter((visit, index, list) => {
-      const firstIndex = list.findIndex((item) => item.id === visit.id)
-      const isLive = liveVisitIds.has(visit.id)
-      const status = String(visit.status ?? '')
-      return (
-        firstIndex === index &&
-        visit.paymentStatus !== 'paid' &&
-        status !== 'finished' &&
-        (isLive || inRange(visit.startedAt ?? visit.createdAt, range))
-      )
-    })
-    const pendingVisitIds = new Set(pendingVisits.map((visit) => visit.id))
-    const openCanteen = canteen.items.filter((order) => {
-      if (order.status !== 'open' || order.paymentStatus === 'paid') return false
-      const linkedEvent = order.eventId ? eventById.get(order.eventId) : null
-      const linkedToLiveVisit = order.visitId ? pendingVisitIds.has(order.visitId) : false
-      return (
-        inRange(order.createdAt, range) ||
-        linkedToLiveVisit ||
-        Boolean(linkedEvent && linkedEvent.status === 'active') ||
-        Boolean(linkedEvent && ['reserved', 'confirmed', 'inquiry'].includes(linkedEvent.status) && linkedEvent.date >= currentDay)
-      )
-    })
-    const pendingEventItems = events.items.filter(
-      (event) =>
-        ['inquiry', 'reserved', 'confirmed', 'active'].includes(event.status) &&
-        getEventPendingAmount({ ...event, depositAmount: 0, eventPaidAmount: sumEventPayments(event.id, validPayments) }, validPayments) > 0 &&
-        (event.status === 'active' || event.date >= currentDay || eventDateInRange(event.date, range)),
-    )
-    const pendingEventAmounts = Object.fromEntries(
-      pendingEventItems.map((event) => [
-        event.id,
-        getEventPendingAmount({ ...event, depositAmount: 0, eventPaidAmount: sumEventPayments(event.id, validPayments) }, validPayments),
-      ]),
-    )
 
     const methodTotals = {
       cash: 0,
@@ -318,22 +254,12 @@ export function useFinanceData(range: DateRange) {
       else methodTotals.missing += payment.totalPaid
     })
 
-    const parkCollected = allPayments.reduce((sum, payment) => sum + (payment.parkAmountPaid || (payment.concepts === 'park' ? payment.totalPaid : 0)), 0)
-    const canteenCollected = allPayments.reduce((sum, payment) => sum + (payment.canteenAmountPaid || (payment.concepts === 'canteen' ? payment.totalPaid : 0)), 0)
-    const eventCollected = allPayments.reduce(
-      (sum, payment) => sum + (payment.eventAmountPaid || (payment.source === 'event_payment' || payment.concepts === 'event' ? payment.totalPaid : 0)),
-      0,
-    )
-    const totalCollected = allPayments.reduce((sum, payment) => sum + payment.totalPaid, 0)
+    const parkCollected = calculation.parkCollected
+    const canteenCollected = calculation.canteenCollected
+    const eventCollected = calculation.eventCollected
+    const totalCollected = calculation.totalCollected
     const totalExpenses = expenseItems.reduce((sum, expense) => sum + expense.amount, 0)
-    const pendingAmount =
-      openCanteen.reduce((sum, order) => sum + order.total, 0) +
-      pendingVisits.reduce((sum, visit) => sum + getVisitBillingSummary(visit, openCanteen).totalPendingAmount, 0) +
-      pendingEventItems.reduce(
-        (sum, event) =>
-          sum + (pendingEventAmounts[event.id] ?? 0),
-        0,
-      )
+    const pendingAmount = calculation.pendingAmount
 
     return {
       closures: closures.items,
@@ -345,11 +271,11 @@ export function useFinanceData(range: DateRange) {
       expenses: expenseItems,
       isLoading: payments.isLoading || expenses.isLoading || closures.isLoading || canteen.isLoading || visits.isLoading || activeVisits.isLoading || events.isLoading,
       methodTotals,
-      openCanteen,
+      openCanteen: calculation.openCanteen,
       payments: allPayments.sort((a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0)),
-      pendingEventItems,
-      pendingEventAmounts,
-      pendingVisits,
+      pendingEventItems: calculation.pendingEventItems,
+      pendingEventAmounts: calculation.pendingEventAmounts,
+      pendingVisits: calculation.pendingVisits,
       range,
       totals: {
         canteenCollected,
