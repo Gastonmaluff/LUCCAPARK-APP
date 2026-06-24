@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Download, ShieldCheck, Upload } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, ShieldCheck } from 'lucide-react'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import {
   generateBackup,
-  getBackupCollections,
   getBackupDownloadUrl,
-  restoreBackupJson,
   subscribeAutomaticBackupState,
   subscribeBackups,
-  validateBackupJson,
   type AutomaticBackupState,
-  type BackupJson,
   type BackupMetadata,
 } from '../../services/backupService'
 import { StatusPill } from '../StatusPill'
@@ -63,12 +59,6 @@ export function BackupSettingsPanel() {
   const [automaticError, setAutomaticError] = useState<string | null>(null)
   const [isGeneratingManual, setIsGeneratingManual] = useState(false)
   const [manualMessage, setManualMessage] = useState<string | null>(null)
-  const [restoreMessage, setRestoreMessage] = useState<string | null>(null)
-  const [restoreBackup, setRestoreBackup] = useState<BackupJson | null>(null)
-  const [restoreConfirmChecked, setRestoreConfirmChecked] = useState(false)
-  const [restoreConfirmText, setRestoreConfirmText] = useState('')
-  const [isRestoring, setIsRestoring] = useState(false)
-  const isAdmin = profile?.role === 'admin'
   const canManageBackups = profile?.role === 'admin' || profile?.role === 'socio'
   const manualBackups = useMemo(() => backups.filter((backup) => backup.type === 'manual'), [backups])
   const automaticBackups = useMemo(() => backups.filter((backup) => backup.type === 'automatic'), [backups])
@@ -121,34 +111,6 @@ export function BackupSettingsPanel() {
       setManualMessage(error instanceof Error ? error.message : 'No se pudo generar el backup manual.')
     } finally {
       setIsGeneratingManual(false)
-    }
-  }
-
-  const handleRestoreFile = async (file: File | null) => {
-    setRestoreBackup(null)
-    setRestoreMessage(null)
-    setRestoreConfirmChecked(false)
-    setRestoreConfirmText('')
-    if (!file) return
-    try {
-      const parsed = JSON.parse(await file.text())
-      setRestoreBackup(validateBackupJson(parsed))
-    } catch (error) {
-      setRestoreMessage(error instanceof Error ? error.message : 'No se pudo leer el archivo JSON.')
-    }
-  }
-
-  const handleRestore = async () => {
-    if (!restoreBackup) return
-    setIsRestoring(true)
-    setRestoreMessage(null)
-    try {
-      const result = await restoreBackupJson(restoreBackup)
-      setRestoreMessage(`Restauracion completada. Documentos procesados: ${result.totalRestored}.`)
-    } catch (error) {
-      setRestoreMessage(error instanceof Error ? error.message : 'No se pudo restaurar el backup.')
-    } finally {
-      setIsRestoring(false)
     }
   }
 
@@ -213,7 +175,7 @@ export function BackupSettingsPanel() {
                 <span><small>Base de datos</small><strong>(default)</strong></span>
               </div>
               <p className="backup-native-note">
-                Estos backups nativos se restauran desde Firebase o Google Cloud; el botón Restaurar desde JSON solo usa backups generados por el sistema.
+                Los backups nativos se restauran mediante las herramientas administrativas de Firebase o Google Cloud.
               </p>
             </div>
             <div className="backup-summary-grid">
@@ -226,33 +188,23 @@ export function BackupSettingsPanel() {
 
           <BackupSubsection isOpen={openSections.restore} onToggle={() => toggleSection('restore')} title="Restaurar desde JSON">
             <div className="form-alert warning">
-              Esta restauración no borra datos actuales que no estén en el backup; solo crea o sobrescribe documentos incluidos.
+              La restauración directa desde JSON está deshabilitada para proteger la integridad de pagos, stock, visitas y reservas.
             </div>
-            {!isAdmin ? <div className="form-alert error">Solo un usuario administrador puede restaurar backups.</div> : null}
-            <label className="field">
-              <span>Archivo JSON</span>
-              <input accept="application/json,.json" onChange={(event) => void handleRestoreFile(event.currentTarget.files?.[0] ?? null)} type="file" />
-            </label>
-            {restoreBackup ? <RestoreSummary backup={restoreBackup} /> : null}
-            <label className="checkbox-option">
-              <input checked={restoreConfirmChecked} onChange={(event) => setRestoreConfirmChecked(event.target.checked)} type="checkbox" />
-              Entiendo que esta acción puede sobrescribir datos actuales.
-            </label>
-            <label className="field">
-              <span>Escribí RESTAURAR para confirmar</span>
-              <input onChange={(event) => setRestoreConfirmText(event.target.value)} value={restoreConfirmText} />
-            </label>
-            {restoreMessage ? <div className={restoreMessage.includes('No se') || restoreMessage.includes('Solo') ? 'form-alert error' : 'form-alert success'}>{restoreMessage}</div> : null}
-            <div className="module-actions">
-              <button
-                className="button primary"
-                disabled={!isAdmin || !restoreBackup || !restoreConfirmChecked || restoreConfirmText !== 'RESTAURAR' || isRestoring}
-                onClick={handleRestore}
-                type="button"
-              >
-                <Upload size={17} />
-                {isRestoring ? 'Restaurando...' : 'Restaurar backup'}
-              </button>
+            <div className="backup-native-card">
+              <div className="backup-native-card-heading">
+                <div>
+                  <h3>Recuperación administrativa</h3>
+                  <p className="muted">Procedimiento exclusivo para el administrador técnico.</p>
+                </div>
+                <StatusPill tone="warning">No disponible en la web</StatusPill>
+              </div>
+              <p>
+                La restauración completa es un procedimiento administrativo realizado mediante Firestore Scheduled Backups.
+                Los archivos JSON continúan disponibles para descarga, auditoría y recuperación asistida.
+              </p>
+              <p className="backup-native-note">
+                Un backup JSON contiene datos y referencias, pero no restaura Firebase Authentication ni los archivos físicos de Storage.
+              </p>
             </div>
           </BackupSubsection>
         </div>
@@ -297,28 +249,6 @@ function BackupList({ backups }: { backups: BackupMetadata[] }) {
           </div>
         </article>
       ))}
-    </div>
-  )
-}
-
-function RestoreSummary({ backup }: { backup: BackupJson }) {
-  const collections = Object.entries(backup.summary.collections)
-  return (
-    <div className="restore-summary">
-      <h3>Resumen del backup</h3>
-      <p className="muted">Fecha: {backup.generatedAt}</p>
-      <p className="muted">Generado por: {backup.generatedBy.name || backup.generatedBy.email || 'Usuario desconocido'}</p>
-      <div className="backup-summary-grid">
-        <span><small>Total documentos</small><strong>{backup.summary.totalDocuments}</strong></span>
-        <span><small>Colecciones</small><strong>{collections.length}</strong></span>
-        <span><small>Versión</small><strong>{backup.backupVersion}</strong></span>
-      </div>
-      <div className="restore-collections">
-        {collections.map(([collectionName, count]) => (
-          <span key={collectionName}>{collectionName}: {count}</span>
-        ))}
-      </div>
-      <p className="muted">Colecciones configuradas para exportar: {getBackupCollections().join(', ')}</p>
     </div>
   )
 }

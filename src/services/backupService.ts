@@ -10,7 +10,6 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
@@ -113,24 +112,6 @@ const serializeValue = (value: unknown): unknown => {
     return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, entry]) => {
       if (sensitiveKeys.has(key.toLowerCase())) return acc
       acc[key] = serializeValue(entry)
-      return acc
-    }, {})
-  }
-  return value
-}
-
-const restoreValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(restoreValue)
-  if (value && typeof value === 'object') {
-    const objectValue = value as Record<string, unknown>
-    if (objectValue.__type === 'timestamp' && typeof objectValue.value === 'string') {
-      return Timestamp.fromDate(new Date(objectValue.value))
-    }
-    if (objectValue.__type === 'date' && typeof objectValue.value === 'string') {
-      return new Date(objectValue.value)
-    }
-    return Object.entries(objectValue).reduce<Record<string, unknown>>((acc, [key, entry]) => {
-      acc[key] = restoreValue(entry)
       return acc
     }, {})
   }
@@ -351,53 +332,4 @@ export const runAutomaticBackupIfDue = async () => {
 export const getBackupDownloadUrl = async (backup: BackupMetadata) => {
   if (!backup.storagePath) throw new Error('Este backup no tiene archivo asociado.')
   return getDownloadURL(ref(storage, backup.storagePath))
-}
-
-export const validateBackupJson = (value: unknown): BackupJson => {
-  const candidate = value as BackupJson
-  if (candidate?.system !== 'LUCCAPARKWEB') throw new Error('El archivo no corresponde a LUCCAPARKWEB.')
-  if (candidate.backupVersion !== 1) throw new Error('Version de backup no soportada.')
-  if (!candidate.collections || typeof candidate.collections !== 'object') throw new Error('El backup no contiene colecciones validas.')
-  return candidate
-}
-
-export const restoreBackupJson = async (backup: BackupJson) => {
-  const userAudit = await getCurrentUserAudit()
-  const isAdmin = userAudit.role === 'admin' || userAudit.uid === 'SXaYNYcKFXP8FZDCk3DP38EyP903'
-  if (!isAdmin) throw new Error('Solo un usuario administrador puede restaurar backups.')
-
-  const entries = Object.entries(backup.collections)
-  let totalRestored = 0
-  let batch = writeBatch(db)
-  let batchCount = 0
-
-  const commitIfNeeded = async (force = false) => {
-    if (batchCount === 0 || (!force && batchCount < 450)) return
-    await batch.commit()
-    batch = writeBatch(db)
-    batchCount = 0
-  }
-
-  for (const [collectionName, documents] of entries) {
-    if (!Array.isArray(documents)) continue
-    for (const item of documents) {
-      if (!item.id || !item.data || typeof item.data !== 'object') continue
-      batch.set(doc(db, collectionName, item.id), restoreValue(item.data) as Record<string, unknown>, { merge: true })
-      batchCount += 1
-      totalRestored += 1
-      await commitIfNeeded()
-    }
-  }
-
-  await commitIfNeeded(true)
-
-  void logActivity({
-    action: 'create',
-    description: 'Restauró backup desde JSON',
-    entityName: backup.generatedAt,
-    metadata: { totalRestored },
-    module: 'Configuración',
-  })
-
-  return { totalRestored }
 }
