@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   CalendarDays,
@@ -19,7 +19,7 @@ import { ProductImageView } from './ProductImageView'
 import { CanteenCheckoutModal } from './CanteenCheckoutModal'
 import { ConsolidatedGroupCheckoutModal } from '../reception/ConsolidatedGroupCheckoutModal'
 import { useActiveVisits } from '../../hooks/useActiveVisits'
-import { useCanteenOrders, useCanteenProducts, useCanteenVoidRequests, usePaidCanteenOrdersForDate } from '../../hooks/useCanteen'
+import { useCanteenCategories, useCanteenOrders, useCanteenProducts, useCanteenVoidRequests, usePaidCanteenOrdersForDate } from '../../hooks/useCanteen'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import { useEventDayContext } from '../../hooks/useEventDayContext'
 import {
@@ -31,6 +31,7 @@ import {
   reviewCanteenVoidRequest,
 } from '../../services/canteenService'
 import { getLocalDateKey } from '../../utils/date'
+import { allCanteenCategoriesKey, buildCanteenCategoryOptions, filterCanteenProductsByCategory } from '../../utils/canteenCategories'
 import { formatGuarani } from '../../utils/money'
 import { formatPersonName } from '../../utils/textFormat'
 import { getVisitBillingSummary, getVisitGroupBillingSummary } from '../../utils/visitBilling'
@@ -274,6 +275,7 @@ function AccountCard({
 export function CanteenOperations({ standalone = false }: CanteenOperationsProps) {
   const [searchParams] = useSearchParams()
   const productsResult = useCanteenProducts()
+  const categoriesResult = useCanteenCategories()
   const ordersResult = useCanteenOrders()
   const voidRequestsResult = useCanteenVoidRequests()
   const paidTodayResult = usePaidCanteenOrdersForDate(getLocalDateKey())
@@ -291,6 +293,7 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const [message, setMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [draftItems, setDraftItems] = useState<CanteenOrderItem[]>([])
+  const [selectedProductCategory, setSelectedProductCategory] = useState(allCanteenCategoriesKey)
   const [voidTarget, setVoidTarget] = useState<{ order: CanteenOrder; lineItemId?: string } | null>(null)
   const [reviewTarget, setReviewTarget] = useState<CanteenVoidRequest | null>(null)
   const [refundTarget, setRefundTarget] = useState<CanteenOrder | null>(null)
@@ -302,6 +305,14 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   const paidToday = paidTodayResult.orders
   const selectedOrder = selectedOrderId ? ordersResult.orders.find((order) => order.id === selectedOrderId) ?? null : null
   const activeProducts = productsResult.products.filter((product) => product.isActive)
+  const operationalCategories = useMemo(
+    () => buildCanteenCategoryOptions(activeProducts, categoriesResult.categories, { onlyOperational: true }),
+    [activeProducts, categoriesResult.categories],
+  )
+  const filteredActiveProducts = useMemo(
+    () => filterCanteenProductsByCategory(activeProducts, selectedProductCategory),
+    [activeProducts, selectedProductCategory],
+  )
   const productCount = activeProducts.length
   const activeEventGuestsCount = activeEvent?.registeredGuestsCount ?? 0
   const visitGroups = groupActiveVisits(visits)
@@ -327,6 +338,16 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
   useEffect(() => {
     setDraftItems([])
   }, [selectedOrderId])
+
+  useEffect(() => {
+    if (
+      selectedProductCategory !== allCanteenCategoriesKey &&
+      !operationalCategories.some((category) => category.normalizedName === selectedProductCategory)
+    ) {
+      setSelectedProductCategory(allCanteenCategoriesKey)
+    }
+  }, [operationalCategories, selectedProductCategory])
+
   const orderPendingTotal = (order: CanteenOrder) => {
     const groupVisits = groupVisitsForOrder(order)
     if (groupVisits.length > 1) {
@@ -650,12 +671,33 @@ export function CanteenOperations({ standalone = false }: CanteenOperationsProps
             <div className="section-subheader">
               <div>
                 <h3>Productos disponibles</h3>
-                <p>Toca un producto para agregar 1 unidad a esta cuenta.</p>
+                <p>Elegí una categoría y tocá un producto para agregar 1 unidad a esta cuenta.</p>
               </div>
+            </div>
+            <div className="canteen-category-tabs" role="tablist" aria-label="Categorías de productos">
+              <button
+                className={selectedProductCategory === allCanteenCategoriesKey ? 'active' : ''}
+                onClick={() => setSelectedProductCategory(allCanteenCategoriesKey)}
+                type="button"
+              >
+                Todos
+              </button>
+              {operationalCategories.map((item) => (
+                <button
+                  className={selectedProductCategory === item.normalizedName ? 'active' : ''}
+                  key={item.normalizedName}
+                  onClick={() => setSelectedProductCategory(item.normalizedName)}
+                  type="button"
+                >
+                  {item.name}
+                  <small>{item.productCount}</small>
+                </button>
+              ))}
             </div>
             <div className="quick-product-grid">
               {productCount === 0 ? <div className="empty-state">No hay productos activos en inventario.</div> : null}
-              {activeProducts.map((product) => (
+              {productCount > 0 && filteredActiveProducts.length === 0 ? <div className="empty-state">No hay productos activos en esta categoría.</div> : null}
+              {filteredActiveProducts.map((product) => (
                 <button className="quick-product-card" key={product.id} onClick={() => addProduct(selectedOrder, product)} type="button">
                   <ProductImageView alt={product.name} className="quick-product-image" fit={product.imageFit} imageUrl={product.imageUrl} />
                   <strong>{product.name}</strong>

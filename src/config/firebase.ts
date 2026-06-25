@@ -42,6 +42,7 @@ export type FirebaseCollectionName =
   | 'budgetDecorations'
   | 'tvDisplaySettings'
   | 'landingContent'
+  | 'canteenCategories'
   | 'canteenProducts'
   | 'canteenOrders'
   | 'canteenVoidRequests'

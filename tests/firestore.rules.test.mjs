@@ -34,6 +34,7 @@ async function seedFixture() {
       setDoc(doc(db, 'activeVisits', 'visit-1'), { childName: 'Niño', status: 'active' }),
       setDoc(doc(db, 'events', 'event-1'), { title: 'Evento', registeredGuestsCount: 0 }),
       setDoc(doc(db, 'eventGuests', 'guest-1'), { eventId: 'event-1', childName: 'Invitado' }),
+      setDoc(doc(db, 'canteenCategories', 'bebidas'), { id: 'bebidas', name: 'Bebidas', normalizedName: 'bebidas', isActive: true }),
       setDoc(doc(db, 'canteenProducts', 'product-1'), { name: 'Agua', stock: 10, updatedAt: new Date() }),
       setDoc(doc(db, 'canteenOrders', 'order-1'), { status: 'open', items: [], total: 0 }),
       setDoc(doc(db, 'payments', 'payment-1'), { source: 'canteen', totalPaid: 10000, createdBy: 'cantina' }),
@@ -184,6 +185,23 @@ describe('permisos de cantina', () => {
     await assertFails(setDoc(doc(db, 'events', 'event-c'), { title: 'No permitido' }))
     await assertFails(setDoc(doc(db, 'settings', 'canteen'), { enabled: false }))
     await assertFails(updateDoc(doc(db, 'users', 'cantina'), { role: 'admin' }))
+  })
+
+  test('admin y socio pueden gestionar categorias de Cantina', async () => {
+    await assertSucceeds(setDoc(doc(dbFor('admin'), 'canteenCategories', 'jugos'), { id: 'jugos', name: 'Jugos', normalizedName: 'jugos', isActive: true }))
+    await assertSucceeds(setDoc(doc(dbFor('socio'), 'canteenCategories', 'cafeteria'), { id: 'cafeteria', name: 'Cafeteria', normalizedName: 'cafeteria', isActive: true }))
+    await assertSucceeds(updateDoc(doc(dbFor('admin'), 'canteenCategories', 'bebidas'), { isActive: false }))
+    await assertSucceeds(deleteDoc(doc(dbFor('socio'), 'canteenCategories', 'cafeteria')))
+  })
+
+  test('roles operativos leen categorias pero no las modifican', async () => {
+    for (const uid of ['recepcion', 'cantina', 'eventos']) {
+      const db = dbFor(uid)
+      await assertSucceeds(getDoc(doc(db, 'canteenCategories', 'bebidas')))
+      await assertFails(setDoc(doc(db, 'canteenCategories', `categoria-${uid}`), { id: `categoria-${uid}`, name: 'No permitido', normalizedName: `categoria-${uid}`, isActive: true }))
+      await assertFails(updateDoc(doc(db, 'canteenCategories', 'bebidas'), { isActive: false }))
+      await assertFails(deleteDoc(doc(db, 'canteenCategories', 'bebidas')))
+    }
   })
 })
 

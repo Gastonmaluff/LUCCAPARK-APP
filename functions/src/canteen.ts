@@ -24,8 +24,16 @@ import {
 const CANTEEN_ROLES: readonly UserRole[] = ['admin', 'socio', 'recepcion', 'cantina']
 const INVENTORY_ROLES: readonly UserRole[] = ['admin', 'socio']
 const ADMIN_ROLES: readonly UserRole[] = ['admin']
-const categories = new Set(['Bebidas', 'Snacks', 'Comidas', 'Combos', 'Helados', 'Otros'])
 const inactiveLineStates = new Set(['voided', 'courtesy', 'waste'])
+
+const normalizeCategoryName = (value: string) =>
+  value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
 interface ProductQuantity {
   productId: string
@@ -119,7 +127,7 @@ const getProductSnapshots = async (
       ref: snapshot.ref,
       productId: snapshot.id,
       productName: requiredString(data.name, 'El nombre del producto'),
-      category: categories.has(stringValue(data.category)) ? stringValue(data.category) : 'Otros',
+      category: stringValue(data.category) || 'Sin categoría',
       unitPrice,
       unitCost,
       stock,
@@ -772,11 +780,13 @@ export const upsertCanteenProductSecure = async (uid: string | null | undefined,
   const requestedId = stringValue(input.id)
   const productId = requestedId || newDocumentId('canteenProducts')
   const name = requiredString(input.name, 'El nombre del producto')
-  const category = stringValue(input.category)
-  if (!categories.has(category)) throw new HttpsError('invalid-argument', 'La categoria no es valida.')
+  const category = requiredString(input.category, 'La categoria')
+  const categoryNormalized = normalizeCategoryName(category)
+  if (!categoryNormalized) throw new HttpsError('invalid-argument', 'La categoria no es valida.')
   const price = positiveMoney(input.price, 'El precio')
   const unitCost = input.unitCost === null || input.unitCost === undefined ? null : nonNegativeMoney(input.unitCost, 'El costo')
-  const requestedStock = input.stock === null || input.stock === undefined ? null : nonNegativeMoney(input.stock, 'El stock')
+  const stockWasProvided = input.stock !== null && input.stock !== undefined
+  const requestedStock = stockWasProvided ? nonNegativeMoney(input.stock, 'El stock') : null
   const minStock = input.minStock === null || input.minStock === undefined ? null : nonNegativeMoney(input.minStock, 'El stock minimo')
   const isActive = input.isActive !== false
 
@@ -791,14 +801,25 @@ export const upsertCanteenProductSecure = async (uid: string | null | undefined,
       const productRef = db.collection('canteenProducts').doc(productId)
       const productSnapshot = await transaction.get(productRef)
       const previous = productSnapshot.data() ?? {}
+      const previousCategoryNormalized = stringValue(previous.categoryNormalized) || normalizeCategoryName(stringValue(previous.category))
+      if (!productSnapshot.exists || previousCategoryNormalized !== categoryNormalized) {
+        const categorySnapshot = await transaction.get(db.collection('canteenCategories').doc(categoryNormalized))
+        const legacyCategorySnapshot = categorySnapshot.exists && categorySnapshot.data()?.isActive !== false
+          ? null
+          : await transaction.get(db.collection('canteenProducts').where('category', '==', category).limit(1))
+        if ((!categorySnapshot.exists || categorySnapshot.data()?.isActive === false) && (!legacyCategorySnapshot || legacyCategorySnapshot.empty)) {
+          throw new HttpsError('failed-precondition', 'La categoria seleccionada no esta activa.')
+        }
+      }
       const previousStock = productSnapshot.exists && previous.stock !== null && previous.stock !== undefined
         ? nonNegativeMoney(previous.stock, 'El stock anterior')
         : null
-      const nextStock = requestedStock
+      const nextStock = productSnapshot.exists && !stockWasProvided ? previousStock : requestedStock
       const productData = {
         id: productId,
         name,
         category,
+        categoryNormalized,
         price,
         salePrice: price,
         unitCost,

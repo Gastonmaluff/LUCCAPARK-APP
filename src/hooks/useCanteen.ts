@@ -3,7 +3,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
 import { isSameLocalDate } from '../utils/date'
-import type { CanteenCategory, CanteenOrder, CanteenOrderStatus, CanteenProduct, CanteenVoidRequest, PaymentMethod, ProductImageFit } from '../types'
+import type {
+  CanteenCategory,
+  CanteenCategoryRecord,
+  CanteenInventoryMovement,
+  CanteenOrder,
+  CanteenOrderStatus,
+  CanteenProduct,
+  CanteenVoidRequest,
+  PaymentMethod,
+  ProductImageFit,
+} from '../types'
 
 const dateFromTimestamp = (value: unknown): Date | null => {
   if (value instanceof Timestamp) {
@@ -30,7 +40,8 @@ const mapProductImageFit = (value: unknown): ProductImageFit | undefined => {
 const mapProduct = (id: string, data: Record<string, unknown>): CanteenProduct => ({
   id,
   name: String(data.name ?? ''),
-  category: (data.category as CanteenCategory) ?? 'Otros',
+  category: (data.category as CanteenCategory) ?? 'Sin categoría',
+  categoryNormalized: data.categoryNormalized ? String(data.categoryNormalized) : undefined,
   price: Number(data.salePrice ?? data.price ?? 0),
   salePrice: Number(data.salePrice ?? data.price ?? 0),
   unitCost: data.unitCost === null || data.unitCost === undefined ? null : Number(data.unitCost),
@@ -41,6 +52,32 @@ const mapProduct = (id: string, data: Record<string, unknown>): CanteenProduct =
   isActive: data.isActive !== false,
   createdAt: dateFromTimestamp(data.createdAt),
   updatedAt: dateFromTimestamp(data.updatedAt),
+})
+
+const mapCategory = (id: string, data: Record<string, unknown>): CanteenCategoryRecord => ({
+  id,
+  name: String(data.name ?? ''),
+  normalizedName: String(data.normalizedName ?? id),
+  isActive: data.isActive !== false,
+  sortOrder: Number(data.sortOrder ?? 999),
+  createdAt: dateFromTimestamp(data.createdAt),
+  updatedAt: dateFromTimestamp(data.updatedAt),
+})
+
+const mapInventoryMovement = (id: string, data: Record<string, unknown>): CanteenInventoryMovement => ({
+  id,
+  type: String(data.type ?? ''),
+  productId: String(data.productId ?? ''),
+  productName: String(data.productName ?? ''),
+  quantity: Number(data.quantity ?? 0),
+  delta: Number(data.delta ?? 0),
+  stockBefore: data.stockBefore === null || data.stockBefore === undefined ? null : Number(data.stockBefore),
+  stockAfter: data.stockAfter === null || data.stockAfter === undefined ? null : Number(data.stockAfter),
+  reason: String(data.reason ?? ''),
+  createdAt: dateFromTimestamp(data.createdAt),
+  createdBy: data.createdBy ? String(data.createdBy) : undefined,
+  createdByName: data.createdByName ? String(data.createdByName) : undefined,
+  source: data.source ? String(data.source) : undefined,
 })
 
 const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
@@ -149,6 +186,54 @@ export function useCanteenProducts() {
   }, [])
 
   return { products, isLoading, error }
+}
+
+export function useCanteenCategories() {
+  const [categories, setCategories] = useState<CanteenCategoryRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      getCollectionRef('canteenCategories'),
+      (snapshot) => {
+        setCategories(snapshot.docs.map((docSnapshot) => mapCategory(docSnapshot.id, docSnapshot.data())).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'es')))
+        setIsLoading(false)
+        setError(null)
+      },
+      (snapshotError) => {
+        setError(snapshotError.message)
+        setIsLoading(false)
+      },
+    )
+    return unsubscribe
+  }, [])
+
+  return { categories, isLoading, error }
+}
+
+export function useCanteenInventoryMovements() {
+  const [movements, setMovements] = useState<CanteenInventoryMovement[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      getCollectionRef('canteenInventoryMovements'),
+      (snapshot) => {
+        setMovements(snapshot.docs.map((docSnapshot) => mapInventoryMovement(docSnapshot.id, docSnapshot.data())).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)))
+        setIsLoading(false)
+        setError(null)
+      },
+      (snapshotError) => {
+        setError(snapshotError.message)
+        setIsLoading(false)
+      },
+    )
+    return unsubscribe
+  }, [])
+
+  return { movements, isLoading, error }
 }
 
 export function useCanteenOrders() {

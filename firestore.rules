@@ -108,6 +108,10 @@ service cloud.firestore {
       return isOwnerOrAdmin() || isPartner() || isReception() || isCanteen();
     }
 
+    function canManageCanteenInventory() {
+      return isOwnerOrAdmin() || isPartner();
+    }
+
     function canReadEventFinance() {
       return canViewFinance() || isEventManager();
     }
@@ -268,6 +272,11 @@ service cloud.firestore {
       allow read: if canReadEvents();
       allow create, update: if canRegisterEventGuests();
       allow delete: if false;
+    }
+
+    match /canteenCategories/{categoryId} {
+      allow read: if canReadCanteen();
+      allow create, update, delete: if canManageCanteenInventory();
     }
 
     match /canteenProducts/{productId} {

@@ -1,7 +1,10 @@
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { deleteDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { auth, firebaseConfig, storage } from '../config/firebase'
 import { ensureReceptionSession } from './authSession'
 import { callSecureFunction } from './secureFunctions'
+import { getCollectionRef, getDocumentRef } from './firestoreCollections'
+import { normalizeCanteenCategoryName } from '../utils/canteenCategories'
 import { normalizeWhitespace } from '../utils/textFormat'
 import type {
   CanteenOrder,
@@ -63,6 +66,56 @@ export const setCanteenProductActive = async (productId: string, isActive: boole
     { productId, isActive },
     operationScope('product-active', [productId, isActive]),
   )
+}
+
+export const upsertCanteenCategory = async (input: {
+  id?: string
+  name: string
+  isActive: boolean
+  sortOrder?: number
+}) => {
+  await ensureReceptionSession()
+  const name = normalizeWhitespace(input.name)
+  const normalizedName = normalizeCanteenCategoryName(name)
+  if (!name || !normalizedName) throw new Error('Ingresá un nombre de categoría válido.')
+
+  const duplicateSnapshot = await getDocs(query(getCollectionRef('canteenCategories'), where('normalizedName', '==', normalizedName)))
+  const duplicated = duplicateSnapshot.docs.find((docSnapshot) => docSnapshot.id !== input.id)
+  if (duplicated) throw new Error('Ya existe una categoría con ese nombre.')
+
+  const categoryId = input.id || normalizedName
+  await setDoc(
+    getDocumentRef('canteenCategories', categoryId),
+    {
+      id: categoryId,
+      isActive: input.isActive,
+      name,
+      normalizedName,
+      sortOrder: Number.isFinite(Number(input.sortOrder)) ? Number(input.sortOrder) : 999,
+      updatedAt: serverTimestamp(),
+      ...(input.id ? {} : { createdAt: serverTimestamp() }),
+    },
+    { merge: true },
+  )
+  return categoryId
+}
+
+export const deleteCanteenCategory = async (categoryId: string, normalizedName: string) => {
+  await ensureReceptionSession()
+  const productSnapshot = await getDocs(query(getCollectionRef('canteenProducts'), where('categoryNormalized', '==', normalizedName)))
+  if (!productSnapshot.empty) {
+    throw new Error('No se puede eliminar una categoría con productos asociados. Desactivala o mové los productos primero.')
+  }
+  await deleteDoc(getDocumentRef('canteenCategories', categoryId))
+}
+
+export const addCanteenStock = async (input: { productId: string; quantity: number; reason: string }) => {
+  const result = await callSecureFunction<{ movementId: string; productId: string; stockAfter: number; stockBefore: number }>(
+    'adjustCanteenStockSecure',
+    { direction: 'increase', ...input },
+    operationScope('stock-entry', [input.productId, input.quantity, input.reason]),
+  )
+  return result
 }
 
 export const createCanteenOrder = async (input: CreateCanteenOrderInput) => {

@@ -7,7 +7,7 @@ export type VisitTimeStatus = 'ok' | 'warning' | 'expired' | 'unlimited'
 export type EventStatus = 'inquiry' | 'reserved' | 'confirmed' | 'active' | 'finished' | 'cancelled'
 export type EventType = 'birthday' | 'private_event' | 'other'
 export type EventCapacityStatus = 'ok' | 'near-limit' | 'over-limit'
-export type CanteenCategory = 'Bebidas' | 'Snacks' | 'Comidas' | 'Combos' | 'Helados' | 'Otros'
+export type CanteenCategory = string
 export type CanteenAccountType = 'visit' | 'event' | 'free'
 export type CanteenOrderStatus = 'open' | 'paid' | 'cancelled' | 'closed_empty' | 'void_requested' | 'voided' | 'refunded'
 export type CanteenLineStatus = 'active' | 'void_requested' | 'voided' | 'courtesy' | 'waste'
@@ -454,6 +454,7 @@ export interface CanteenProduct {
   id: string
   name: string
   category: CanteenCategory
+  categoryNormalized?: string
   price: number
   salePrice?: number
   unitCost?: number | null
@@ -462,6 +463,18 @@ export interface CanteenProduct {
   imageUrl?: string
   imageFit?: ProductImageFit
   isActive: boolean
+  createdAt?: Date | null
+  updatedAt?: Date | null
+}
+
+export interface CanteenCategoryRecord {
+  id: string
+  name: string
+  normalizedName: string
+  isActive: boolean
+  sortOrder: number
+  productCount?: number
+  isLegacy?: boolean
   createdAt?: Date | null
   updatedAt?: Date | null
 }
@@ -486,6 +499,22 @@ export interface CanteenOrderItem {
   voidedAt?: Date | null
   voidedBy?: string | null
   voidReason?: string
+}
+
+export interface CanteenInventoryMovement {
+  id: string
+  type: string
+  productId: string
+  productName: string
+  quantity: number
+  delta: number
+  stockBefore: number | null
+  stockAfter: number | null
+  reason: string
+  createdAt?: Date | null
+  createdBy?: string
+  createdByName?: string
+  source?: string
 }
 
 export interface CanteenVoidRequest {

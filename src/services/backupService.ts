@@ -74,6 +74,7 @@ const backupCollections = [
   firestoreCollections.budgetDecorations,
   firestoreCollections.tvDisplaySettings,
   firestoreCollections.landingContent,
+  firestoreCollections.canteenCategories,
   firestoreCollections.canteenProducts,
   firestoreCollections.canteenOrders,
   firestoreCollections.canteenInventoryMovements,

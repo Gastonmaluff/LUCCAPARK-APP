@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronRight, PackagePlus, Search, SlidersHorizontal, X } from 'lucide-react'
-import { canteenCategories } from '../../config/canteen'
-import { setCanteenProductActive, upsertCanteenProduct, uploadCanteenProductImage } from '../../services/canteenService'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronRight, PackagePlus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { useCanteenCategories, useCanteenInventoryMovements } from '../../hooks/useCanteen'
+import { addCanteenStock, deleteCanteenCategory, setCanteenProductActive, upsertCanteenCategory, upsertCanteenProduct, uploadCanteenProductImage } from '../../services/canteenService'
+import { buildCanteenCategoryOptions, filterCanteenProductsByCategory } from '../../utils/canteenCategories'
 import { formatGuarani, toNumber } from '../../utils/money'
 import { StatusPill } from '../StatusPill'
 import { ProductImageView, defaultProductImageFit, normalizeProductImageFit } from './ProductImageView'
-import type { CanteenCategory, CanteenProduct, ProductImageFit, UpsertCanteenProductInput } from '../../types'
+import type { CanteenCategory, CanteenCategoryRecord, CanteenProduct, ProductImageFit, UpsertCanteenProductInput } from '../../types'
 
 interface ProductManagerProps {
   products: CanteenProduct[]
@@ -16,7 +17,7 @@ interface ProductManagerProps {
 
 const emptyProduct: UpsertCanteenProductInput = {
   name: '',
-  category: 'Bebidas',
+  category: '',
   price: 0,
   unitCost: null,
   stock: null,
@@ -39,29 +40,48 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
   const [form, setForm] = useState<UpsertCanteenProductInput>(emptyProduct)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [query, setQuery] = useState('')
-  const [category, setCategory] = useState<CanteenCategory | 'Todas'>('Todas')
+  const [category, setCategory] = useState('Todas')
+  const [categoryForm, setCategoryForm] = useState({ id: '', isActive: true, name: '', sortOrder: '' })
+  const [stockTarget, setStockTarget] = useState<CanteenProduct | null>(null)
+  const [stockForm, setStockForm] = useState({ quantity: '', reason: '' })
   const [showInactive, setShowInactive] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
   const [isImageFitOpen, setIsImageFitOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const categoriesResult = useCanteenCategories()
+  const movementsResult = useCanteenInventoryMovements()
 
   const activeProductsCount = products.filter((product) => product.isActive).length
   const lowStockCount = products.filter(
     (product) => product.stock !== null && product.minStock !== null && product.stock <= product.minStock,
   ).length
 
+  const categoryOptions = useMemo(
+    () => buildCanteenCategoryOptions(products, categoriesResult.categories),
+    [categoriesResult.categories, products],
+  )
+  const activeCategoryOptions = useMemo(
+    () => categoryOptions.filter((item) => item.isActive !== false),
+    [categoryOptions],
+  )
+
   const filteredProducts = useMemo(
     () =>
-      products.filter((product) => {
+      filterCanteenProductsByCategory(products, category === 'Todas' ? 'all' : category).filter((product) => {
         const matchesQuery = product.name.toLowerCase().includes(query.trim().toLowerCase())
-        const matchesCategory = category === 'Todas' || product.category === category
         const matchesActive = showInactive || product.isActive
-        return matchesQuery && matchesCategory && matchesActive
+        return matchesQuery && matchesActive
       }),
     [category, products, query, showInactive],
   )
+
+  useEffect(() => {
+    if (!form.category && activeCategoryOptions[0]) {
+      setForm((current) => ({ ...current, category: activeCategoryOptions[0].name }))
+    }
+  }, [activeCategoryOptions, form.category])
 
   useEffect(() => {
     if (!imageFile) {
@@ -110,8 +130,8 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
     event.preventDefault()
     setMessage(null)
 
-    if (!form.name.trim() || Number(form.price) <= 0) {
-      setMessage('Completa nombre y precio mayor a cero.')
+    if (!form.name.trim() || !form.category || Number(form.price) <= 0) {
+      setMessage('Completá nombre, categoría y precio mayor a cero.')
       return
     }
 
@@ -120,7 +140,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
       setIsUploadingImage(Boolean(imageFile))
       const imageUrl = imageFile ? await uploadCanteenProductImage(imageFile, form.id ?? 'new') : form.imageUrl
       setIsUploadingImage(false)
-      await upsertCanteenProduct({ ...form, imageUrl })
+      await upsertCanteenProduct({ ...form, imageUrl, stock: form.id ? undefined : form.stock })
       resetForm()
       setMessage('Producto guardado.')
     } catch (saveError) {
@@ -128,6 +148,76 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
       setMessage(saveError instanceof Error ? saveError.message : 'No se pudo guardar el producto.')
     } finally {
       setIsUploadingImage(false)
+      setIsSaving(false)
+    }
+  }
+
+  const saveCategory = async () => {
+    setMessage(null)
+    if (!categoryForm.name.trim()) {
+      setMessage('Ingresá el nombre de la categoría.')
+      return
+    }
+    setIsSaving(true)
+    try {
+      await upsertCanteenCategory({
+        id: categoryForm.id || undefined,
+        isActive: categoryForm.isActive,
+        name: categoryForm.name,
+        sortOrder: categoryForm.sortOrder ? Number(categoryForm.sortOrder) : 999,
+      })
+      setCategoryForm({ id: '', isActive: true, name: '', sortOrder: '' })
+      setMessage('Categoría guardada.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo guardar la categoría.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const editCategory = (item: CanteenCategoryRecord) => {
+    setCategoryForm({
+      id: item.id,
+      isActive: item.isActive,
+      name: item.name,
+      sortOrder: String(item.sortOrder ?? 999),
+    })
+  }
+
+  const removeCategory = async (item: CanteenCategoryRecord) => {
+    if (!window.confirm(`¿Eliminar la categoría "${item.name}"?`)) return
+    setIsSaving(true)
+    try {
+      await deleteCanteenCategory(item.id, item.normalizedName)
+      setMessage('Categoría eliminada.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo eliminar la categoría.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const openStockEntry = (product: CanteenProduct) => {
+    setStockTarget(product)
+    setStockForm({ quantity: '', reason: 'Ingreso de stock' })
+    setMessage(null)
+  }
+
+  const saveStockEntry = async () => {
+    if (!stockTarget) return
+    const quantity = Number(stockForm.quantity)
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setMessage('Ingresá una cantidad entera mayor a cero.')
+      return
+    }
+    setIsSaving(true)
+    try {
+      await addCanteenStock({ productId: stockTarget.id, quantity, reason: stockForm.reason || 'Ingreso de stock' })
+      setStockTarget(null)
+      setMessage('Stock agregado correctamente.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo agregar stock.')
+    } finally {
       setIsSaving(false)
     }
   }
@@ -171,6 +261,49 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
             </button>
           </div>
 
+          <section className="inventory-category-manager">
+            <div className="section-subheader">
+              <div>
+                <h3>Categorías de Cantina</h3>
+                <p>Creá y ordená categorías para el inventario y la carga de productos.</p>
+              </div>
+              {categoriesResult.isLoading ? <StatusPill tone="info">Cargando</StatusPill> : <StatusPill tone="available">{categoryOptions.length} categorías</StatusPill>}
+            </div>
+            {categoriesResult.error ? <div className="form-alert error">No se pudieron cargar categorías: {categoriesResult.error}</div> : null}
+            <div className="compact-form inventory-category-form">
+              <label className="field">
+                <span>Nombre de categoría</span>
+                <input value={categoryForm.name} onChange={(event) => setCategoryForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej: Bebidas frías" />
+              </label>
+              <label className="field">
+                <span>Orden</span>
+                <input inputMode="numeric" value={categoryForm.sortOrder} onChange={(event) => setCategoryForm((current) => ({ ...current, sortOrder: event.target.value.replace(/\D/g, '') }))} placeholder="Opcional" />
+              </label>
+              <label className="field inline-check">
+                <input checked={categoryForm.isActive} onChange={(event) => setCategoryForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+                Activa
+              </label>
+              <div className="module-actions">
+                {categoryForm.id ? <button className="button ghost" onClick={() => setCategoryForm({ id: '', isActive: true, name: '', sortOrder: '' })} type="button">Cancelar edición</button> : null}
+                <button className="button primary" disabled={isSaving} onClick={saveCategory} type="button">{categoryForm.id ? 'Actualizar categoría' : 'Agregar categoría'}</button>
+              </div>
+            </div>
+            <div className="category-admin-list">
+              {categoryOptions.map((item) => (
+                <article className={`category-admin-row ${item.isActive ? '' : 'inactive'}`} key={item.id}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>{item.productCount ?? 0} productos · {item.isLegacy ? 'Detectada por productos existentes' : item.isActive ? 'Activa' : 'Inactiva'}</small>
+                  </div>
+                  <div className="module-actions">
+                    {!item.isLegacy ? <button className="button ghost small-button" onClick={() => editCategory(item)} type="button">Editar</button> : null}
+                    {!item.isLegacy ? <button className="button ghost small-button" disabled={(item.productCount ?? 0) > 0 || isSaving} onClick={() => removeCategory(item)} type="button"><Trash2 size={14} /> Eliminar</button> : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
           {message ? (
             <div className={message.includes('No se') || message.includes('Completa') || message.includes('permiso') ? 'form-alert error' : 'form-alert success'}>
               {message}
@@ -184,14 +317,15 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
                 <input onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} value={form.name} />
               </label>
               <label className="field">
-                <span>Categoria</span>
+                <span>Categoría</span>
                 <select
                   onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as CanteenCategory }))}
                   value={form.category}
                 >
-                  {canteenCategories.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
+                  {activeCategoryOptions.length === 0 ? <option value="">Creá una categoría primero</option> : null}
+                  {activeCategoryOptions.map((item) => (
+                    <option key={item.normalizedName} value={item.name}>
+                      {item.name}
                     </option>
                   ))}
                 </select>
@@ -219,12 +353,14 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               <label className="field">
                 <span>Stock actual</span>
                 <input
+                  disabled={Boolean(form.id)}
                   min={0}
                   onChange={(event) => setForm((current) => ({ ...current, stock: event.target.value === '' ? null : toNumber(event.target.value) }))}
-                  placeholder="Opcional"
+                  placeholder={form.id ? 'Usá Agregar stock' : 'Opcional'}
                   type="number"
                   value={form.stock ?? ''}
                 />
+                {form.id ? <small>El stock de productos existentes se ajusta con Agregar stock.</small> : null}
               </label>
               <label className="field">
                 <span>Stock minimo</span>
@@ -288,12 +424,12 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               <input onChange={(event) => setQuery(event.target.value)} placeholder="Producto..." value={query} />
             </label>
             <label className="field">
-              <span>Categoria</span>
-              <select onChange={(event) => setCategory(event.target.value as CanteenCategory | 'Todas')} value={category}>
+              <span>Categoría</span>
+              <select onChange={(event) => setCategory(event.target.value)} value={category}>
                 <option value="Todas">Todas</option>
-                {canteenCategories.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                {categoryOptions.map((item) => (
+                  <option key={item.normalizedName} value={item.normalizedName}>
+                    {item.name}
                   </option>
                 ))}
               </select>
@@ -330,6 +466,9 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
                     <StatusPill tone={product.isActive ? 'available' : 'blocked'}>{product.isActive ? 'Activo' : 'Inactivo'}</StatusPill>
                   </div>
                   <div className="module-actions">
+                    <button className="button secondary" onClick={() => openStockEntry(product)} type="button">
+                      Agregar stock
+                    </button>
                     <button className="button ghost" onClick={() => editProduct(product)} type="button">
                       Editar
                     </button>
@@ -341,7 +480,66 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               )
             })}
           </div>
+
+          <section className="inventory-history-panel">
+            <div className="section-subheader">
+              <div>
+                <h3>Historial de ingresos de stock</h3>
+                <p>Movimientos generados por ajustes seguros desde el backend.</p>
+              </div>
+              <StatusPill tone="info">{movementsResult.movements.filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock').length} ingresos</StatusPill>
+            </div>
+            {movementsResult.error ? <div className="form-alert error">No se pudieron cargar movimientos: {movementsResult.error}</div> : null}
+            {movementsResult.isLoading ? <div className="empty-state">Cargando historial de stock...</div> : null}
+            {!movementsResult.isLoading && movementsResult.movements.filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock').length === 0 ? (
+              <div className="empty-state">Todavía no hay ingresos de stock registrados.</div>
+            ) : null}
+            <div className="stock-history-list">
+              {movementsResult.movements
+                .filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock')
+                .slice(0, 20)
+                .map((movement) => (
+                  <article className="stock-history-row" key={movement.id}>
+                    <div>
+                      <strong>{movement.productName || 'Producto'}</strong>
+                      <small>{movement.createdAt ? new Intl.DateTimeFormat('es-PY', { dateStyle: 'short', timeStyle: 'short' }).format(movement.createdAt) : 'Sin fecha'} · {movement.createdByName || 'Sin usuario'}</small>
+                    </div>
+                    <span>{movement.quantity} unidades</span>
+                    <small>Stock: {movement.stockBefore ?? '-'} → {movement.stockAfter ?? '-'}</small>
+                    <small>{movement.reason || 'Sin motivo'}</small>
+                  </article>
+                ))}
+            </div>
+          </section>
         </>
+      ) : null}
+      {stockTarget ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card stock-entry-modal" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Inventario</p>
+                <h3>Agregar stock</h3>
+              </div>
+              <button className="icon-button" onClick={() => setStockTarget(null)} type="button" aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="muted">{stockTarget.name} · Stock actual: {stockTarget.stock ?? 'sin control'}</p>
+            <label className="field">
+              <span>Cantidad a ingresar</span>
+              <input inputMode="numeric" min={1} onChange={(event) => setStockForm((current) => ({ ...current, quantity: event.target.value.replace(/\D/g, '') }))} value={stockForm.quantity} />
+            </label>
+            <label className="field">
+              <span>Motivo</span>
+              <input onChange={(event) => setStockForm((current) => ({ ...current, reason: event.target.value }))} value={stockForm.reason} />
+            </label>
+            <div className="module-actions">
+              <button className="button ghost" onClick={() => setStockTarget(null)} type="button">Cancelar</button>
+              <button className="button primary" disabled={isSaving} onClick={saveStockEntry} type="button">Confirmar ingreso</button>
+            </div>
+          </section>
+        </div>
       ) : null}
       {isImageFitOpen ? (
         <ProductImageFitModal

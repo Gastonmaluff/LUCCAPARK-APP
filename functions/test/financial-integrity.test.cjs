@@ -12,6 +12,7 @@ const {
   refundCanteenOrderSecure,
   requestCanteenVoidSecure,
   reviewCanteenVoidSecure,
+  upsertCanteenProductSecure,
 } = require('../lib/canteen')
 const { registerEventPaymentSecure } = require('../lib/events')
 const { checkoutVisitGroupSecure, createVisitSecure, extendVisitTimeSecure } = require('../lib/visits')
@@ -56,6 +57,9 @@ async function seedBase() {
   batch.set(db.collection('canteenProducts').doc('product-1'), {
     id: 'product-1', name: 'Agua', category: 'Bebidas', price: 10000, salePrice: 10000,
     unitCost: 4000, stock: 10, minStock: 2, isActive: true,
+  })
+  batch.set(db.collection('canteenCategories').doc('bebidas'), {
+    id: 'bebidas', name: 'Bebidas', normalizedName: 'bebidas', isActive: true,
   })
   batch.set(db.collection('events').doc('event-1'), {
     id: 'event-1', title: 'Cumple de Ana', customerName: 'Maria', status: 'confirmed', totalAmount: 100000,
@@ -278,6 +282,41 @@ describe('consumos y stock', () => {
     assert.equal(result.stockAfter, 7)
     const movement = await db.collection('canteenInventoryMovements').doc(result.movementId).get()
     assert.equal(movement.data().createdBy, 'socio')
+  })
+
+  test('19b. producto nuevo requiere categoria activa configurada', async () => {
+    const productId = await upsertCanteenProductSecure('admin', {
+      category: 'Bebidas',
+      idempotencyKey: key('new-product-valid-category'),
+      isActive: true,
+      name: 'Jugo',
+      price: 12000,
+      stock: 5,
+    })
+    assert.ok(productId.productId)
+    await assert.rejects(() => upsertCanteenProductSecure('admin', {
+      category: 'Categoria fantasma',
+      idempotencyKey: key('new-product-invalid-category'),
+      isActive: true,
+      name: 'Producto fantasma',
+      price: 12000,
+      stock: 5,
+    }), /categoria seleccionada no esta activa/i)
+  })
+
+  test('19c. producto legacy puede conservar su categoria existente', async () => {
+    await db.collection('canteenCategories').doc('bebidas').delete()
+    const result = await upsertCanteenProductSecure('admin', {
+      id: 'product-1',
+      category: 'Bebidas',
+      idempotencyKey: key('legacy-product-same-category'),
+      isActive: true,
+      name: 'Agua editada',
+      price: 11000,
+      unitCost: 4000,
+    })
+    assert.equal(result.productId, 'product-1')
+    assert.equal((await db.collection('canteenProducts').doc('product-1').get()).data().stock, 10)
   })
 
   test('20. productos entregados no restauran stock y quedan como cortesia', async () => {

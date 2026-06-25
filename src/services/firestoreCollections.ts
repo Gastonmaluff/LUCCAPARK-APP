@@ -15,6 +15,7 @@ export const firestoreCollections: Record<FirebaseCollectionName, FirebaseCollec
   budgetDecorations: 'budgetDecorations',
   tvDisplaySettings: 'tvDisplaySettings',
   landingContent: 'landingContent',
+  canteenCategories: 'canteenCategories',
   canteenProducts: 'canteenProducts',
   canteenOrders: 'canteenOrders',
   canteenVoidRequests: 'canteenVoidRequests',
