@@ -10,12 +10,11 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { canAccessAdminModule, type AdminModule } from '../auth/accessControl'
 import { BrandLogo } from '../components/BrandLogo'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { runAutomaticBackupIfDue } from '../services/backupService'
 
 const adminNavItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard; module: AdminModule }> = [
   { label: 'Control', to: '/admin/dashboard', icon: LayoutDashboard, module: 'dashboard' },
@@ -31,14 +30,8 @@ const adminNavItems: Array<{ label: string; to: string; icon: typeof LayoutDashb
 
 export function AdminLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const { isLoadingProfile, profile } = useUserProfile()
+  const { profile } = useUserProfile()
   const visibleNavItems = profile ? adminNavItems.filter((item) => canAccessAdminModule(profile.role, item.module)) : []
-
-  useEffect(() => {
-    if (isLoadingProfile || !profile?.isActive) return
-    if (profile.role !== 'admin' && profile.role !== 'socio') return
-    void runAutomaticBackupIfDue()
-  }, [isLoadingProfile, profile?.isActive, profile?.role])
 
   return (
     <main className="internal-page">

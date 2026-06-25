@@ -4,9 +4,7 @@ import { useUserProfile } from '../../hooks/useUserProfile'
 import {
   generateBackup,
   getBackupDownloadUrl,
-  subscribeAutomaticBackupState,
   subscribeBackups,
-  type AutomaticBackupState,
   type BackupMetadata,
 } from '../../services/backupService'
 import { StatusPill } from '../StatusPill'
@@ -55,24 +53,18 @@ export function BackupSettingsPanel() {
   const [openSections, setOpenSections] = useState({ automatic: false, manual: true, restore: false })
   const [backups, setBackups] = useState<BackupMetadata[]>([])
   const [backupsError, setBackupsError] = useState<string | null>(null)
-  const [automaticState, setAutomaticState] = useState<AutomaticBackupState>({ checkedAt: null, lastSuccessAt: null, lockExpiresAt: null, status: 'idle' })
-  const [automaticError, setAutomaticError] = useState<string | null>(null)
   const [isGeneratingManual, setIsGeneratingManual] = useState(false)
   const [manualMessage, setManualMessage] = useState<string | null>(null)
   const canManageBackups = profile?.role === 'admin' || profile?.role === 'socio'
   const manualBackups = useMemo(() => backups.filter((backup) => backup.type === 'manual'), [backups])
   const automaticBackups = useMemo(() => backups.filter((backup) => backup.type === 'automatic'), [backups])
-  const lastAutomatic = automaticBackups.find((backup) => backup.status === 'success')
-  const nextAutomatic = automaticState.lastSuccessAt
-    ? new Date(automaticState.lastSuccessAt.getTime() + 12 * 60 * 60 * 1000)
-    : null
+  const lastLegacyAutomatic = automaticBackups.find((backup) => backup.status === 'success')
 
   useEffect(() => {
     if (isLoadingProfile) return undefined
     if (!canManageBackups) {
       setBackups([])
       setBackupsError(null)
-      setAutomaticError(null)
       return undefined
     }
 
@@ -83,17 +75,7 @@ export function BackupSettingsPanel() {
       },
       setBackupsError,
     )
-    const unsubscribeAutomatic = subscribeAutomaticBackupState(
-      (nextState) => {
-        setAutomaticState(nextState)
-        setAutomaticError(null)
-      },
-      setAutomaticError,
-    )
-    return () => {
-      unsubscribeBackups()
-      unsubscribeAutomatic()
-    }
+    return unsubscribeBackups
   }, [canManageBackups, isLoadingProfile])
 
   const toggleSection = (section: keyof typeof openSections) => {
@@ -149,14 +131,10 @@ export function BackupSettingsPanel() {
 
           <BackupSubsection isOpen={openSections.automatic} onToggle={() => toggleSection('automatic')} title="Backup automático">
             <div className="backup-auto-status">
-              <StatusPill tone={automaticState.status === 'error' ? 'blocked' : automaticState.status === 'running' ? 'warning' : 'available'}>
-                Activo por uso del sistema
-              </StatusPill>
+              <StatusPill tone="available">Scheduled Backups activo</StatusPill>
               <p>
-                El sistema genera un backup automático cuando un usuario autorizado ingresa, siempre que hayan pasado más de 12 horas desde el último backup automático exitoso.
+                La copia automática oficial la realiza Firestore Scheduled Backups de forma diaria. La recuperación completa es un procedimiento administrativo desde Firebase o Google Cloud.
               </p>
-              {automaticError ? <div className="form-alert error">No se pudo leer estado automático: {automaticError}</div> : null}
-              {automaticState.errorMessage ? <div className="form-alert error">{automaticState.errorMessage}</div> : null}
             </div>
             <div className="backup-native-card">
               <div className="backup-native-card-heading">
@@ -167,7 +145,7 @@ export function BackupSettingsPanel() {
                 <StatusPill tone="available">Activo</StatusPill>
               </div>
               <p>
-                Además del backup manual y el backup automático por uso del sistema, este proyecto tiene activo Firestore Scheduled Backups: copia diaria de la base de datos con retención de 30 días.
+                Este proyecto tiene activo Firestore Scheduled Backups: copia diaria de la base de datos con retención de 30 días. La exportación JSON manual queda disponible como respaldo auxiliar descargable.
               </p>
               <div className="backup-native-facts">
                 <span><small>Frecuencia</small><strong>Diaria</strong></span>
@@ -179,9 +157,9 @@ export function BackupSettingsPanel() {
               </p>
             </div>
             <div className="backup-summary-grid">
-              <span><small>Último automático</small><strong>{formatDateTime(lastAutomatic?.createdAt ?? automaticState.lastSuccessAt)}</strong></span>
-              <span><small>Próximo estimado</small><strong>{formatDateTime(nextAutomatic)}</strong></span>
-              <span><small>Estado interno</small><strong>{automaticState.status}</strong></span>
+              <span><small>Frecuencia oficial</small><strong>Diaria</strong></span>
+              <span><small>Recuperación</small><strong>Administrativa</strong></span>
+              <span><small>Último JSON automático anterior</small><strong>{formatDateTime(lastLegacyAutomatic?.createdAt ?? null)}</strong></span>
             </div>
             <BackupList backups={automaticBackups} />
           </BackupSubsection>

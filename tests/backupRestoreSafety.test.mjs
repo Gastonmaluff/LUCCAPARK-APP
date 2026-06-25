@@ -8,17 +8,20 @@ const projectId = 'demo-luccapark-restore'
 let testEnv
 let backupServiceSource
 let backupPanelSource
+let adminLayoutSource
 let storageRulesSource
 
 before(async () => {
-  const [firestoreRules, backupService, backupPanel, storageRules] = await Promise.all([
+  const [firestoreRules, backupService, backupPanel, adminLayout, storageRules] = await Promise.all([
     readFile('firestore.rules', 'utf8'),
     readFile('src/services/backupService.ts', 'utf8'),
     readFile('src/components/settings/BackupSettingsPanel.tsx', 'utf8'),
+    readFile('src/layouts/AdminLayout.tsx', 'utf8'),
     readFile('storage.rules', 'utf8'),
   ])
   backupServiceSource = backupService
   backupPanelSource = backupPanel
+  adminLayoutSource = adminLayout
   storageRulesSource = storageRules
   testEnv = await initializeTestEnvironment({ projectId, firestore: { rules: firestoreRules } })
 })
@@ -65,6 +68,43 @@ describe('restore JSON deshabilitado en el cliente', () => {
   test('la interfaz explica la recuperacion mediante Scheduled Backups', () => {
     assert.match(backupPanelSource, /restauración completa es un procedimiento administrativo realizado mediante Firestore Scheduled Backups/i)
     assert.match(backupPanelSource, /no restaura Firebase Authentication ni los archivos físicos de Storage/i)
+  })
+})
+
+describe('backup JSON automatico obsoleto deshabilitado', () => {
+  test('iniciar sesion en el panel admin no dispara backup automatico', () => {
+    assert.equal(adminLayoutSource.includes('runAutomaticBackupIfDue'), false)
+    assert.equal(adminLayoutSource.includes('generateBackup'), false)
+  })
+
+  test('el servicio ya no expone ni ejecuta el backup automatico por uso', () => {
+    assert.equal(backupServiceSource.includes('runAutomaticBackupIfDue'), false)
+    assert.equal(backupServiceSource.includes("generateBackup('automatic')"), false)
+    assert.equal(backupServiceSource.includes('backupLocks'), false)
+  })
+
+  test('el servicio no contiene llamadas directas a backups/automatic', () => {
+    assert.equal(backupServiceSource.includes('backups/automatic'), false)
+    assert.equal(adminLayoutSource.includes('backups/automatic'), false)
+    assert.equal(backupPanelSource.includes('backups/automatic'), false)
+  })
+
+  test('la exportacion JSON manual sigue disponible', () => {
+    assert.match(backupPanelSource, /Generar backup manual/)
+    assert.match(backupPanelSource, /generateBackup\('manual'\)/)
+    assert.match(backupServiceSource, /export const generateBackup = async \(type: ExportableBackupType\)/)
+  })
+
+  test('la seccion de Scheduled Backups sigue visible como mecanismo oficial', () => {
+    assert.match(backupPanelSource, /Scheduled Backups activo/)
+    assert.match(backupPanelSource, /copia diaria de la base de datos con retención de 30 días/i)
+    assert.match(backupPanelSource, /recuperación completa es un procedimiento administrativo/i)
+  })
+
+  test('la interfaz no muestra el antiguo estado automatico por uso ni el error de Storage', () => {
+    assert.equal(backupPanelSource.includes('Activo por uso del sistema'), false)
+    assert.equal(backupPanelSource.includes('más de 12 horas'), false)
+    assert.equal(backupPanelSource.includes('storage/unauthorized'), false)
   })
 })
 
