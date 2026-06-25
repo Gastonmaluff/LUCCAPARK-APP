@@ -33,6 +33,51 @@ const parseMoneyInput = (value: string) => {
   return digits ? Number(digits) : 0
 }
 const formatMoneyInput = (value?: number | null) => (value && value > 0 ? new Intl.NumberFormat('es-PY').format(value) : '')
+type StockHistoryPeriod = 'today' | 'week' | 'month' | 'custom'
+
+const stockHistoryPeriods: Array<{ label: string; value: StockHistoryPeriod }> = [
+  { label: 'Hoy', value: 'today' },
+  { label: 'Esta semana', value: 'week' },
+  { label: 'Este mes', value: 'month' },
+  { label: 'Elegir rango', value: 'custom' },
+]
+
+const getDateInputTime = (value: string, endOfDay = false) => {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0).getTime()
+}
+
+const getStockHistoryRange = (period: StockHistoryPeriod, customFrom: string, customTo: string) => {
+  const now = new Date()
+  const start = new Date(now)
+  const end = new Date(now)
+  end.setHours(23, 59, 59, 999)
+
+  if (period === 'today') {
+    start.setHours(0, 0, 0, 0)
+    return { end: end.getTime(), start: start.getTime() }
+  }
+
+  if (period === 'week') {
+    const mondayOffset = (start.getDay() + 6) % 7
+    start.setDate(start.getDate() - mondayOffset)
+    start.setHours(0, 0, 0, 0)
+    return { end: end.getTime(), start: start.getTime() }
+  }
+
+  if (period === 'month') {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    return { end: end.getTime(), start: start.getTime() }
+  }
+
+  return {
+    end: getDateInputTime(customTo, true),
+    start: getDateInputTime(customFrom),
+  }
+}
 
 export function ProductManager({ defaultOpen = false, error, isLoading, products }: ProductManagerProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
@@ -44,6 +89,10 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
   const [categoryForm, setCategoryForm] = useState({ id: '', isActive: true, name: '', sortOrder: '' })
   const [stockTarget, setStockTarget] = useState<CanteenProduct | null>(null)
   const [stockForm, setStockForm] = useState({ quantity: '', reason: '' })
+  const [isStockHistoryOpen, setIsStockHistoryOpen] = useState(false)
+  const [stockHistoryPeriod, setStockHistoryPeriod] = useState<StockHistoryPeriod>('today')
+  const [stockHistoryFrom, setStockHistoryFrom] = useState('')
+  const [stockHistoryTo, setStockHistoryTo] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
@@ -76,6 +125,22 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
       }),
     [category, products, query, showInactive],
   )
+
+  const stockEntryMovements = useMemo(
+    () => movementsResult.movements.filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock'),
+    [movementsResult.movements],
+  )
+
+  const filteredStockEntryMovements = useMemo(() => {
+    const range = getStockHistoryRange(stockHistoryPeriod, stockHistoryFrom, stockHistoryTo)
+    return stockEntryMovements.filter((item) => {
+      const time = item.createdAt?.getTime()
+      if (!time) return false
+      if (range.start !== null && time < range.start) return false
+      if (range.end !== null && time > range.end) return false
+      return true
+    })
+  }, [stockEntryMovements, stockHistoryFrom, stockHistoryPeriod, stockHistoryTo])
 
   useEffect(() => {
     if (!form.category && activeCategoryOptions[0]) {
@@ -482,34 +547,67 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
           </div>
 
           <section className="inventory-history-panel">
-            <div className="section-subheader">
-              <div>
-                <h3>Historial de ingresos de stock</h3>
-                <p>Movimientos generados por ajustes seguros desde el backend.</p>
+            <button className="inventory-history-header" onClick={() => setIsStockHistoryOpen((current) => !current)} type="button">
+              <span>
+                {isStockHistoryOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                <span>
+                  <strong>Historial de ingresos de stock</strong>
+                  <small>Movimientos generados por ajustes seguros desde el backend.</small>
+                </span>
+              </span>
+              <StatusPill tone="info">{filteredStockEntryMovements.length} ingresos</StatusPill>
+            </button>
+            {isStockHistoryOpen ? (
+              <div className="inventory-history-body">
+                <div className="stock-history-filters" aria-label="Filtrar historial de ingresos de stock">
+                  {stockHistoryPeriods.map((period) => (
+                    <button
+                      className={stockHistoryPeriod === period.value ? 'active' : ''}
+                      key={period.value}
+                      onClick={() => setStockHistoryPeriod(period.value)}
+                      type="button"
+                    >
+                      {period.label}
+                    </button>
+                  ))}
+                </div>
+                {stockHistoryPeriod === 'custom' ? (
+                  <div className="stock-history-range">
+                    <label className="field">
+                      <span>Desde</span>
+                      <input onChange={(event) => setStockHistoryFrom(event.target.value)} type="date" value={stockHistoryFrom} />
+                    </label>
+                    <label className="field">
+                      <span>Hasta</span>
+                      <input onChange={(event) => setStockHistoryTo(event.target.value)} type="date" value={stockHistoryTo} />
+                    </label>
+                  </div>
+                ) : null}
+                {movementsResult.error ? <div className="form-alert error">No se pudieron cargar movimientos: {movementsResult.error}</div> : null}
+                {movementsResult.isLoading ? <div className="empty-state">Cargando historial de stock...</div> : null}
+                {!movementsResult.isLoading && stockEntryMovements.length === 0 ? (
+                  <div className="empty-state">Todavía no hay ingresos de stock registrados.</div>
+                ) : null}
+                {!movementsResult.isLoading && stockEntryMovements.length > 0 && filteredStockEntryMovements.length === 0 ? (
+                  <div className="empty-state">No hay ingresos de stock en este período.</div>
+                ) : null}
+                <div className="stock-history-list">
+                  {filteredStockEntryMovements.slice(0, 50).map((movement) => (
+                    <article className="stock-history-row" key={movement.id}>
+                      <div>
+                        <strong>{movement.productName || 'Producto'}</strong>
+                        <small>
+                          {movement.createdAt ? new Intl.DateTimeFormat('es-PY', { dateStyle: 'short', timeStyle: 'short' }).format(movement.createdAt) : 'Sin fecha'} · {movement.createdByName || 'Sin usuario'}
+                        </small>
+                      </div>
+                      <span>{movement.quantity} unidades</span>
+                      <small>Stock: {movement.stockBefore ?? '-'} → {movement.stockAfter ?? '-'}</small>
+                      <small>{movement.reason || 'Sin motivo'}</small>
+                    </article>
+                  ))}
+                </div>
               </div>
-              <StatusPill tone="info">{movementsResult.movements.filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock').length} ingresos</StatusPill>
-            </div>
-            {movementsResult.error ? <div className="form-alert error">No se pudieron cargar movimientos: {movementsResult.error}</div> : null}
-            {movementsResult.isLoading ? <div className="empty-state">Cargando historial de stock...</div> : null}
-            {!movementsResult.isLoading && movementsResult.movements.filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock').length === 0 ? (
-              <div className="empty-state">Todavía no hay ingresos de stock registrados.</div>
             ) : null}
-            <div className="stock-history-list">
-              {movementsResult.movements
-                .filter((item) => item.type === 'stock_entry' || item.type === 'initial_stock')
-                .slice(0, 20)
-                .map((movement) => (
-                  <article className="stock-history-row" key={movement.id}>
-                    <div>
-                      <strong>{movement.productName || 'Producto'}</strong>
-                      <small>{movement.createdAt ? new Intl.DateTimeFormat('es-PY', { dateStyle: 'short', timeStyle: 'short' }).format(movement.createdAt) : 'Sin fecha'} · {movement.createdByName || 'Sin usuario'}</small>
-                    </div>
-                    <span>{movement.quantity} unidades</span>
-                    <small>Stock: {movement.stockBefore ?? '-'} → {movement.stockAfter ?? '-'}</small>
-                    <small>{movement.reason || 'Sin motivo'}</small>
-                  </article>
-                ))}
-            </div>
           </section>
         </>
       ) : null}
