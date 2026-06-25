@@ -68,4 +68,3 @@ export const filterCanteenProductsByCategory = (
   if (!selectedCategory || selectedCategory === allCanteenCategoriesKey) return products
   return products.filter((product) => getProductCategoryKey(product) === selectedCategory)
 }
-

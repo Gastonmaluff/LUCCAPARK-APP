@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarPlus } from 'lucide-react'
 import { createEvent } from '../../services/eventService'
 import { getTodayDateKey } from '../../utils/eventCapacity'
+import { isPastAsuncionDateKey } from '../../utils/asuncionDate'
 import { formatGuarani, parseCurrencyInput } from '../../utils/money'
 import { formatEventTitle, formatParaguayanPhone, formatPersonName } from '../../utils/textFormat'
 import type { CreateEventInput, EventType, LuccaEvent } from '../../types'
@@ -94,6 +95,11 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
 
     if (!form.title.trim() && !form.birthdayChildName.trim()) {
       setError('Carga el nombre del evento o cumpleañero.')
+      return
+    }
+
+    if (isPastAsuncionDateKey(form.date)) {
+      setError('No se puede crear una reserva en una fecha que ya pasó.')
       return
     }
 
@@ -205,7 +211,7 @@ export function EventCreateForm({ events = [], initialDate, onCancel, onCreated 
       <div className="form-inline">
         <label className="field">
           <span>Fecha *</span>
-          <input onChange={(event) => updateField('date', event.target.value)} type="date" value={form.date} />
+          <input min={getTodayDateKey()} onChange={(event) => updateField('date', event.target.value)} type="date" value={form.date} />
         </label>
       </div>
 

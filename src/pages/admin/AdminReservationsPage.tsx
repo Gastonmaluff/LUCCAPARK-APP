@@ -156,6 +156,10 @@ export function AdminReservationsPage() {
   const selectedDayEvents = sortedEvents.filter((event) => event.date === selectedDayKey)
 
   const openCreateForm = (dateKey = todayKey) => {
+    if (dateKey < todayKey) {
+      setEventActionError('No se puede crear una reserva en una fecha que ya pasó.')
+      return
+    }
     setCreateDate(dateKey)
     setShowCreateForm(true)
   }
@@ -351,6 +355,7 @@ export function AdminReservationsPage() {
                     isToday ? 'today' : '',
                     selectedDayKey === day.dateKey ? 'selected' : '',
                   ].join(' ')}
+                  disabled={isPast}
                   key={day.dateKey}
                   onClick={() => setSelectedDayKey(day.dateKey)}
                   type="button"
@@ -363,7 +368,7 @@ export function AdminReservationsPage() {
                       {dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ''}
                     </span>
                   ) : (
-                    <span className="calendar-event-chip available-chip">Disponible</span>
+                    <span className="calendar-event-chip available-chip">{isPast ? 'No disponible' : 'Disponible'}</span>
                   )}
                 </button>
               )
@@ -372,14 +377,19 @@ export function AdminReservationsPage() {
 
           <div className="selected-day-panel">
             <div>
-              <p className="eyebrow">D?a seleccionado</p>
+              <p className="eyebrow">Día seleccionado</p>
               <h3>{formatDate(selectedDayKey)}</h3>
             </div>
-            {selectedDayEvents.length === 0 ? (
+            {selectedDayKey < todayKey ? (
+              <div className="selected-day-actions">
+                <StatusPill tone="blocked">No disponible</StatusPill>
+                <span className="muted">Las fechas pasadas no aceptan nuevas reservas.</span>
+              </div>
+            ) : selectedDayEvents.length === 0 ? (
               <div className="selected-day-actions">
                 <StatusPill tone="available">Disponible</StatusPill>
                 <button className="button primary" onClick={() => openCreateForm(selectedDayKey)} type="button">
-                  Agregar reserva a este d?a
+                  Agregar reserva a este día
                 </button>
               </div>
             ) : (

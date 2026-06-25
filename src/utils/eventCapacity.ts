@@ -1,7 +1,7 @@
-import { getLocalDateKey } from './date'
+import { getAsuncionDateKey } from './asuncionDate'
 import type { EventCapacityStatus, LuccaEvent } from '../types'
 
-export const getTodayDateKey = () => getLocalDateKey()
+export const getTodayDateKey = () => getAsuncionDateKey()
 
 export const getExtraGuestsCount = (registeredGuestsCount: number, contractedChildrenCount: number) =>
   Math.max(0, registeredGuestsCount - contractedChildrenCount)

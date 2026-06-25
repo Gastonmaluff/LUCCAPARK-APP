@@ -20,6 +20,7 @@ import { getCurrentUserAudit } from './userAudit'
 import { logActivity } from './activityLogService'
 import { callSecureFunction } from './secureFunctions'
 import { parseCurrencyInput } from '../utils/money'
+import { isPastAsuncionDateKey } from '../utils/asuncionDate'
 import { formatEventTitle, formatPersonName, lowerSearchKey, normalizeWhitespace, phoneDigits } from '../utils/textFormat'
 import type {
   CreateEventGuestInput,
@@ -129,6 +130,9 @@ const findChildByReservation = async (childName: string, birthDate?: string, pho
 
 export const createEvent = async (input: CreateEventInput) => {
   await ensureReceptionSession()
+  if (isPastAsuncionDateKey(input.date)) {
+    throw new Error('No se puede crear una reserva en una fecha que ya pasó.')
+  }
 
   const title = formatEventTitle(input.title || `Cumpleanos de ${input.birthdayChildName}`)
   const birthdayChildName = formatPersonName(input.birthdayChildName)

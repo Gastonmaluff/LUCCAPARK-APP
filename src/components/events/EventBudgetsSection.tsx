@@ -2,6 +2,8 @@ import {
   BookImage,
   Calculator,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Download,
   Edit3,
   FileText,
@@ -630,6 +632,8 @@ export function EventBudgetsSection() {
   const [showForm, setShowForm] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
+  const [isCreateSectionOpen, setIsCreateSectionOpen] = useState(false)
+  const [isListSectionOpen, setIsListSectionOpen] = useState(false)
   const [editingBudget, setEditingBudget] = useState<EventBudget | null>(null)
   const [actionError, setActionError] = useState('')
   const filteredBudgets = useMemo(() => (filter === 'all' ? budgets : budgets.filter((budget) => budget.status === filter)), [budgets, filter])
@@ -677,45 +681,70 @@ export function EventBudgetsSection() {
         </div>
       </div>
       {actionError || error ? <div className="form-alert error">{actionError || error}</div> : null}
-      <div className="reservation-filter-row secondary">
-        {([
-          ['all', 'Todos'],
-          ['draft', 'Borradores'],
-          ['sent', 'Enviados'],
-          ['approved', 'Aprobados'],
-          ['rejected', 'Rechazados'],
-          ['converted', 'Convertidos en reserva'],
-        ] as Array<[BudgetFilter, string]>).map(([value, label]) => (
-          <button className={filter === value ? 'active' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
-        ))}
-      </div>
-      {isLoading ? <div className="empty-state">Cargando presupuestos...</div> : null}
-      {!isLoading && filteredBudgets.length === 0 ? <div className="empty-state">Todavía no hay presupuestos para mostrar.</div> : null}
-      <div className="event-budget-list">
-        {filteredBudgets.map((budget) => (
-          <article className="event-budget-card" key={budget.id}>
-            <div className="event-budget-main">
-              <strong>{budget.childName || 'Sin niño/a'}</strong>
-              <p>Responsable: {budget.responsibleName || 'Sin responsable'}</p>
-              <small>{budget.responsiblePhone ? formatParaguayanPhone(budget.responsiblePhone) : 'Sin teléfono'} · Fecha tentativa: {formatDate(budget.tentativeEventDate)} · Creado por: {budget.createdByName || 'Sin usuario'}</small>
+      <section className="budget-collapsible-section">
+        <button className="budget-collapsible-header" onClick={() => setIsCreateSectionOpen((current) => !current)} type="button">
+          <span>{isCreateSectionOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />} Crear presupuesto de evento</span>
+          <StatusPill tone="info">Herramienta comercial</StatusPill>
+        </button>
+        {isCreateSectionOpen ? (
+          <div className="budget-collapsible-body">
+            <p className="muted">Armá una propuesta con datos del cliente, invitados, adicionales, decoración y PDF.</p>
+            {canManageBudgets ? (
+              <button className="button primary" onClick={() => { setEditingBudget(null); setShowForm(true) }} type="button"><Plus size={18} /> Crear presupuesto</button>
+            ) : <div className="empty-state">Tu rol no permite crear presupuestos.</div>}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="budget-collapsible-section">
+        <button className="budget-collapsible-header" onClick={() => setIsListSectionOpen((current) => !current)} type="button">
+          <span>{isListSectionOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />} Presupuestos creados</span>
+          <StatusPill tone="info">{filteredBudgets.length} visibles</StatusPill>
+        </button>
+        {isListSectionOpen ? (
+          <div className="budget-collapsible-body">
+            <div className="reservation-filter-row secondary">
+              {([
+                ['all', 'Todos'],
+                ['draft', 'Borradores'],
+                ['sent', 'Enviados'],
+                ['approved', 'Aprobados'],
+                ['rejected', 'Rechazados'],
+                ['converted', 'Convertidos en reserva'],
+              ] as Array<[BudgetFilter, string]>).map(([value, label]) => (
+                <button className={filter === value ? 'active' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
+              ))}
             </div>
-            <div className="event-budget-total">
-              <BudgetStatusPill status={budget.status} />
-              <strong>{budget.decorationMode === 'alternatives' ? 'Según opción seleccionada' : formatGuarani(budget.finalTotal ?? budget.baseSubtotal)}</strong>
-              <small>Creado: {formatDate(budget.createdAt)}</small>
+            {isLoading ? <div className="empty-state">Cargando presupuestos...</div> : null}
+            {!isLoading && filteredBudgets.length === 0 ? <div className="empty-state">Todavía no hay presupuestos para mostrar.</div> : null}
+            <div className="event-budget-list">
+              {filteredBudgets.map((budget) => (
+                <article className="event-budget-card" key={budget.id}>
+                  <div className="event-budget-main">
+                    <strong>{budget.childName || 'Sin niño/a'}</strong>
+                    <p>Responsable: {budget.responsibleName || 'Sin responsable'}</p>
+                    <small>{budget.responsiblePhone ? formatParaguayanPhone(budget.responsiblePhone) : 'Sin teléfono'} · Fecha tentativa: {formatDate(budget.tentativeEventDate)} · Creado por: {budget.createdByName || 'Sin usuario'}</small>
+                  </div>
+                  <div className="event-budget-total">
+                    <BudgetStatusPill status={budget.status} />
+                    <strong>{budget.decorationMode === 'alternatives' ? 'Según opción seleccionada' : formatGuarani(budget.finalTotal ?? budget.baseSubtotal)}</strong>
+                    <small>Creado: {formatDate(budget.createdAt)}</small>
+                  </div>
+                  <div className="event-budget-actions">
+                    <button className="button ghost" onClick={() => { setEditingBudget(budget); setShowForm(true) }} type="button"><Edit3 size={16} /> Ver detalle</button>
+                    <button className="button ghost" onClick={() => { setEditingBudget(budget); setShowForm(true) }} type="button"><Edit3 size={16} /> Editar</button>
+                    <button className="button ghost" onClick={() => downloadEventBudgetPdf(budget)} type="button"><Download size={16} /> PDF</button>
+                    {budget.status === 'draft' ? <button className="button secondary" onClick={() => changeStatus(budget, 'sent')} type="button"><Send size={16} /> Enviado</button> : null}
+                    {budget.status !== 'approved' && budget.status !== 'converted' ? <button className="button secondary" onClick={() => changeStatus(budget, 'approved')} type="button"><CheckCircle2 size={16} /> Aprobar</button> : null}
+                    {budget.status !== 'rejected' && budget.status !== 'converted' ? <button className="button ghost" onClick={() => changeStatus(budget, 'rejected')} type="button"><XCircle size={16} /> Rechazar</button> : null}
+                    {budget.status === 'approved' ? <button className="button primary" onClick={() => convert(budget)} type="button"><PackagePlus size={16} /> Convertir en reserva</button> : null}
+                  </div>
+                </article>
+              ))}
             </div>
-            <div className="event-budget-actions">
-              <button className="button ghost" onClick={() => { setEditingBudget(budget); setShowForm(true) }} type="button"><Edit3 size={16} /> Ver detalle</button>
-              <button className="button ghost" onClick={() => { setEditingBudget(budget); setShowForm(true) }} type="button"><Edit3 size={16} /> Editar</button>
-              <button className="button ghost" onClick={() => downloadEventBudgetPdf(budget)} type="button"><Download size={16} /> PDF</button>
-              {budget.status === 'draft' ? <button className="button secondary" onClick={() => changeStatus(budget, 'sent')} type="button"><Send size={16} /> Enviado</button> : null}
-              {budget.status !== 'approved' && budget.status !== 'converted' ? <button className="button secondary" onClick={() => changeStatus(budget, 'approved')} type="button"><CheckCircle2 size={16} /> Aprobar</button> : null}
-              {budget.status !== 'rejected' && budget.status !== 'converted' ? <button className="button ghost" onClick={() => changeStatus(budget, 'rejected')} type="button"><XCircle size={16} /> Rechazar</button> : null}
-              {budget.status === 'approved' ? <button className="button primary" onClick={() => convert(budget)} type="button"><PackagePlus size={16} /> Convertir en reserva</button> : null}
-            </div>
-          </article>
-        ))}
-      </div>
+          </div>
+        ) : null}
+      </section>
       {showForm ? <BudgetFormModal budget={editingBudget} onClose={() => setShowForm(false)} /> : null}
       {showConfig ? <BudgetConfigPanel onClose={() => setShowConfig(false)} /> : null}
       {showCatalog ? <DecorationCatalogModal decorations={decorations} onClose={() => setShowCatalog(false)} /> : null}
