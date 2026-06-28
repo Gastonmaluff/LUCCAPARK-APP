@@ -21,6 +21,7 @@ import {
   extendVisitTimeSecure as extendVisit,
   finishVisitSecure as finishVisit,
 } from './visits'
+import { resetOperationalTestDataSecure as resetOperationalData } from './adminReset'
 
 type SecureHandler = (uid: string | null | undefined, data: unknown) => Promise<unknown>
 
@@ -55,3 +56,4 @@ export const extendVisitTimeSecure = callable('extendVisitTimeSecure', extendVis
 export const finishVisitSecure = callable('finishVisitSecure', finishVisit)
 
 export const registerEventPaymentSecure = callable('registerEventPaymentSecure', registerEventPayment)
+export const resetOperationalTestData = callable('resetOperationalTestData', resetOperationalData)

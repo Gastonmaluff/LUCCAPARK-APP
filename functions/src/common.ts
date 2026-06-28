@@ -50,7 +50,7 @@ const stableValue = (value: unknown): unknown => {
   return value
 }
 
-const digest = (value: unknown) =>
+export const digest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(stableValue(value))).digest('hex')
 
 const requireIdempotencyKey = (value: unknown) => {
@@ -77,6 +77,23 @@ const actorFromProfile = (uid: string, data: DocumentData, roles: readonly UserR
   }
 }
 
+export const requireActor = async (uid: string | null | undefined, roles: readonly UserRole[]): Promise<Actor> => {
+  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesion para continuar.')
+  const profileSnapshot = await db.collection('users').doc(uid).get()
+  if (!profileSnapshot.exists) {
+    throw new HttpsError('permission-denied', 'No existe un perfil autorizado para esta cuenta.')
+  }
+  return actorFromProfile(uid, profileSnapshot.data() ?? {}, roles)
+}
+
+export const assertSystemOperational = async (transaction: Transaction) => {
+  const maintenanceSnapshot = await transaction.get(db.collection('systemFlags').doc('maintenance'))
+  const maintenance = maintenanceSnapshot.data() ?? {}
+  if (maintenance.active === true) {
+    throw new HttpsError('failed-precondition', 'El sistema esta en mantenimiento administrativo. Intenta nuevamente en unos minutos.')
+  }
+}
+
 export const executeIdempotent = async <T>(options: IdempotentOptions<T>): Promise<T> => {
   if (!options.uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesion para continuar.')
   const key = requireIdempotencyKey(options.idempotencyKey)
@@ -95,6 +112,8 @@ export const executeIdempotent = async <T>(options: IdempotentOptions<T>): Promi
       transaction.get(profileRef),
       transaction.get(operationRef),
     ])
+
+    await assertSystemOperational(transaction)
 
     if (!profileSnapshot.exists) {
       throw new HttpsError('permission-denied', 'No existe un perfil autorizado para esta cuenta.')
