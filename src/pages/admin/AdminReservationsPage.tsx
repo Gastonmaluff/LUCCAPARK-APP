@@ -23,6 +23,11 @@ import {
 } from '../../utils/eventCapacity'
 import { getEventFinancialLabel, getEventPaidAmount, getEventPendingAmount } from '../../utils/eventFinance'
 import { formatGuarani } from '../../utils/money'
+import {
+  canSelectReservationCalendarDay,
+  getReservationCalendarAvailabilityLabel,
+  getReservationCalendarDayStatus,
+} from '../../utils/reservationCalendar'
 import { updateEventStatus } from '../../services/eventService'
 import type { LuccaEvent } from '../../types'
 
@@ -344,8 +349,10 @@ export function AdminReservationsPage() {
               const dayEvents = sortedEvents.filter((event) => event.date === day.dateKey)
               const primaryEvent = dayEvents.find(isEventBlockingCalendar)
               const isToday = day.dateKey === todayKey
-              const isPast = day.dateKey < todayKey
-              const statusClass = primaryEvent ? `occupied ${primaryEvent.status}` : isPast ? 'past' : 'available'
+              const dayStatus = getReservationCalendarDayStatus(day, todayKey)
+              const isSelectable = canSelectReservationCalendarDay(day, todayKey)
+              const isUnavailable = !isSelectable
+              const statusClass = isUnavailable ? dayStatus : primaryEvent ? `occupied ${primaryEvent.status}` : 'available'
               return (
                 <button
                   className={[
@@ -355,7 +362,7 @@ export function AdminReservationsPage() {
                     isToday ? 'today' : '',
                     selectedDayKey === day.dateKey ? 'selected' : '',
                   ].join(' ')}
-                  disabled={isPast}
+                  disabled={!isSelectable}
                   key={day.dateKey}
                   onClick={() => setSelectedDayKey(day.dateKey)}
                   type="button"
@@ -368,7 +375,7 @@ export function AdminReservationsPage() {
                       {dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ''}
                     </span>
                   ) : (
-                    <span className="calendar-event-chip available-chip">{isPast ? 'No disponible' : 'Disponible'}</span>
+                    <span className="calendar-event-chip available-chip">{getReservationCalendarAvailabilityLabel(day, todayKey)}</span>
                   )}
                 </button>
               )

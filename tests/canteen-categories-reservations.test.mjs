@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict'
 import { readFile, stat } from 'node:fs/promises'
 import { describe, test } from 'node:test'
+import vm from 'node:vm'
+import ts from 'typescript'
 
 const read = (path) => readFile(path, 'utf8')
+
+const loadTsModule = async (path) => {
+  const source = await read(path)
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText
+  const context = { exports: {} }
+  vm.runInNewContext(output, context)
+  return context.exports
+}
 
 describe('categorias dinamicas de Cantina', () => {
   test('no existe configuracion hardcodeada de categorias', async () => {
@@ -138,6 +153,50 @@ describe('ingreso seguro de stock', () => {
 })
 
 describe('reservas y presupuestos', () => {
+  test('dia pasado queda no disponible y no seleccionable', async () => {
+    const calendar = await loadTsModule('src/utils/reservationCalendar.ts')
+    const day = { dateKey: '2026-06-24', isCurrentMonth: true }
+    assert.equal(calendar.getReservationCalendarDayStatus(day, '2026-06-25'), 'past')
+    assert.equal(calendar.canSelectReservationCalendarDay(day, '2026-06-25'), false)
+    assert.equal(calendar.getReservationCalendarAvailabilityLabel(day, '2026-06-25'), 'No disponible')
+  })
+
+  test('dia de hoy queda seleccionable en el mes visible', async () => {
+    const calendar = await loadTsModule('src/utils/reservationCalendar.ts')
+    const day = { dateKey: '2026-06-25', isCurrentMonth: true }
+    assert.equal(calendar.getReservationCalendarDayStatus(day, '2026-06-25'), 'today')
+    assert.equal(calendar.canSelectReservationCalendarDay(day, '2026-06-25'), true)
+    assert.equal(calendar.getReservationCalendarAvailabilityLabel(day, '2026-06-25'), 'Disponible')
+  })
+
+  test('dia futuro del mes visible queda disponible', async () => {
+    const calendar = await loadTsModule('src/utils/reservationCalendar.ts')
+    const day = { dateKey: '2026-06-30', isCurrentMonth: true }
+    assert.equal(calendar.getReservationCalendarDayStatus(day, '2026-06-25'), 'future')
+    assert.equal(calendar.canSelectReservationCalendarDay(day, '2026-06-25'), true)
+  })
+
+  test('dia del mes anterior visible queda gris y bloqueado', async () => {
+    const calendar = await loadTsModule('src/utils/reservationCalendar.ts')
+    const day = { dateKey: '2026-05-31', isCurrentMonth: false }
+    assert.equal(calendar.getReservationCalendarDayStatus(day, '2026-06-25'), 'outside')
+    assert.equal(calendar.canSelectReservationCalendarDay(day, '2026-06-25'), false)
+  })
+
+  test('dia del mes siguiente visible queda gris y bloqueado', async () => {
+    const calendar = await loadTsModule('src/utils/reservationCalendar.ts')
+    const day = { dateKey: '2026-07-01', isCurrentMonth: false }
+    assert.equal(calendar.getReservationCalendarDayStatus(day, '2026-06-25'), 'outside')
+    assert.equal(calendar.canSelectReservationCalendarDay(day, '2026-06-25'), false)
+  })
+
+  test('al navegar al mes siguiente el dia futuro del mes visible queda disponible', async () => {
+    const calendar = await loadTsModule('src/utils/reservationCalendar.ts')
+    const day = { dateKey: '2026-07-01', isCurrentMonth: true }
+    assert.equal(calendar.getReservationCalendarDayStatus(day, '2026-06-25'), 'future')
+    assert.equal(calendar.canSelectReservationCalendarDay(day, '2026-06-25'), true)
+  })
+
   test('la fecha actual usa America/Asuncion', async () => {
     const source = await read('src/utils/asuncionDate.ts')
     assert.match(source, /America\/Asuncion/)
@@ -158,7 +217,7 @@ describe('reservas y presupuestos', () => {
 
   test('el calendario deshabilita dias pasados', async () => {
     const source = await read('src/pages/admin/AdminReservationsPage.tsx')
-    assert.match(source, /disabled=\{isPast\}/)
+    assert.match(source, /disabled=\{!isSelectable\}/)
     assert.match(source, /No disponible/)
   })
 

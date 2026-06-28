@@ -3685,7 +3685,9 @@ img {
 }
 
 .reservation-day.outside {
-  opacity: 0.42;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #94a3b8;
 }
 
 .reservation-day.available {
@@ -3710,9 +3712,21 @@ img {
 .reservation-day.occupied.cancelled,
 .reservation-day.occupied.finished,
 .reservation-day.past {
-  background: #f8fafc;
-  border-color: var(--line);
+  background: #f1f5f9;
+  border-color: #cbd5e1;
   color: #94a3b8;
+}
+
+.reservation-day.outside .calendar-event-chip,
+.reservation-day.past .calendar-event-chip {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.reservation-day.outside .available-chip,
+.reservation-day.past .available-chip {
+  background: #e2e8f0;
+  color: #64748b;
 }
 
 .reservation-day.today {
