@@ -25,7 +25,6 @@ import { getEventFinancialLabel, getEventPaidAmount, getEventPendingAmount } fro
 import { formatGuarani } from '../../utils/money'
 import {
   canSelectReservationCalendarDay,
-  getReservationCalendarAvailabilityLabel,
   getReservationCalendarDayStatus,
 } from '../../utils/reservationCalendar'
 import { updateEventStatus } from '../../services/eventService'
@@ -349,16 +348,18 @@ export function AdminReservationsPage() {
               const dayEvents = sortedEvents.filter((event) => event.date === day.dateKey)
               const primaryEvent = dayEvents.find(isEventBlockingCalendar)
               const isToday = day.dateKey === todayKey
+              const isPast = day.dateKey < todayKey
+              const isOutsideMonth = !day.isCurrentMonth
               const dayStatus = getReservationCalendarDayStatus(day, todayKey)
               const isSelectable = canSelectReservationCalendarDay(day, todayKey)
-              const isUnavailable = !isSelectable
+              const isUnavailable = isPast || isOutsideMonth
               const statusClass = isUnavailable ? dayStatus : primaryEvent ? `occupied ${primaryEvent.status}` : 'available'
               return (
                 <button
                   className={[
                     'reservation-day',
                     statusClass,
-                    day.isCurrentMonth ? '' : 'outside',
+                    isOutsideMonth ? 'outside' : '',
                     isToday ? 'today' : '',
                     selectedDayKey === day.dateKey ? 'selected' : '',
                   ].join(' ')}
@@ -375,7 +376,9 @@ export function AdminReservationsPage() {
                       {dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ''}
                     </span>
                   ) : (
-                    <span className="calendar-event-chip available-chip">{getReservationCalendarAvailabilityLabel(day, todayKey)}</span>
+                    <span className={`calendar-event-chip ${isUnavailable ? 'unavailable-chip' : 'available-chip'}`}>
+                      {isUnavailable ? 'No disponible' : 'Disponible'}
+                    </span>
                   )}
                 </button>
               )

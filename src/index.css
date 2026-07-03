@@ -3685,9 +3685,9 @@ img {
 }
 
 .reservation-day.outside {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #94a3b8;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #9ca3af;
 }
 
 .reservation-day.available {
@@ -3712,9 +3712,19 @@ img {
 .reservation-day.occupied.cancelled,
 .reservation-day.occupied.finished,
 .reservation-day.past {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #94a3b8;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #9ca3af;
+}
+
+.reservation-day.past .day-number,
+.reservation-day.outside .day-number {
+  color: #9ca3af;
+}
+
+.reservation-day.past small,
+.reservation-day.outside small {
+  color: #6b7280;
 }
 
 .reservation-day.outside .calendar-event-chip,
@@ -3770,6 +3780,13 @@ img {
 .calendar-event-chip.available-chip {
   background: rgba(120, 191, 19, 0.13);
   color: var(--green-dark);
+}
+
+.calendar-event-chip.unavailable-chip {
+  background: #e5e7eb;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  box-shadow: none;
 }
 
 .selected-day-panel {
@@ -5133,6 +5150,70 @@ img {
   gap: 14px;
   margin: 16px 0;
   padding: 16px;
+}
+
+.inventory-category-manager {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.inventory-category-header {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  justify-content: space-between;
+  padding: 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.inventory-category-header > span:first-child {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.inventory-category-header strong,
+.inventory-category-header small {
+  display: block;
+}
+
+.inventory-category-header small {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.inventory-category-manager .section-subheader {
+  display: none;
+}
+
+.inventory-category-manager.collapsed .form-alert,
+.inventory-category-manager.collapsed .inventory-category-form,
+.inventory-category-manager.collapsed .category-admin-list {
+  display: none;
+}
+
+.inventory-category-manager.expanded .form-alert,
+.inventory-category-manager.expanded .inventory-category-form,
+.inventory-category-manager.expanded .category-admin-list {
+  margin: 14px 16px 0;
+}
+
+.inventory-category-manager.expanded .category-admin-list {
+  margin-bottom: 16px;
+}
+
+.inventory-actions {
+  justify-content: flex-start;
 }
 
 .inventory-history-panel {
@@ -8018,6 +8099,17 @@ img {
   .report-action-row .button,
   .event-budget-actions .button {
     justify-content: stretch;
+    width: 100%;
+  }
+
+  .inventory-category-header,
+  .inventory-history-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .inventory-actions .button {
     width: 100%;
   }
 

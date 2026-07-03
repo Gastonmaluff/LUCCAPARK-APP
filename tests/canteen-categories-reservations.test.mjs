@@ -67,6 +67,16 @@ describe('categorias dinamicas de Cantina', () => {
     assert.match(source, /Categorías de Cantina/)
     assert.match(source, /upsertCanteenCategory/)
     assert.match(source, /deleteCanteenCategory/)
+    assert.match(source, /inventory-category-header/)
+    assert.match(source, /isCategoryManagerOpen/)
+  })
+
+  test('categorias de inventario inicia contraida y no duplica agregar producto', async () => {
+    const source = await read('src/components/canteen/ProductManager.tsx')
+    assert.match(source, /useState\(false\)/)
+    assert.match(source, /inventory-category-manager/)
+    assert.equal((source.match(/Agregar producto/g) ?? []).length, 1)
+    assert.ok(source.indexOf('inventory-category-manager') < source.indexOf('Agregar producto'))
   })
 
   test('el formulario de producto usa categorias activas dinamicas', async () => {
@@ -249,12 +259,44 @@ describe('reservas y presupuestos', () => {
   test('los dias pasados se comunican como no disponibles', async () => {
     const source = await read('src/pages/admin/AdminReservationsPage.tsx')
     assert.match(source, /Las fechas pasadas no aceptan nuevas reservas/)
-    assert.match(source, /available-chip/)
+    assert.match(source, /unavailable-chip/)
+    assert.match(source, /isUnavailable \? 'No disponible' : 'Disponible'/)
+  })
+
+  test('el calendario pinta no disponible en gris y conserva disponible en verde', async () => {
+    const source = await read('src/index.css')
+    const unavailableChip = source.match(/\.calendar-event-chip\.unavailable-chip\s*\{[^}]+\}/s)?.[0] ?? ''
+    const availableChip = source.match(/\.calendar-event-chip\.available-chip\s*\{[^}]+\}/s)?.[0] ?? ''
+    assert.match(unavailableChip, /#e5e7eb/)
+    assert.match(unavailableChip, /#6b7280/)
+    assert.doesNotMatch(unavailableChip, /green|120,\s*191|var\(--green/)
+    assert.match(availableChip, /120,\s*191|var\(--green/)
+  })
+
+  test('dias pasados y externos usan tratamiento gris sin verde', async () => {
+    const source = await read('src/index.css')
+    const outsideBlock = source.match(/\.reservation-day\.outside\s*\{[^}]+\}/s)?.[0] ?? ''
+    const pastBlock = source.match(/\.reservation-day\.occupied\.cancelled,[\s\S]*?\.reservation-day\.past\s*\{[^}]+\}/s)?.[0] ?? ''
+    assert.match(outsideBlock, /#f3f4f6/)
+    assert.match(outsideBlock, /#9ca3af/)
+    assert.match(pastBlock, /#f3f4f6/)
+    assert.doesNotMatch(`${outsideBlock}\n${pastBlock}`, /green|120,\s*191|var\(--green/)
+  })
+
+  test('hoy conserva tratamiento especial y dias externos se bloquean', async () => {
+    const css = await read('src/index.css')
+    const source = await read('src/pages/admin/AdminReservationsPage.tsx')
+    assert.match(css, /\.reservation-day\.today/)
+    assert.match(css, /\.today-badge/)
+    assert.match(source, /isOutsideMonth = !day\.isCurrentMonth/)
+    assert.match(source, /const isUnavailable = isPast \|\| isOutsideMonth/)
   })
 
   test('el CSS contiene estilos mobile-friendly para categorias e historial', async () => {
     const source = await read('src/index.css')
     assert.match(source, /canteen-category-tabs/)
+    assert.match(source, /inventory-category-header/)
+    assert.match(source, /inventory-actions \.button/)
     assert.match(source, /stock-history-row/)
     assert.match(source, /budget-collapsible-section/)
   })

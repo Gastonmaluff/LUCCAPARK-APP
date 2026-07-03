@@ -87,6 +87,7 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('Todas')
   const [categoryForm, setCategoryForm] = useState({ id: '', isActive: true, name: '', sortOrder: '' })
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
   const [stockTarget, setStockTarget] = useState<CanteenProduct | null>(null)
   const [stockForm, setStockForm] = useState({ quantity: '', reason: '' })
   const [isStockHistoryOpen, setIsStockHistoryOpen] = useState(false)
@@ -312,21 +313,17 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
 
       {isOpen ? (
         <>
-          <div className="module-actions inventory-actions">
-            <button
-              className="button primary"
-              onClick={() => {
-                setForm(emptyProduct)
-                setImageFile(null)
-                setIsFormOpen(true)
-              }}
-              type="button"
-            >
-              Agregar producto
+          <section className={`inventory-category-manager ${isCategoryManagerOpen ? 'expanded' : 'collapsed'}`}>
+            <button className="inventory-category-header" onClick={() => setIsCategoryManagerOpen((current) => !current)} type="button">
+              <span>
+                {isCategoryManagerOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                <span>
+                  <strong>Categorias de Cantina</strong>
+                  <small>Crear, ordenar y activar categorias del inventario.</small>
+                </span>
+              </span>
+              {categoriesResult.isLoading ? <StatusPill tone="info">Cargando</StatusPill> : <StatusPill tone="available">{categoryOptions.filter((item) => item.isActive !== false).length} categorias</StatusPill>}
             </button>
-          </div>
-
-          <section className="inventory-category-manager">
             <div className="section-subheader">
               <div>
                 <h3>Categorías de Cantina</h3>
@@ -368,6 +365,20 @@ export function ProductManager({ defaultOpen = false, error, isLoading, products
               ))}
             </div>
           </section>
+
+          <div className="module-actions inventory-actions">
+            <button
+              className="button primary"
+              onClick={() => {
+                setForm(emptyProduct)
+                setImageFile(null)
+                setIsFormOpen(true)
+              }}
+              type="button"
+            >
+              Agregar producto
+            </button>
+          </div>
 
           {message ? (
             <div className={message.includes('No se') || message.includes('Completa') || message.includes('permiso') ? 'form-alert error' : 'form-alert success'}>
