@@ -104,6 +104,10 @@ export const chargeVisit = async (visit: ActiveVisit, input: ChargeVisitInput) =
 }
 
 export const extendVisitTime = async (visit: ActiveVisit, input: { minutes: 30 | 60; amount: number }) => {
+  if (visit.isUnlimited) {
+    throw new Error('El plan libre no se puede extender.')
+  }
+
   const storageMode = await getVisitStorageMode()
   if (storageMode === 'local') return extendLocalVisitTime(visit, input)
 

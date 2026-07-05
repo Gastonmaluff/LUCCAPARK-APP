@@ -7,11 +7,13 @@ import { formatGuarani } from '../../utils/money'
 import { getVisitGroupBillingSummary } from '../../utils/visitBilling'
 import { formatGroupChildNames } from '../../utils/visitGroups'
 import {
+  formatElapsedTime,
   formatOverdueDuration,
   formatRemainingTime,
   formatVisitStartTime,
   formatWarningMinutes,
   getVisitTimeStatus,
+  missingVisitStartTimeLabel,
 } from '../../utils/visitTime'
 import { ConsolidatedGroupCheckoutModal } from './ConsolidatedGroupCheckoutModal'
 import { VisitConsumptionPanel } from './VisitConsumptionPanel'
@@ -27,7 +29,14 @@ const statusLabel = (visit: ActiveVisit, now: Date) => {
   const status = getVisitTimeStatus(visit, now)
   if (status === 'expired') return { status, title: 'Vencido', detail: formatOverdueDuration(visit, now) }
   if (status === 'warning') return { status, title: 'Vence en', detail: formatWarningMinutes(visit, now) }
-  if (status === 'unlimited') return { status, title: 'Libre', detail: 'Sin límite' }
+  if (status === 'unlimited') {
+    const elapsedTime = formatElapsedTime(visit.startedAt, now)
+    return {
+      status,
+      title: elapsedTime,
+      detail: elapsedTime === missingVisitStartTimeLabel ? 'Plan libre' : 'Libre · transcurrido',
+    }
+  }
   return { status, title: formatRemainingTime(visit, now), detail: 'restantes' }
 }
 

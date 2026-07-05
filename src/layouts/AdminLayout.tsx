@@ -13,6 +13,7 @@ import {
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { canAccessAdminModule, type AdminModule } from '../auth/accessControl'
+import { AdminSessionActions } from '../components/AdminSessionActions'
 import { BrandLogo } from '../components/BrandLogo'
 import { useUserProfile } from '../hooks/useUserProfile'
 
@@ -30,7 +31,7 @@ const adminNavItems: Array<{ label: string; to: string; icon: typeof LayoutDashb
 
 export function AdminLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const { profile } = useUserProfile()
+  const { profile, profileStatus, user } = useUserProfile()
   const visibleNavItems = profile ? adminNavItems.filter((item) => canAccessAdminModule(profile.role, item.module)) : []
 
   return (
@@ -59,6 +60,7 @@ export function AdminLayout() {
               </NavLink>
             ))}
           </nav>
+          <AdminSessionActions profile={profile} profileStatus={profileStatus} user={user} />
         </header>
         <Outlet />
       </section>

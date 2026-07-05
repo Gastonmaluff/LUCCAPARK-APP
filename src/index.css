@@ -752,6 +752,67 @@ img {
   min-width: 0;
 }
 
+.admin-session-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.admin-session-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: inline-flex;
+  gap: 10px;
+  min-width: min(260px, 32vw);
+  padding: 8px 10px;
+}
+
+.admin-session-card .session-avatar {
+  align-items: center;
+  background: rgba(8, 169, 181, 0.13);
+  border-radius: 999px;
+  color: var(--turquoise);
+  display: inline-flex;
+  font-weight: 950;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.admin-session-card strong,
+.admin-session-card small {
+  display: block;
+}
+
+.admin-session-card strong {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-session-card small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.admin-logout-button {
+  min-height: 42px;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.admin-session-error {
+  color: var(--red);
+  font-weight: 900;
+}
+
 .nav-chip {
   align-items: center;
   border-bottom: 2px solid transparent;
@@ -839,6 +900,48 @@ img {
   display: flex;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.session-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.current-session-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: inline-flex;
+  gap: 10px;
+  min-width: min(320px, 100%);
+  padding: 10px 12px;
+}
+
+.session-avatar {
+  align-items: center;
+  background: rgba(8, 169, 181, 0.13);
+  border-radius: 999px;
+  color: var(--turquoise);
+  display: inline-flex;
+  font-weight: 950;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.current-session-card strong,
+.current-session-card small {
+  display: block;
+}
+
+.current-session-card small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .panel-title {
@@ -3065,6 +3168,12 @@ img {
 .tv-list-row.unlimited .tv-time-icon,
 .tv-list-row.unlimited .tv-row-time {
   color: var(--turquoise);
+}
+
+.tv-list-row.unlimited .tv-row-time {
+  font-family: inherit;
+  font-size: clamp(1.4rem, 2.55vw, 3.05rem);
+  letter-spacing: 0;
 }
 
 .tv-normal-page .tv-empty {
@@ -7611,6 +7720,19 @@ img {
     display: grid;
   }
 
+  .panel-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .session-actions,
+  .current-session-card,
+  .session-actions .button {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
   .reception-header-actions {
     justify-content: flex-start;
   }
@@ -7752,8 +7874,21 @@ img {
     display: inline-flex;
   }
 
+  .admin-session-actions {
+    order: 2;
+  }
+
+  .admin-session-card {
+    display: none;
+  }
+
+  .admin-logout-button span {
+    display: none;
+  }
+
   .internal-nav {
     display: none;
+    order: 3;
   }
 
   .internal-nav.open {

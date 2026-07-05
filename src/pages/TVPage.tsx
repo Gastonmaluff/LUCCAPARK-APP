@@ -32,7 +32,7 @@ const formatTvTime = (visit: ActiveVisit, now: Date) => {
   const remainingMs = calculateRemainingMs(visit, now)
 
   if (remainingMs === null) {
-    return '--'
+    return 'LIBRE'
   }
 
   if (remainingMs <= 0) {
@@ -90,7 +90,9 @@ const sortVisitsForTv = (visits: ActiveVisit[], now: Date) =>
       return remainingA - remainingB
     }
 
-    return a.startedAt.getTime() - b.startedAt.getTime()
+    const startedA = Number.isNaN(a.startedAt.getTime()) ? Number.MAX_SAFE_INTEGER : a.startedAt.getTime()
+    const startedB = Number.isNaN(b.startedAt.getTime()) ? Number.MAX_SAFE_INTEGER : b.startedAt.getTime()
+    return startedA - startedB || a.childName.localeCompare(b.childName, 'es')
   })
 
 const getVisibleVisitsForTv = (visits: ActiveVisit[], now: Date) => {

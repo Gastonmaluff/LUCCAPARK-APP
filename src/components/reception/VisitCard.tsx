@@ -6,11 +6,13 @@ import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
 import { getVisitBillingSummary } from '../../utils/visitBilling'
 import {
+  formatElapsedTime,
   formatOverdueDuration,
   formatRemainingTime,
   formatVisitStartTime,
   formatWarningMinutes,
   getVisitTimeStatus,
+  missingVisitStartTimeLabel,
 } from '../../utils/visitTime'
 
 interface VisitCardProps {
@@ -36,7 +38,11 @@ const statusLabel = (status: ReturnType<typeof getVisitTimeStatus>, visit: Activ
     return { title: 'Vence en', detail: formatWarningMinutes(visit, now) }
   }
   if (status === 'unlimited') {
-    return { title: 'Libre', detail: 'Sin límite' }
+    const elapsedTime = formatElapsedTime(visit.startedAt, now)
+    return {
+      title: elapsedTime,
+      detail: elapsedTime === missingVisitStartTimeLabel ? 'Plan libre' : 'Libre · transcurrido',
+    }
   }
   return { title: formatRemainingTime(visit, now), detail: 'restantes' }
 }

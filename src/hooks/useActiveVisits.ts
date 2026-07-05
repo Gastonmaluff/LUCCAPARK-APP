@@ -63,7 +63,7 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   planName: String(data.planName ?? '1 hora'),
   durationMinutes: data.durationMinutes === null ? null : Number(data.durationMinutes ?? 60),
   isUnlimited: Boolean(data.isUnlimited),
-  startedAt: dateFromTimestamp(data.startedAt) ?? new Date(),
+  startedAt: dateFromTimestamp(data.startedAt) ?? new Date(Number.NaN),
   expectedEndAt: dateFromTimestamp(data.expectedEndAt),
   paymentStatus: (data.paymentStatus as ActiveVisit['paymentStatus']) ?? 'pending',
   paymentMethod: (data.paymentMethod as ActiveVisit['paymentMethod']) ?? '',
