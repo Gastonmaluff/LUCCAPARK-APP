@@ -756,61 +756,156 @@ img {
   align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
-  gap: 10px;
   justify-content: flex-end;
   min-width: 0;
 }
 
-.admin-session-card {
+.admin-account-trigger {
   align-items: center;
-  background: #f8fafc;
+  background: #fff;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
+  color: #475569;
+  cursor: pointer;
   display: inline-flex;
-  gap: 10px;
-  min-width: min(260px, 32vw);
-  padding: 8px 10px;
+  height: 42px;
+  justify-content: center;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+  width: 42px;
 }
 
-.admin-session-card .session-avatar {
+.admin-account-trigger:hover,
+.admin-account-trigger:focus-visible {
+  background: #f8fafc;
+  border-color: rgba(255, 91, 15, 0.35);
+  color: var(--orange);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.account-modal-backdrop {
+  align-items: flex-start;
+  background: rgba(15, 23, 42, 0.08);
+  display: flex;
+  inset: 0;
+  justify-content: flex-end;
+  padding: 82px max(24px, calc((100vw - 1280px) / 2 + 24px)) 24px 24px;
+  position: fixed;
+  z-index: 80;
+}
+
+.account-modal {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 18px;
+  width: 340px;
+}
+
+.account-modal-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.account-modal-avatar {
   align-items: center;
   background: rgba(8, 169, 181, 0.13);
   border-radius: 999px;
   color: var(--turquoise);
   display: inline-flex;
+  font-size: 1.05rem;
   font-weight: 950;
-  height: 32px;
+  height: 42px;
   justify-content: center;
-  width: 32px;
+  width: 42px;
 }
 
-.admin-session-card strong,
-.admin-session-card small {
+.account-modal-close {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.account-modal-close:hover,
+.account-modal-close:focus-visible {
+  background: #f8fafc;
+  color: var(--ink);
+  outline: 0;
+}
+
+.account-modal-user strong,
+.account-modal-user span {
   display: block;
 }
 
-.admin-session-card strong {
-  max-width: 170px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.account-modal-user strong {
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 950;
 }
 
-.admin-session-card small {
+.account-modal-user span {
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 800;
+  font-size: 0.9rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
 }
 
-.admin-logout-button {
-  min-height: 42px;
-  padding: 10px 12px;
-  white-space: nowrap;
+.account-modal-meta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
 }
 
-.admin-session-error {
-  color: var(--red);
+.account-modal-meta span {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.account-modal-meta small,
+.account-modal-meta strong {
+  display: block;
+}
+
+.account-modal-meta small {
+  color: var(--muted);
+  font-size: 0.73rem;
   font-weight: 900;
+  text-transform: uppercase;
+}
+
+.account-modal-meta strong {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.account-modal-error {
+  margin: 0;
+}
+
+.account-modal-signout {
+  justify-content: center;
+  min-height: 46px;
+  width: 100%;
 }
 
 .nav-chip {
@@ -7878,12 +7973,13 @@ img {
     order: 2;
   }
 
-  .admin-session-card {
-    display: none;
+  .account-modal-backdrop {
+    justify-content: center;
+    padding: 72px 16px 16px;
   }
 
-  .admin-logout-button span {
-    display: none;
+  .account-modal {
+    width: min(100%, 360px);
   }
 
   .internal-nav {
