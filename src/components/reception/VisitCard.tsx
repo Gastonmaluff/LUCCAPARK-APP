@@ -4,6 +4,7 @@ import { ConsolidatedCheckoutModal } from './ConsolidatedCheckoutModal'
 import { extendVisitTime, finishVisit } from '../../services/visitService'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
+import { isPendingUnlimitedVisit } from '../../utils/unlimitedPricing'
 import { getVisitBillingSummary } from '../../utils/visitBilling'
 import {
   formatElapsedTime,
@@ -56,7 +57,8 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
   const timeStatus = getVisitTimeStatus(visit, now)
   const timeCopy = statusLabel(timeStatus, visit, now)
   const billing = getVisitBillingSummary(visit, canteenOrders)
-  const hasPendingBalance = billing.totalPendingAmount > 0
+  const hasPendingUnlimited = isPendingUnlimitedVisit(visit)
+  const hasPendingBalance = billing.totalPendingAmount > 0 || hasPendingUnlimited
   const canExtendTime = !visit.isUnlimited
 
   const finishWithoutDebt = async () => {
@@ -116,8 +118,12 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
       <div className="visit-account-block">
         <div className="account-line">
           <span>Parque</span>
-          <strong className={billing.pendingParkAmount > 0 ? 'pending' : 'paid'}>
-            {billing.pendingParkAmount > 0 ? `${formatGuarani(billing.pendingParkAmount)} pendiente` : 'Pagado'}
+          <strong className={billing.pendingParkAmount > 0 || hasPendingUnlimited ? 'pending' : 'paid'}>
+            {hasPendingUnlimited
+              ? 'Monto a definir al finalizar'
+              : billing.pendingParkAmount > 0
+                ? `${formatGuarani(billing.pendingParkAmount)} pendiente`
+                : 'Pagado'}
           </strong>
         </div>
         <div className="account-line">
@@ -132,7 +138,9 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
         </div>
         <div className="account-line total">
           <span>Total pendiente</span>
-          <strong className={billing.totalPendingAmount > 0 ? 'pending' : 'paid'}>{formatGuarani(billing.totalPendingAmount)}</strong>
+          <strong className={billing.totalPendingAmount > 0 || hasPendingUnlimited ? 'pending' : 'paid'}>
+            {hasPendingUnlimited && billing.totalPendingAmount <= 0 ? 'A definir' : formatGuarani(billing.totalPendingAmount)}
+          </strong>
         </div>
       </div>
 

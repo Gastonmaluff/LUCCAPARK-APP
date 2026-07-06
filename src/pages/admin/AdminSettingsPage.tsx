@@ -6,6 +6,7 @@ import { BackupSettingsPanel } from '../../components/settings/BackupSettingsPan
 import { parseGoogleMapsInput } from '../../config/app'
 import { usePublicPageConfig } from '../../hooks/usePublicPageConfig'
 import { useUserProfile } from '../../hooks/useUserProfile'
+import { useVisitPricing } from '../../hooks/useVisitPricing'
 import { useUsers } from '../../hooks/useUsers'
 import { logActivity } from '../../services/activityLogService'
 import { subscribeActivityLogs, type ActivityAction, type ActivityLogRecord } from '../../services/activityLogService'
@@ -17,6 +18,8 @@ import {
   type PublicPageConfig,
 } from '../../services/publicPageService'
 import { saveUserProfile } from '../../services/userService'
+import { saveVisitPricing } from '../../services/visitPricingService'
+import { formatGuarani } from '../../utils/money'
 import type { UserRole } from '../../types'
 
 const roleOptions: Array<{ label: string; value: UserRole; detail: string }> = [
@@ -332,8 +335,65 @@ export function AdminSettingsPage() {
           <PublicPageEditor config={publicPage.config} error={publicPage.error} isLoading={publicPage.isLoading} />
         ) : null}
       </article>
+      <VisitPricingPanel />
       <BackupSettingsPanel />
     </>
+  )
+}
+
+function VisitPricingPanel() {
+  const pricing = useVisitPricing()
+  const [hourlyRate, setHourlyRate] = useState('')
+  const [status, setStatus] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    setHourlyRate(pricing.config.unlimitedHourlyRate ? String(pricing.config.unlimitedHourlyRate) : '')
+  }, [pricing.config.unlimitedHourlyRate])
+
+  const savePricing = async () => {
+    setStatus(null)
+    setIsSaving(true)
+    try {
+      await saveVisitPricing({ unlimitedHourlyRate: Number(hourlyRate) })
+      setStatus('Tarifa del plan libre guardada.')
+    } catch (saveError) {
+      setStatus(saveError instanceof Error ? saveError.message : 'No se pudo guardar la tarifa.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <article className="panel settings-pricing-panel">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Recepcion</p>
+          <h2>Tarifa del plan Libre</h2>
+          <p className="muted">Se usa como precio por hora al finalizar visitas Libre / sin limite.</p>
+        </div>
+        <strong>{pricing.config.unlimitedHourlyRate ? formatGuarani(pricing.config.unlimitedHourlyRate) : 'Sin tarifa'}</strong>
+      </div>
+      {pricing.error ? <div className="form-alert error">No se pudo cargar la tarifa: {pricing.error}</div> : null}
+      {status ? <div className={status.includes('No se') ? 'form-alert error' : 'form-alert success'}>{status}</div> : null}
+      <div className="form-inline">
+        <label className="field">
+          <span>Tarifa por hora</span>
+          <input
+            disabled={isSaving || pricing.isLoading}
+            min={1}
+            onChange={(event) => setHourlyRate(event.target.value)}
+            placeholder="Ej. 30000"
+            type="number"
+            value={hourlyRate}
+          />
+        </label>
+        <button className="button primary" disabled={isSaving || pricing.isLoading} onClick={savePricing} type="button">
+          <Save size={16} />
+          {isSaving ? 'Guardando...' : 'Guardar tarifa'}
+        </button>
+      </div>
+    </article>
   )
 }
 

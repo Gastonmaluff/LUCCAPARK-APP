@@ -123,6 +123,24 @@ export interface VisitTimeExtension {
   createdByName?: string
 }
 
+export interface UnlimitedVisitPricing {
+  type?: 'unlimited_checkout'
+  startedAt?: Date | null
+  endedAt?: Date | null
+  elapsedMinutes?: number
+  billableHours?: number
+  hourlyRate?: number
+  suggestedAmount?: number
+  finalAmount?: number
+  difference?: number
+  reason?: string
+  adjustedBy?: string | null
+  adjustedByName?: string
+  adjustedByRole?: UserRole | ''
+  adjustedAt?: Date | null
+  sourceIntegrity?: 'secure_backend'
+}
+
 export interface ActiveVisit {
   id: string
   groupEntryId?: string
@@ -161,6 +179,7 @@ export interface ActiveVisit {
   parkPaymentMethod?: PaymentMethod
   defaultAmount?: number | null
   customAmount?: boolean
+  unlimitedPricing?: UnlimitedVisitPricing | null
   notes?: string
   timeExtensions?: VisitTimeExtension[]
   status: 'active'

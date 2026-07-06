@@ -4,7 +4,7 @@ import { getCollectionRef } from '../services/firestoreCollections'
 import { subscribeLocalActiveVisits } from '../services/localVisitStore'
 import { getVisitStorageMode, type VisitStorageMode } from '../services/visitStorageMode'
 import { ensureReceptionSession } from '../services/authSession'
-import type { ActiveVisit } from '../types'
+import type { ActiveVisit, UserRole } from '../types'
 
 const dateFromTimestamp = (value: unknown): Date | null => {
   if (value instanceof Timestamp) {
@@ -37,6 +37,28 @@ const mapTimeExtensions = (value: unknown): ActiveVisit['timeExtensions'] => {
       createdByName: String(record.createdByName ?? ''),
     }
   })
+}
+
+const mapUnlimitedPricing = (value: unknown): ActiveVisit['unlimitedPricing'] => {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  return {
+    type: record.type === 'unlimited_checkout' ? 'unlimited_checkout' : undefined,
+    startedAt: dateFromTimestamp(record.startedAt),
+    endedAt: dateFromTimestamp(record.endedAt),
+    elapsedMinutes: Number(record.elapsedMinutes ?? 0),
+    billableHours: Number(record.billableHours ?? 0),
+    hourlyRate: Number(record.hourlyRate ?? 0),
+    suggestedAmount: Number(record.suggestedAmount ?? 0),
+    finalAmount: Number(record.finalAmount ?? 0),
+    difference: Number(record.difference ?? 0),
+    reason: String(record.reason ?? ''),
+    adjustedBy: record.adjustedBy ? String(record.adjustedBy) : null,
+    adjustedByName: String(record.adjustedByName ?? ''),
+    adjustedByRole: (record.adjustedByRole as UserRole | '') ?? '',
+    adjustedAt: dateFromTimestamp(record.adjustedAt),
+    sourceIntegrity: record.sourceIntegrity === 'secure_backend' ? 'secure_backend' : undefined,
+  }
 }
 
 const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
@@ -77,6 +99,7 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   parkPaymentMethod: (data.parkPaymentMethod as ActiveVisit['parkPaymentMethod']) ?? '',
   defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
   customAmount: Boolean(data.customAmount),
+  unlimitedPricing: mapUnlimitedPricing(data.unlimitedPricing),
   notes: String(data.notes ?? ''),
   timeExtensions: mapTimeExtensions(data.timeExtensions),
   status: 'active',

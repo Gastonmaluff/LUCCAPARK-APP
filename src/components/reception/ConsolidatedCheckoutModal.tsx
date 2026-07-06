@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CreditCard, X } from 'lucide-react'
 import { checkoutVisitBalance } from '../../services/checkoutService'
+import { useVisitPricing } from '../../hooks/useVisitPricing'
 import { formatGuarani } from '../../utils/money'
+import { formatElapsedMinutes, getUnlimitedPricingPreview, isPendingUnlimitedVisit } from '../../utils/unlimitedPricing'
 import { getVisitBillingSummary } from '../../utils/visitBilling'
+import { formatVisitStartTime } from '../../utils/visitTime'
 import { PaymentMethodSelector } from '../payments/PaymentMethodSelector'
 import type { ActiveVisit, CanteenOrder, PaymentMethod } from '../../types'
 
@@ -28,27 +31,56 @@ export function ConsolidatedCheckoutModal({
   const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, ''> | ''>('')
   const [cardType, setCardType] = useState<'debit' | 'credit' | ''>('')
   const [finishVisit, setFinishVisit] = useState(finishByDefault)
+  const [unlimitedFinalAmount, setUnlimitedFinalAmount] = useState('')
+  const [unlimitedReason, setUnlimitedReason] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pricing = useVisitPricing()
   const summary = getVisitBillingSummary(visit, orders)
+  const closeTime = useMemo(() => new Date(), [])
+  const hasPendingUnlimited = isPendingUnlimitedVisit(visit)
+  const unlimitedPreview = hasPendingUnlimited ? getUnlimitedPricingPreview(visit, pricing.config.unlimitedHourlyRate, closeTime) : null
+  const unlimitedFinalValue = hasPendingUnlimited ? Number(unlimitedFinalAmount || unlimitedPreview?.suggestedAmount || 0) : 0
+  const unlimitedDifference = unlimitedPreview ? unlimitedFinalValue - unlimitedPreview.suggestedAmount : 0
+  const totalPendingAmount = summary.totalPendingAmount + (finishVisit && hasPendingUnlimited ? unlimitedFinalValue : 0)
 
   const confirmCheckout = async () => {
-    if (!paymentMethod && summary.totalPendingAmount > 0) {
-      setError('Seleccioná un método de pago.')
+    if (hasPendingUnlimited && !finishVisit) {
+      setError('El plan libre se cobra al finalizar la visita.')
+      return
+    }
+
+    if (hasPendingUnlimited && !unlimitedPreview) {
+      setError(pricing.error || 'Configura la tarifa por hora del plan libre antes de cobrar.')
+      return
+    }
+
+    if (hasPendingUnlimited && (!Number.isFinite(unlimitedFinalValue) || unlimitedFinalValue <= 0)) {
+      setError('El monto final del plan libre debe ser mayor a cero.')
+      return
+    }
+
+    if (hasPendingUnlimited && unlimitedDifference !== 0 && !unlimitedReason.trim()) {
+      setError('Indica el motivo del ajuste del plan libre.')
+      return
+    }
+
+    if (!paymentMethod && totalPendingAmount > 0) {
+      setError('Selecciona un metodo de pago.')
       return
     }
 
     if (paymentMethod === 'card' && !cardType) {
-      setError('Seleccioná si la tarjeta es débito o crédito.')
+      setError('Selecciona si la tarjeta es debito o credito.')
       return
     }
 
-    if (summary.totalPendingAmount <= 0 && !finishVisit) {
+    if (totalPendingAmount <= 0 && !finishVisit) {
       onClose()
       return
     }
 
-    if (allowFinishChoice && finishVisit && !window.confirm(`¿Cobrar y finalizar la visita de ${visit.childName}?`)) {
+    if (allowFinishChoice && finishVisit && !window.confirm(`Cobrar y finalizar la visita de ${visit.childName}?`)) {
       return
     }
 
@@ -62,6 +94,9 @@ export function ConsolidatedCheckoutModal({
         cardType,
         source,
         finishVisit,
+        unlimitedAdjustments: hasPendingUnlimited
+          ? { [visit.id]: { finalAmount: unlimitedFinalValue, reason: unlimitedReason.trim() } }
+          : undefined,
       })
       onDone?.()
       onClose()
@@ -93,8 +128,64 @@ export function ConsolidatedCheckoutModal({
           <h3>Parque</h3>
           <div className="checkout-line">
             <span>{visit.planName}</span>
-            <strong>{summary.pendingParkAmount > 0 ? formatGuarani(summary.pendingParkAmount) : 'Pagado'}</strong>
+            <strong>
+              {hasPendingUnlimited
+                ? 'Monto a definir al finalizar'
+                : summary.pendingParkAmount > 0
+                  ? formatGuarani(summary.pendingParkAmount)
+                  : 'Pagado'}
+            </strong>
           </div>
+
+          {hasPendingUnlimited ? (
+            <div className="unlimited-checkout-box">
+              <div className="checkout-line">
+                <span>Hora de ingreso</span>
+                <strong>{formatVisitStartTime(visit.startedAt)}</strong>
+              </div>
+              <div className="checkout-line">
+                <span>Hora de salida</span>
+                <strong>{formatVisitStartTime(closeTime)}</strong>
+              </div>
+              <div className="checkout-line">
+                <span>Tiempo transcurrido</span>
+                <strong>{unlimitedPreview ? formatElapsedMinutes(unlimitedPreview.elapsedMinutes) : 'Sin tarifa'}</strong>
+              </div>
+              <div className="checkout-line">
+                <span>Horas facturables</span>
+                <strong>{unlimitedPreview ? unlimitedPreview.billableHours : '-'}</strong>
+              </div>
+              <div className="checkout-line">
+                <span>Tarifa por hora</span>
+                <strong>{unlimitedPreview ? formatGuarani(unlimitedPreview.hourlyRate) : 'Configurar'}</strong>
+              </div>
+              <div className="checkout-line subtotal">
+                <span>Importe sugerido</span>
+                <strong>{unlimitedPreview ? formatGuarani(unlimitedPreview.suggestedAmount) : '-'}</strong>
+              </div>
+              <label className="field">
+                <span>Monto final a cobrar</span>
+                <input
+                  min={1}
+                  onChange={(event) => setUnlimitedFinalAmount(event.target.value)}
+                  placeholder={unlimitedPreview ? String(unlimitedPreview.suggestedAmount) : ''}
+                  type="number"
+                  value={unlimitedFinalAmount}
+                />
+              </label>
+              {unlimitedDifference !== 0 ? (
+                <label className="field">
+                  <span>Motivo del ajuste *</span>
+                  <textarea
+                    onChange={(event) => setUnlimitedReason(event.target.value)}
+                    placeholder="Autorizacion del dueno, tarifa VIP acordada..."
+                    rows={2}
+                    value={unlimitedReason}
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="checkout-block">
@@ -118,7 +209,7 @@ export function ConsolidatedCheckoutModal({
 
         <div className="checkout-total">
           <span>Total pendiente</span>
-          <strong>{formatGuarani(summary.totalPendingAmount)}</strong>
+          <strong>{formatGuarani(totalPendingAmount)}</strong>
         </div>
 
         <PaymentMethodSelector
@@ -142,7 +233,7 @@ export function ConsolidatedCheckoutModal({
           </button>
           <button
             className="button primary"
-            disabled={isSaving || (!paymentMethod && summary.totalPendingAmount > 0) || (summary.totalPendingAmount <= 0 && !finishVisit)}
+            disabled={isSaving || (!paymentMethod && totalPendingAmount > 0) || (totalPendingAmount <= 0 && !finishVisit)}
             onClick={confirmCheckout}
             type="button"
           >

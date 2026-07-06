@@ -1,6 +1,13 @@
 import { callSecureFunction } from './secureFunctions'
 import type { ActiveVisit, CanteenOrder, PaymentMethod } from '../types'
 
+export interface UnlimitedCheckoutAdjustment {
+  finalAmount: number
+  reason?: string
+}
+
+export type UnlimitedCheckoutAdjustments = Record<string, UnlimitedCheckoutAdjustment>
+
 interface ConsolidatedCheckoutInput {
   visit: ActiveVisit
   orders: CanteenOrder[]
@@ -8,6 +15,7 @@ interface ConsolidatedCheckoutInput {
   cardType?: 'debit' | 'credit' | ''
   source: 'reception' | 'canteen'
   finishVisit?: boolean
+  unlimitedAdjustments?: UnlimitedCheckoutAdjustments
 }
 
 interface ConsolidatedGroupCheckoutInput {
@@ -17,6 +25,7 @@ interface ConsolidatedGroupCheckoutInput {
   cardType?: 'debit' | 'credit' | ''
   source: 'reception' | 'canteen'
   finishVisits?: boolean
+  unlimitedAdjustments?: UnlimitedCheckoutAdjustments
 }
 
 export const checkoutVisitBalance = async ({
@@ -25,7 +34,9 @@ export const checkoutVisitBalance = async ({
   paymentMethod,
   source,
   visit,
+  unlimitedAdjustments = {},
 }: ConsolidatedCheckoutInput) => {
+  const adjustmentKey = JSON.stringify(unlimitedAdjustments)
   await callSecureFunction(
     'checkoutVisitGroup',
     {
@@ -35,8 +46,9 @@ export const checkoutVisitBalance = async ({
       cardType,
       source,
       finishVisit,
+      unlimitedAdjustments,
     },
-    `checkout-visit:${visit.id}:${paymentMethod}:${cardType}:${finishVisit}`,
+    `checkout-visit:${visit.id}:${paymentMethod}:${cardType}:${finishVisit}:${adjustmentKey}`,
   )
 }
 
@@ -46,9 +58,11 @@ export const checkoutVisitGroupBalance = async ({
   paymentMethod,
   source,
   visits,
+  unlimitedAdjustments = {},
 }: ConsolidatedGroupCheckoutInput) => {
   const groupEntryId = visits.find((visit) => visit.groupEntryId)?.groupEntryId ?? ''
   const visitIds = visits.map((visit) => visit.id)
+  const adjustmentKey = JSON.stringify(unlimitedAdjustments)
   await callSecureFunction(
     'checkoutVisitGroup',
     {
@@ -59,7 +73,8 @@ export const checkoutVisitGroupBalance = async ({
       cardType,
       source,
       finishVisits,
+      unlimitedAdjustments,
     },
-    `checkout-group:${groupEntryId || visitIds.join(',')}:${paymentMethod}:${cardType}:${finishVisits}`,
+    `checkout-group:${groupEntryId || visitIds.join(',')}:${paymentMethod}:${cardType}:${finishVisits}:${adjustmentKey}`,
   )
 }

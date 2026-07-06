@@ -369,7 +369,8 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read, create, update: if isOwnerOrAdmin() || isPartner();
+      allow read: if isOwnerOrAdmin() || isPartner() || (isReception() && settingId == 'visitPricing');
+      allow create, update: if isOwnerOrAdmin() || isPartner();
       allow delete: if false;
     }
 

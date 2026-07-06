@@ -123,13 +123,26 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
     [responsibleLookup?.children, selectedChildIds],
   )
   const totalAmount = useMemo(
-    () => childEntries.reduce((sum, entry) => sum + Number(entry.amountCharged || getPlanPrice(entry.planId) || 0), 0),
+    () => childEntries.reduce((sum, entry) => {
+      const plan = timePlans.find((item) => item.id === entry.planId)
+      return plan?.isUnlimited ? sum : sum + Number(entry.amountCharged || getPlanPrice(entry.planId) || 0)
+    }, 0),
+    [childEntries],
+  )
+  const hasUnlimitedEntry = useMemo(
+    () => childEntries.some((entry) => timePlans.find((plan) => plan.id === entry.planId)?.isUnlimited),
     [childEntries],
   )
 
   useEffect(() => {
     documentInputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (hasUnlimitedEntry && responsibleForm.paymentStatus === 'paid') {
+      setResponsibleForm((current) => ({ ...current, paymentStatus: 'payAtExit' }))
+    }
+  }, [hasUnlimitedEntry, responsibleForm.paymentStatus])
 
   const setResponsibleField = (field: keyof ReturnType<typeof initialResponsibleForm>, value: string) => {
     setResponsibleForm((current) => ({ ...current, [field]: value }))
@@ -142,18 +155,23 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
   }
 
   const handlePlanChange = (localId: string, planId: TimePlan['id']) => {
-    const nextPrice = getPlanPrice(planId)
+    const nextPlan = timePlans.find((plan) => plan.id === planId)
+    const nextPrice = nextPlan?.defaultPrice ?? null
     setChildEntries((current) =>
       current.map((entry) =>
         entry.localId === localId
           ? {
               ...entry,
               planId,
-              amountCharged: entry.customAmount ? entry.amountCharged : String(nextPrice ?? ''),
+              customAmount: nextPlan?.isUnlimited ? false : entry.customAmount,
+              amountCharged: nextPlan?.isUnlimited ? '' : entry.customAmount ? entry.amountCharged : String(nextPrice ?? ''),
             }
           : entry,
       ),
     )
+    if (nextPlan?.isUnlimited) {
+      setResponsibleField('paymentStatus', 'payAtExit')
+    }
   }
 
   const toggleExistingChild = (child: ChildProfile) => {
@@ -264,6 +282,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       const birthDateResult = parseBirthDateDisplay(entry.childBirthDateInput)
       const selectedPlan = timePlans.find((plan) => plan.id === entry.planId) ?? timePlans[0]
       const defaultAmount = selectedPlan.defaultPrice ?? null
+      const isUnlimitedPlan = selectedPlan.isUnlimited
 
       if (!childName || !entry.planId) {
         throw new Error('Completá nombre del niño y plan de todos los ingresos.')
@@ -290,12 +309,12 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         childrenCount: 1,
         planId: selectedPlan.id,
         startedAt: parseTodayTime(entry.startedAtTime),
-        paymentStatus: responsibleForm.paymentStatus,
+        paymentStatus: isUnlimitedPlan ? 'payAtExit' : responsibleForm.paymentStatus,
         paymentMethod: responsibleForm.paymentStatus === 'paid' ? '' : '',
         cardType: '',
-        amountCharged: entry.amountCharged ? Number(entry.amountCharged) : null,
-        defaultAmount,
-        customAmount: Boolean(entry.customAmount),
+        amountCharged: isUnlimitedPlan ? null : entry.amountCharged ? Number(entry.amountCharged) : null,
+        defaultAmount: isUnlimitedPlan ? null : defaultAmount,
+        customAmount: isUnlimitedPlan ? false : Boolean(entry.customAmount),
         notes: entry.notes,
         groupEntryId,
       } satisfies CreateVisitInput
@@ -325,7 +344,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       return
     }
 
-    if (responsibleForm.paymentStatus === 'paid') {
+    if (responsibleForm.paymentStatus === 'paid' && !hasUnlimitedEntry) {
       setPendingPaidEntries(payloads)
       setEntryPaymentMethod('')
       setEntryCardType('')
@@ -500,6 +519,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
               const calculatedAge = calculateAgeYears(birthDateResult.iso)
               const ageLabel = formatAgeLabel(calculatedAge)
               const defaultAmount = selectedPlan.defaultPrice ?? null
+              const isUnlimitedPlan = selectedPlan.isUnlimited
 
               return (
                 <article className="child-entry-card" key={entry.localId}>
@@ -586,30 +606,36 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
                     </label>
                   </div>
 
-                  <div className="form-inline amount-inline">
-                    <label className="field">
-                      <span>Monto cobrado</span>
-                      <input
-                        disabled={!entry.customAmount}
-                        min={0}
-                        onChange={(event) => updateChildEntry(entry.localId, { amountCharged: event.target.value })}
-                        type="number"
-                        value={entry.amountCharged}
-                      />
-                      <small className="field-hint">Monto sugerido: {defaultAmount ? formatGuarani(defaultAmount) : 'Manual'}</small>
-                    </label>
-                    <label className="field inline-check amount-check">
-                      <input
-                        checked={entry.customAmount}
-                        onChange={(event) => updateChildEntry(entry.localId, {
-                          customAmount: event.target.checked,
-                          amountCharged: event.target.checked ? entry.amountCharged : String(defaultAmount ?? ''),
-                        })}
-                        type="checkbox"
-                      />
-                      Usar monto diferente
-                    </label>
-                  </div>
+                  {isUnlimitedPlan ? (
+                    <div className="form-alert info">
+                      El importe se calculara y confirmara al finalizar la visita.
+                    </div>
+                  ) : (
+                    <div className="form-inline amount-inline">
+                      <label className="field">
+                        <span>Monto cobrado</span>
+                        <input
+                          disabled={!entry.customAmount}
+                          min={0}
+                          onChange={(event) => updateChildEntry(entry.localId, { amountCharged: event.target.value })}
+                          type="number"
+                          value={entry.amountCharged}
+                        />
+                        <small className="field-hint">Monto sugerido: {defaultAmount ? formatGuarani(defaultAmount) : 'Manual'}</small>
+                      </label>
+                      <label className="field inline-check amount-check">
+                        <input
+                          checked={entry.customAmount}
+                          onChange={(event) => updateChildEntry(entry.localId, {
+                            customAmount: event.target.checked,
+                            amountCharged: event.target.checked ? entry.amountCharged : String(defaultAmount ?? ''),
+                          })}
+                          type="checkbox"
+                        />
+                        Usar monto diferente
+                      </label>
+                    </div>
+                  )}
 
                   {!compact ? (
                     <label className="field">
@@ -678,11 +704,11 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
               <div className="entry-summary-list">
                 {childEntries.map((entry) => {
                   const plan = timePlans.find((item) => item.id === entry.planId) ?? timePlans[0]
-                  const amount = Number(entry.amountCharged || plan.defaultPrice || 0)
+                  const amount = plan.isUnlimited ? 0 : Number(entry.amountCharged || plan.defaultPrice || 0)
                   return (
                     <div key={entry.localId}>
                       <span>{entry.childName || 'Nino sin nombre'} - {plan.name}</span>
-                      <strong>{formatGuarani(amount)}</strong>
+                      <strong>{plan.isUnlimited ? 'A definir al salir' : formatGuarani(amount)}</strong>
                     </div>
                   )
                 })}
@@ -699,6 +725,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
             <div className="payment-status-options">
               <button
                 className={responsibleForm.paymentStatus === 'paid' ? 'active paid' : 'paid'}
+                disabled={hasUnlimitedEntry}
                 onClick={() => setResponsibleField('paymentStatus', 'paid')}
                 type="button"
               >

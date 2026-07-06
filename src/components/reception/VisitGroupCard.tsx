@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { extendVisitTime, finishVisit } from '../../services/visitService'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
+import { isPendingUnlimitedVisit } from '../../utils/unlimitedPricing'
 import { getVisitGroupBillingSummary } from '../../utils/visitBilling'
 import { formatGroupChildNames } from '../../utils/visitGroups'
 import {
@@ -54,7 +55,8 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
   const responsibleName = visits[0]?.customerName || 'Sin responsable'
   const visibleVisits = isChildrenExpanded ? visits : visits.slice(0, 4)
   const hiddenChildrenCount = Math.max(0, visits.length - visibleVisits.length)
-  const hasPendingBalance = billing.totalPendingAmount > 0
+  const hasPendingUnlimited = visits.some(isPendingUnlimitedVisit)
+  const hasPendingBalance = billing.totalPendingAmount > 0 || hasPendingUnlimited
   const canExtendVisits = visits.filter((visit) => !visit.isUnlimited)
 
   const selectedVisits = useMemo(
@@ -90,6 +92,11 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
   }
 
   const finishSingleVisit = async (visit: ActiveVisit) => {
+    if (isPendingUnlimitedVisit(visit)) {
+      setIsCheckoutOpen(true)
+      return
+    }
+
     if (!window.confirm(`Finalizar solo la visita de ${visit.childName}?`)) return
 
     setActionError(null)
@@ -148,8 +155,12 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
         <div className="visit-account-block group-account">
           <div className="account-line">
             <span>Parque</span>
-            <strong className={billing.pendingParkAmount > 0 ? 'pending' : 'paid'}>
-              {billing.pendingParkAmount > 0 ? `${formatGuarani(billing.pendingParkAmount)} pendiente` : 'Pagado'}
+            <strong className={billing.pendingParkAmount > 0 || hasPendingUnlimited ? 'pending' : 'paid'}>
+              {hasPendingUnlimited
+                ? 'Monto a definir al finalizar'
+                : billing.pendingParkAmount > 0
+                  ? `${formatGuarani(billing.pendingParkAmount)} pendiente`
+                  : 'Pagado'}
             </strong>
           </div>
           <div className="account-line">
@@ -164,7 +175,9 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
           </div>
           <div className="account-line total">
             <span>Total pendiente</span>
-            <strong className={billing.totalPendingAmount > 0 ? 'pending' : 'paid'}>{formatGuarani(billing.totalPendingAmount)}</strong>
+            <strong className={billing.totalPendingAmount > 0 || hasPendingUnlimited ? 'pending' : 'paid'}>
+              {hasPendingUnlimited && billing.totalPendingAmount <= 0 ? 'A definir' : formatGuarani(billing.totalPendingAmount)}
+            </strong>
           </div>
         </div>
 

@@ -330,4 +330,18 @@ describe('integridad financiera del cliente', () => {
       paymentStatus: 'paid', paidParkAmount: 60000,
     }))
   })
+
+  test('recepcion puede leer tarifa del plan libre pero no modificar configuracion', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'settings', 'visitPricing'), { unlimitedHourlyRate: 30000 })
+      await setDoc(doc(context.firestore(), 'settings', 'privateConfig'), { locked: true })
+    })
+
+    const db = dbFor('recepcion')
+    await assertSucceeds(getDoc(doc(db, 'settings', 'visitPricing')))
+    await assertFails(getDoc(doc(db, 'settings', 'privateConfig')))
+    await assertFails(setDoc(doc(db, 'settings', 'visitPricing'), { unlimitedHourlyRate: 35000 }))
+    await assertFails(updateDoc(doc(db, 'settings', 'visitPricing'), { unlimitedHourlyRate: 35000 }))
+    await assertSucceeds(updateDoc(doc(dbFor('admin'), 'settings', 'visitPricing'), { unlimitedHourlyRate: 35000 }))
+  })
 })

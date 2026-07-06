@@ -36,6 +36,25 @@ interface VisitCharge {
   paid: number
   pending: number
   legacyPricing: boolean
+  unlimitedPricing?: UnlimitedPricingAudit
+}
+
+interface UnlimitedPricingAudit {
+  type: 'unlimited_checkout'
+  startedAt: Timestamp
+  endedAt: Timestamp
+  elapsedMinutes: number
+  billableHours: number
+  hourlyRate: number
+  suggestedAmount: number
+  finalAmount: number
+  difference: number
+  reason: string
+  adjustedBy: string | null
+  adjustedByName: string
+  adjustedByRole: UserRole | ''
+  adjustedAt: Timestamp | null
+  sourceIntegrity: 'secure_backend'
 }
 
 const normalizedDocumentNumber = (value: unknown) => stringValue(value).replace(/\D/g, '')
@@ -49,8 +68,12 @@ const resolvePlan = (input: Record<string, unknown>, actor: Actor) => {
   if (customAmount && !['admin', 'socio'].includes(actor.role)) {
     throw new HttpsError('permission-denied', 'Solo Administracion puede aplicar un importe especial.')
   }
-  if (plan.isUnlimited && !customAmount) {
-    throw new HttpsError('failed-precondition', 'El plan libre requiere un importe autorizado por Administracion.')
+  if (plan.isUnlimited) {
+    const hasInitialAmount = input.amountCharged !== null && input.amountCharged !== undefined && Number(input.amountCharged) > 0
+    if (customAmount || hasInitialAmount) {
+      throw new HttpsError('failed-precondition', 'El plan libre se cobra y confirma al finalizar la visita.')
+    }
+    return { plan, customAmount: false, chargeAmount: null as number | null }
   }
   const chargeAmount = customAmount
     ? positiveMoney(input.amountCharged, 'El importe especial')
@@ -97,6 +120,91 @@ const resolveVisitCharge = (visit: DocumentData): VisitCharge => {
     throw new HttpsError('failed-precondition', 'La visita registra un pago mayor a su cargo y requiere revision administrativa.')
   }
   return { charge, paid, pending: charge - paid, legacyPricing }
+}
+
+const readUnlimitedHourlyRate = async (transaction: Transaction) => {
+  const snapshot = await transaction.get(db.collection('settings').doc('visitPricing'))
+  const data = snapshot.data() ?? {}
+  return positiveMoney(data.unlimitedHourlyRate, 'La tarifa por hora del plan libre')
+}
+
+const billableHoursForUnlimited = (startedAt: Timestamp, endedAt: Timestamp) => {
+  const elapsedMinutes = Math.max(0, Math.floor((endedAt.toMillis() - startedAt.toMillis()) / 60000))
+  return Math.max(1, Math.floor(elapsedMinutes / 60))
+}
+
+const unlimitedAdjustmentForVisit = (input: Record<string, unknown>, visitId: string): Record<string, unknown> => {
+  const raw = input.unlimitedAdjustments
+  if (Array.isArray(raw)) {
+    return asRecord(raw.find((item) => stringValue(asRecord(item).visitId) === visitId))
+  }
+  return asRecord(asRecord(raw)[visitId])
+}
+
+const resolveCheckoutVisitCharge = (
+  visitId: string,
+  visit: DocumentData,
+  input: Record<string, unknown>,
+  actor: Actor,
+  now: Timestamp,
+  unlimitedHourlyRate: number | null,
+  finishVisits: boolean,
+): VisitCharge => {
+  if (visit.isUnlimited !== true) return resolveVisitCharge(visit)
+
+  const storedCharge = nonNegativeMoney(visit.parkChargeAmount ?? visit.amountCharged ?? 0, 'El importe historico de la visita libre')
+  const storedPaid = nonNegativeMoney(visit.paidParkAmount ?? 0, 'El importe historico pagado')
+  if (storedPaid > 0 || visit.parkPaymentStatus === 'paid' || visit.paymentStatus === 'paid') {
+    if (storedPaid > storedCharge) throw new HttpsError('failed-precondition', 'La visita registra un pago mayor a su cargo y requiere revision administrativa.')
+    return { charge: storedCharge, paid: storedPaid, pending: Math.max(0, storedCharge - storedPaid), legacyPricing: true }
+  }
+
+  if (!finishVisits) {
+    throw new HttpsError('failed-precondition', 'El plan libre se cobra al finalizar la visita.')
+  }
+  if (!unlimitedHourlyRate) {
+    throw new HttpsError('failed-precondition', 'Configura la tarifa por hora del plan libre antes de cobrar.')
+  }
+
+  const startedAt = visit.startedAt instanceof Timestamp ? visit.startedAt : timestampFromUnknown(visit.startedAt, now)
+  const billableHours = billableHoursForUnlimited(startedAt, now)
+  const suggestedAmount = billableHours * unlimitedHourlyRate
+  const adjustment = unlimitedAdjustmentForVisit(input, visitId)
+  const finalAmount = adjustment.finalAmount === undefined || adjustment.finalAmount === null || adjustment.finalAmount === ''
+    ? suggestedAmount
+    : positiveMoney(adjustment.finalAmount, 'El monto final del plan libre')
+  if (finalAmount <= 0) throw new HttpsError('invalid-argument', 'El monto final del plan libre debe ser mayor a cero.')
+
+  const difference = finalAmount - suggestedAmount
+  const reason = optionalString(adjustment.reason, 300)
+  if (difference !== 0 && !reason) {
+    throw new HttpsError('failed-precondition', 'Indica el motivo del ajuste del plan libre.')
+  }
+
+  const elapsedMinutes = Math.max(0, Math.floor((now.toMillis() - startedAt.toMillis()) / 60000))
+  return {
+    charge: finalAmount,
+    paid: 0,
+    pending: finalAmount,
+    legacyPricing: false,
+    unlimitedPricing: {
+      type: 'unlimited_checkout',
+      startedAt,
+      endedAt: now,
+      elapsedMinutes,
+      billableHours,
+      hourlyRate: unlimitedHourlyRate,
+      suggestedAmount,
+      finalAmount,
+      difference,
+      reason,
+      adjustedBy: difference !== 0 ? actor.uid : null,
+      adjustedByName: difference !== 0 ? actor.name : '',
+      adjustedByRole: difference !== 0 ? actor.role : '',
+      adjustedAt: difference !== 0 ? now : null,
+      sourceIntegrity: 'secure_backend',
+    },
+  }
 }
 
 const paymentBase = (actor: Actor, data: Record<string, unknown>) => ({
@@ -171,6 +279,9 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
       const { plan, customAmount, chargeAmount } = resolvePlan(input, actor)
       const paymentStatus = stringValue(input.paymentStatus)
       if (!['paid', 'payAtExit', 'pending'].includes(paymentStatus)) throw new HttpsError('invalid-argument', 'El estado de pago no es valido.')
+      if (plan.isUnlimited && paymentStatus === 'paid') {
+        throw new HttpsError('failed-precondition', 'El plan libre se cobra al finalizar la visita.')
+      }
       const paymentMethod = paymentStatus === 'paid' ? validPaymentMethod(input.paymentMethod) : ''
       const cardType = paymentStatus === 'paid' ? validCardType(paymentMethod, input.cardType) : ''
 
@@ -260,7 +371,7 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
         cardType,
         amountCharged: chargeAmount,
         parkChargeAmount: chargeAmount,
-        paidParkAmount: paymentStatus === 'paid' ? chargeAmount : 0,
+        paidParkAmount: paymentStatus === 'paid' ? chargeAmount ?? 0 : 0,
         extensionChargeAmount: 0,
         parkPaymentStatus: paymentStatus === 'paid' ? 'paid' : 'pending',
         parkPaidAt: paymentStatus === 'paid' ? serverTimestamp() : null,
@@ -282,7 +393,7 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
 
       let paymentId = ''
       if (paymentStatus === 'paid') {
-        if (chargeAmount <= 0) throw new HttpsError('failed-precondition', 'No se puede registrar como pagada una visita sin importe.')
+        if (!chargeAmount || chargeAmount <= 0) throw new HttpsError('failed-precondition', 'No se puede registrar como pagada una visita sin importe.')
         paymentId = newDocumentId('payments')
         transaction.create(db.collection('payments').doc(paymentId), paymentBase(actor, {
           id: paymentId,
@@ -305,7 +416,7 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
         entityId: visitId, entityName: childName,
         metadata: { amount: chargeAmount, plan: plan.name, responsible: customerName, customerId: customerRef.id, paymentId, reusedCustomer: Boolean(customerSnapshot), previousCustomerName: stringValue(customerData.name) },
       })
-      return { visitId, customerId: customerRef.id, childId: childRef.id, paymentId, amount: chargeAmount }
+      return { visitId, customerId: customerRef.id, childId: childRef.id, paymentId, amount: chargeAmount ?? 0 }
     },
   })
 }
@@ -356,18 +467,28 @@ export const checkoutVisitGroupSecure = async (
     operationType: 'checkout_visit_group',
     entityId: requiredString(entityId, 'La visita o grupo'),
     idempotencyKey: input.idempotencyKey,
-    fingerprint: { entityId, finishVisits, source, paymentMethod: input.paymentMethod, cardType: input.cardType },
+    fingerprint: { entityId, finishVisits, source, paymentMethod: input.paymentMethod, cardType: input.cardType, unlimitedAdjustments: input.unlimitedAdjustments },
     handler: async (transaction, actor) => {
       if (actor.role === 'cantina' && finishVisits) {
         throw new HttpsError('permission-denied', 'Cantina puede cobrar, pero la salida debe finalizar desde Recepcion.')
       }
       const visits = await getActiveVisits(transaction, input)
       const orders = await getRelatedOrders(transaction, visits)
+      const now = Timestamp.now()
+      const needsUnlimitedPricing = visits.some((document) => {
+        const visit = document.data()
+        const paid = nonNegativeMoney(visit.paidParkAmount ?? 0, 'El importe historico pagado')
+        return visit.isUnlimited === true && paid <= 0 && visit.parkPaymentStatus !== 'paid' && visit.paymentStatus !== 'paid'
+      })
+      const unlimitedHourlyRate = needsUnlimitedPricing ? await readUnlimitedHourlyRate(transaction) : null
       const openOrders = orders.filter((document) => {
         const order = document.data()
         return order.status === 'open' && order.paymentStatus !== 'paid'
       })
-      const visitCharges = visits.map((document) => ({ document, charge: resolveVisitCharge(document.data()) }))
+      const visitCharges = visits.map((document) => ({
+        document,
+        charge: resolveCheckoutVisitCharge(document.id, document.data(), input, actor, now, unlimitedHourlyRate, finishVisits),
+      }))
       const orderTotals = openOrders.map((document) => ({ document, totals: calculateTrustedOrderTotals(document.data()) }))
       const productIds = [...new Set(orderTotals.flatMap(({ totals }) => totals.activeItems.map((item) => item.productId)))]
       const productSnapshots = await Promise.all(productIds.map((productId) => transaction.get(db.collection('canteenProducts').doc(productId))))
@@ -382,7 +503,6 @@ export const checkoutVisitGroupSecure = async (
       if (totalPaid <= 0 && !finishVisits) throw new HttpsError('failed-precondition', 'La operacion no tiene saldo pendiente.')
       if (testOptions.failBeforeWrites) throw new HttpsError('internal', 'Fallo simulado antes de escribir.')
 
-      const now = Timestamp.now()
       visitCharges.forEach(({ document, charge }) => {
         const visit = document.data()
         const payload: Record<string, unknown> = {
@@ -396,6 +516,12 @@ export const checkoutVisitGroupSecure = async (
           updatedAt: serverTimestamp(),
           updatedBy: actor.uid,
           sourceIntegrity: 'secure_backend',
+        }
+        if (charge.unlimitedPricing) {
+          payload.amountCharged = charge.charge
+          payload.defaultAmount = null
+          payload.customAmount = charge.unlimitedPricing.finalAmount !== charge.unlimitedPricing.suggestedAmount
+          payload.unlimitedPricing = charge.unlimitedPricing
         }
         if (finishVisits) {
           const started = visit.startedAt instanceof Timestamp ? visit.startedAt : timestampFromUnknown(visit.startedAt, now)
@@ -431,7 +557,7 @@ export const checkoutVisitGroupSecure = async (
         paymentId = newDocumentId('payments')
         const first = visits[0].data()
         const childNames = visits.map((document) => stringValue(document.data().childName)).filter(Boolean)
-        transaction.create(db.collection('payments').doc(paymentId), paymentBase(actor, {
+          transaction.create(db.collection('payments').doc(paymentId), paymentBase(actor, {
           id: paymentId,
           visitId: visits[0].id,
           visitIds: visits.map((document) => document.id),
@@ -449,13 +575,28 @@ export const checkoutVisitGroupSecure = async (
           childNames,
           customerName: stringValue(first.customerName),
           description: visits.length > 1 ? `Cobro grupal ${childNames.join(' y ')}` : `Cobro ${childNames[0] || visits[0].id}`,
+          unlimitedPricing: visitCharges
+            .filter(({ charge }) => Boolean(charge.unlimitedPricing))
+            .map(({ document, charge }) => ({ visitId: document.id, childName: stringValue(document.data().childName), ...charge.unlimitedPricing })),
         }))
       }
       writeActivity(transaction, actor, {
         action: finishVisits ? 'status_change' : 'creation', module: 'Recepcion',
         description: finishVisits ? `Cobro y finalizo ${visits.length} visita(s)` : `Registro cobro de ${visits.length} visita(s)`,
         entityId, entityName: visits.map((document) => stringValue(document.data().childName)).filter(Boolean).join(' y '),
-        metadata: { paymentId, visitIds: visits.map((document) => document.id), orderIds: openOrders.map((document) => document.id), parkAmountPaid, canteenAmountPaid, totalPaid, paymentMethod, finishVisits },
+        metadata: {
+          paymentId,
+          visitIds: visits.map((document) => document.id),
+          orderIds: openOrders.map((document) => document.id),
+          parkAmountPaid,
+          canteenAmountPaid,
+          totalPaid,
+          paymentMethod,
+          finishVisits,
+          unlimitedPricing: visitCharges
+            .filter(({ charge }) => Boolean(charge.unlimitedPricing))
+            .map(({ document, charge }) => ({ visitId: document.id, childName: stringValue(document.data().childName), ...charge.unlimitedPricing })),
+        },
       })
       return { paymentId, visitIds: visits.map((document) => document.id), orderIds: openOrders.map((document) => document.id), parkAmountPaid, canteenAmountPaid, totalPaid, finished: finishVisits }
     },
@@ -541,6 +682,9 @@ export const finishVisitSecure = async (uid: string | null | undefined, rawInput
       const activeSnapshot = await transaction.get(activeRef)
       if (!activeSnapshot.exists || activeSnapshot.data()?.status !== 'active') throw new HttpsError('failed-precondition', 'La visita ya fue finalizada.')
       const visit = activeSnapshot.data() ?? {}
+      if (visit.isUnlimited === true && visit.parkPaymentStatus !== 'paid' && visit.paymentStatus !== 'paid') {
+        throw new HttpsError('failed-precondition', 'La visita libre debe cobrarse al finalizar.')
+      }
       const orders = await getRelatedOrders(transaction, [activeSnapshot as QueryDocumentSnapshot])
       const charge = resolveVisitCharge(visit)
       const openOrderTotals = orders

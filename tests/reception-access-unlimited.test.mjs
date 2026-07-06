@@ -28,3 +28,23 @@ test('recepcion conserva operaciones minimas de clientes y ninos desde recepcion
   assert.match(visitForm, /findResponsibleByDocument\(responsibleForm\.customerDocumentNumber\)/)
   assert.match(visitService, /query\(getCollectionRef\('customers'\), where\('documentNumberNormalized'/)
 })
+
+test('plan libre ingresa sin monto inicial y se cobra al finalizar', () => {
+  const functionsVisits = read('functions/src/visits.ts')
+  const visitForm = read('src/components/reception/VisitForm.tsx')
+  const checkoutModal = read('src/components/reception/ConsolidatedCheckoutModal.tsx')
+  const groupCheckoutModal = read('src/components/reception/ConsolidatedGroupCheckoutModal.tsx')
+
+  assert.doesNotMatch(functionsVisits, /requiere un importe autorizado por Administracion/)
+  assert.match(functionsVisits, /El plan libre se cobra y confirma al finalizar la visita/)
+  assert.match(functionsVisits, /settings'\)\.doc\('visitPricing'\)/)
+  assert.match(functionsVisits, /billableHoursForUnlimited/)
+  assert.match(functionsVisits, /Math\.max\(1, Math\.floor\(elapsedMinutes \/ 60\)\)/)
+  assert.match(functionsVisits, /unlimitedPricing:\s*\{/)
+  assert.match(visitForm, /El importe se calculara y confirmara al finalizar la visita/)
+  assert.match(visitForm, /paymentStatus: isUnlimitedPlan \? 'payAtExit'/)
+  assert.match(checkoutModal, /Monto final a cobrar/)
+  assert.match(checkoutModal, /Motivo del ajuste/)
+  assert.match(groupCheckoutModal, /pendingUnlimitedVisits/)
+  assert.match(groupCheckoutModal, /Cantina compartida/)
+})

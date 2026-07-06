@@ -107,6 +107,39 @@ async function seedGroup({ withOrder = true } = {}) {
   await batch.commit()
 }
 
+async function seedUnlimitedVisit(id = 'unlimited-visit', minutesAgo = 130, overrides = {}) {
+  const startedAt = new Date(Date.now() - minutesAgo * 60 * 1000)
+  const visit = {
+    id,
+    childId: `child-${id}`,
+    childName: 'Lito VIP',
+    customerId: 'customer-1',
+    customerName: 'Maria',
+    planId: 'unlimited',
+    planName: 'Libre / sin limite',
+    durationMinutes: null,
+    isUnlimited: true,
+    startedAt,
+    expectedEndAt: null,
+    paymentStatus: 'pending',
+    parkPaymentStatus: 'pending',
+    amountCharged: null,
+    parkChargeAmount: null,
+    paidParkAmount: 0,
+    extensionChargeAmount: 0,
+    timeExtensions: [],
+    status: 'active',
+    sourceIntegrity: 'secure_backend',
+    ...overrides,
+  }
+  await db.collection('activeVisits').doc(id).set(visit)
+  await db.collection('visits').doc(id).set(visit)
+}
+
+async function seedUnlimitedRate(rate = 30000) {
+  await db.collection('settings').doc('visitPricing').set({ unlimitedHourlyRate: rate })
+}
+
 beforeEach(async () => {
   sequence = 0
   await clearFirestore()
@@ -455,5 +488,145 @@ describe('operaciones complementarias protegidas', () => {
     assert.equal(order.data().total, 10000)
     assert.equal(order.data().items[0].unitPrice, 10000)
     assert.equal((await db.collection('canteenProducts').doc('product-1').get()).data().stock, 9)
+  })
+})
+
+describe('plan libre seguro', () => {
+  test('32. plan libre puede ingresar sin monto inicial y sin pago', async () => {
+    const result = await createVisitSecure('recepcion', {
+      childName: 'Lito VIP', customerName: 'Maria', planId: 'unlimited',
+      startedAt: new Date().toISOString(), paymentStatus: 'payAtExit', amountCharged: null,
+      idempotencyKey: key('unlimited-entry'),
+    })
+    assert.equal(result.amount, 0)
+    assert.equal(result.paymentId, '')
+    assert.equal((await db.collection('payments').get()).size, 0)
+    const active = await db.collection('activeVisits').doc(result.visitId).get()
+    assert.equal(active.data().isUnlimited, true)
+    assert.equal(active.data().expectedEndAt, null)
+    assert.equal(active.data().parkChargeAmount, null)
+  })
+
+  test('33. plan libre rechaza cobro o importe inicial', async () => {
+    await assert.rejects(() => createVisitSecure('recepcion', {
+      childName: 'Lito VIP', customerName: 'Maria', planId: 'unlimited',
+      startedAt: new Date().toISOString(), paymentStatus: 'paid', paymentMethod: 'cash',
+      idempotencyKey: key('unlimited-paid'),
+    }), /se cobra al finalizar/i)
+    await assert.rejects(() => createVisitSecure('admin', {
+      childName: 'Lito VIP', customerName: 'Maria', planId: 'unlimited',
+      startedAt: new Date().toISOString(), paymentStatus: 'pending', amountCharged: 50000,
+      customAmount: true, idempotencyKey: key('unlimited-amount'),
+    }), /se cobra y confirma al finalizar/i)
+  })
+
+  test('34. horas facturables usan horas completas con minimo de una hora', async () => {
+    await seedUnlimitedRate(30000)
+    for (const [visitId, minutesAgo, expectedHours] of [
+      ['free-45', 45, 1],
+      ['free-90', 90, 1],
+      ['free-130', 130, 2],
+      ['free-220', 220, 3],
+    ]) {
+      await seedUnlimitedVisit(visitId, minutesAgo)
+      const result = await checkoutVisitGroupSecure('recepcion', {
+        visitId, paymentMethod: 'cash', finishVisits: true, source: 'reception', idempotencyKey: key(`checkout-${visitId}`),
+      })
+      assert.equal(result.parkAmountPaid, expectedHours * 30000)
+      const history = await db.collection('visits').doc(visitId).get()
+      assert.equal(history.data().unlimitedPricing.billableHours, expectedHours)
+      assert.equal(history.data().unlimitedPricing.suggestedAmount, expectedHours * 30000)
+      assert.equal(history.data().status, 'finished')
+    }
+  })
+
+  test('35. monto final distinto exige motivo y queda auditado', async () => {
+    await seedUnlimitedRate(30000)
+    await seedUnlimitedVisit('free-adjust', 130)
+    await assert.rejects(() => checkoutVisitGroupSecure('recepcion', {
+      visitId: 'free-adjust', paymentMethod: 'cash', finishVisits: true, source: 'reception',
+      unlimitedAdjustments: { 'free-adjust': { finalAmount: 50000 } },
+      idempotencyKey: key('adjust-missing-reason'),
+    }), /motivo/i)
+    assert.equal((await db.collection('activeVisits').doc('free-adjust').get()).exists, true)
+
+    const result = await checkoutVisitGroupSecure('recepcion', {
+      visitId: 'free-adjust', paymentMethod: 'cash', finishVisits: true, source: 'reception',
+      unlimitedAdjustments: { 'free-adjust': { finalAmount: 50000, reason: 'tarifa VIP acordada' } },
+      idempotencyKey: key('adjust-with-reason'),
+    })
+    assert.equal(result.parkAmountPaid, 50000)
+    const history = await db.collection('visits').doc('free-adjust').get()
+    assert.equal(history.data().unlimitedPricing.finalAmount, 50000)
+    assert.equal(history.data().unlimitedPricing.suggestedAmount, 60000)
+    assert.equal(history.data().unlimitedPricing.difference, -10000)
+    assert.equal(history.data().unlimitedPricing.reason, 'tarifa VIP acordada')
+    assert.equal(history.data().unlimitedPricing.adjustedBy, 'recepcion')
+  })
+
+  test('36. monto cero o negativo es rechazado y no duplica cobros por idempotencia', async () => {
+    await seedUnlimitedRate(30000)
+    await seedUnlimitedVisit('free-zero', 130)
+    await assert.rejects(() => checkoutVisitGroupSecure('recepcion', {
+      visitId: 'free-zero', paymentMethod: 'cash', finishVisits: true, source: 'reception',
+      unlimitedAdjustments: { 'free-zero': { finalAmount: 0, reason: 'cortesia' } },
+      idempotencyKey: key('zero-free'),
+    }), /mayor a cero/i)
+
+    await seedUnlimitedVisit('free-idempotent', 130)
+    const idempotencyKey = key('free-idempotent')
+    const first = await checkoutVisitGroupSecure('recepcion', {
+      visitId: 'free-idempotent', paymentMethod: 'cash', finishVisits: true, source: 'reception', idempotencyKey,
+    })
+    const second = await checkoutVisitGroupSecure('recepcion', {
+      visitId: 'free-idempotent', paymentMethod: 'cash', finishVisits: true, source: 'reception', idempotencyKey,
+    })
+    assert.deepEqual(second, first)
+    assert.equal((await db.collection('payments').get()).size, 1)
+  })
+
+  test('37. grupo mixto suma plan temporal, libre y cantina compartida una sola vez', async () => {
+    await seedUnlimitedRate(30000)
+    await seedGroup()
+    await db.collection('activeVisits').doc('visit-b').update({
+      planId: 'unlimited', planName: 'Libre / sin limite', durationMinutes: null, isUnlimited: true,
+      startedAt: new Date(Date.now() - 130 * 60 * 1000), expectedEndAt: null,
+      amountCharged: null, parkChargeAmount: null, paidParkAmount: 0,
+    })
+    await db.collection('visits').doc('visit-b').update({
+      planId: 'unlimited', planName: 'Libre / sin limite', durationMinutes: null, isUnlimited: true,
+      startedAt: new Date(Date.now() - 130 * 60 * 1000), expectedEndAt: null,
+      amountCharged: null, parkChargeAmount: null, paidParkAmount: 0,
+    })
+    const result = await checkoutVisitGroupSecure('recepcion', {
+      groupEntryId: 'group-1', paymentMethod: 'cash', finishVisits: true, source: 'reception', idempotencyKey: key('mixed-group'),
+    })
+    assert.equal(result.parkAmountPaid, 120000)
+    assert.equal(result.canteenAmountPaid, 20000)
+    assert.equal(result.totalPaid, 140000)
+    assert.equal((await db.collection('payments').get()).size, 1)
+  })
+
+  test('38. grupo con ajuste invalido no queda parcialmente cerrado', async () => {
+    await seedUnlimitedRate(30000)
+    await seedGroup()
+    await db.collection('activeVisits').doc('visit-b').update({
+      planId: 'unlimited', planName: 'Libre / sin limite', durationMinutes: null, isUnlimited: true,
+      startedAt: new Date(Date.now() - 130 * 60 * 1000), expectedEndAt: null,
+      amountCharged: null, parkChargeAmount: null, paidParkAmount: 0,
+    })
+    await db.collection('visits').doc('visit-b').update({
+      planId: 'unlimited', planName: 'Libre / sin limite', durationMinutes: null, isUnlimited: true,
+      startedAt: new Date(Date.now() - 130 * 60 * 1000), expectedEndAt: null,
+      amountCharged: null, parkChargeAmount: null, paidParkAmount: 0,
+    })
+    await assert.rejects(() => checkoutVisitGroupSecure('recepcion', {
+      groupEntryId: 'group-1', paymentMethod: 'cash', finishVisits: true, source: 'reception',
+      unlimitedAdjustments: { 'visit-b': { finalAmount: 50000 } },
+      idempotencyKey: key('mixed-group-invalid'),
+    }), /motivo/i)
+    assert.equal((await db.collection('activeVisits').get()).size, 2)
+    assert.equal((await db.collection('payments').get()).size, 0)
+    assert.equal((await db.collection('canteenOrders').doc('group-order').get()).data().status, 'open')
   })
 })

@@ -1,4 +1,5 @@
 import type { ActiveVisit, CanteenOrder } from '../types'
+import { isPendingUnlimitedVisit } from './unlimitedPricing'
 import { getOrdersForVisit, getOrdersForVisitGroup } from './visitGroups'
 
 export interface VisitBillingSummary {
@@ -12,6 +13,7 @@ export interface VisitBillingSummary {
   openCanteenOrders: CanteenOrder[]
   paidCanteenOrders: CanteenOrder[]
   relatedCanteenOrders: CanteenOrder[]
+  hasPendingUnlimitedPricing: boolean
 }
 
 export const getVisitParkChargeAmount = (visit: Pick<ActiveVisit, 'amountCharged' | 'defaultAmount' | 'parkChargeAmount'>) =>
@@ -31,6 +33,7 @@ export const getVisitBillingSummary = (visit: ActiveVisit, orders: CanteenOrder[
   const pendingParkAmount = Math.max(0, parkChargeAmount - paidParkAmount)
   const pendingCanteenAmount = openCanteenOrders.reduce((sum, order) => sum + order.total, 0)
   const paidCanteenAmount = paidCanteenOrders.reduce((sum, order) => sum + order.total, 0)
+  const hasPendingUnlimitedPricing = isPendingUnlimitedVisit(visit)
 
   return {
     parkChargeAmount,
@@ -40,6 +43,7 @@ export const getVisitBillingSummary = (visit: ActiveVisit, orders: CanteenOrder[
     paidCanteenAmount,
     totalPendingAmount: pendingParkAmount + pendingCanteenAmount,
     totalPaidAmount: paidParkAmount + paidCanteenAmount,
+    hasPendingUnlimitedPricing,
     openCanteenOrders,
     paidCanteenOrders,
     relatedCanteenOrders,
@@ -64,6 +68,7 @@ export const getVisitGroupBillingSummary = (visits: ActiveVisit[], orders: Cante
   const pendingParkAmount = Math.max(0, parkChargeAmount - paidParkAmount)
   const pendingCanteenAmount = openCanteenOrders.reduce((sum, order) => sum + order.total, 0)
   const paidCanteenAmount = paidCanteenOrders.reduce((sum, order) => sum + order.total, 0)
+  const hasPendingUnlimitedPricing = visits.some(isPendingUnlimitedVisit)
 
   return {
     parkChargeAmount,
@@ -73,6 +78,7 @@ export const getVisitGroupBillingSummary = (visits: ActiveVisit[], orders: Cante
     paidCanteenAmount,
     totalPendingAmount: pendingParkAmount + pendingCanteenAmount,
     totalPaidAmount: paidParkAmount + paidCanteenAmount,
+    hasPendingUnlimitedPricing,
     openCanteenOrders,
     paidCanteenOrders,
     relatedCanteenOrders,
