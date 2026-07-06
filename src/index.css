@@ -1836,6 +1836,81 @@ img {
   margin-top: 3px;
 }
 
+.promotion-adjustment {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.promotion-adjustment-toggle {
+  align-items: center;
+  background: #fff;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.promotion-adjustment-toggle span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.promotion-adjustment-toggle small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.promotion-adjustment-toggle svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
+}
+
+.promotion-adjustment.expanded .promotion-adjustment-toggle svg {
+  transform: rotate(180deg);
+}
+
+.promotion-adjustment-toggle:hover {
+  background: #f8fafc;
+}
+
+.promotion-adjustment-panel {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.promotion-preview {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+}
+
+.promotion-preview strong {
+  color: var(--ink);
+  font-size: 1.08rem;
+}
+
+.promotion-reason,
+.promotion-cancel {
+  grid-column: 1 / -1;
+}
+
 .text-button {
   background: transparent;
   border: 0;
@@ -8126,6 +8201,7 @@ img {
   .finance-movement-row,
   .payment-status-options,
   .add-child-actions,
+  .promotion-adjustment-panel,
   .form-inline {
     grid-template-columns: 1fr;
   }

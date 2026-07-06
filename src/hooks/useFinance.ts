@@ -4,7 +4,7 @@ import { ensureReceptionSession } from '../services/authSession'
 import { getCollectionRef } from '../services/firestoreCollections'
 import { parseCurrencyInput } from '../utils/money'
 import { calculateFinanceOperations, isDateInFinanceRange, type FinanceVisit } from '../utils/financeCalculations'
-import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentMethod, PaymentRecord } from '../types'
+import type { ActiveVisit, CanteenOrder, ExpenseRecord, FinancialClosureRecord, LuccaEvent, PaymentMethod, PaymentRecord, PromotionalAdjustmentAudit, UserRole } from '../types'
 
 export interface DateRange {
   from: string
@@ -21,6 +21,24 @@ const inRange = (date: Date | null | undefined, range: DateRange) => {
   if (!date) return false
   const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
   return dateKey >= range.from && dateKey <= range.to
+}
+
+const mapPromotionalAdjustment = (value: unknown): PromotionalAdjustmentAudit | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  return {
+    type: record.type === 'percentage' ? 'percentage' : record.type === 'final_amount' ? 'final_amount' : undefined,
+    originalAmount: parseCurrencyInput(record.originalAmount ?? 0),
+    percentage: record.percentage === null || record.percentage === undefined ? null : Number(record.percentage),
+    discountAmount: parseCurrencyInput(record.discountAmount ?? 0),
+    finalAmount: parseCurrencyInput(record.finalAmount ?? 0),
+    reason: String(record.reason ?? ''),
+    adjustedBy: record.adjustedBy ? String(record.adjustedBy) : null,
+    adjustedByName: String(record.adjustedByName ?? ''),
+    adjustedByRole: (record.adjustedByRole as UserRole | '') ?? '',
+    adjustedAt: dateFromTimestamp(record.adjustedAt),
+    sourceIntegrity: record.sourceIntegrity === 'secure_backend' ? 'secure_backend' : undefined,
+  }
 }
 
 const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord => ({
@@ -47,6 +65,13 @@ const mapPayment = (id: string, data: Record<string, unknown>): PaymentRecord =>
   parkAmountPaid: parseCurrencyInput(data.parkAmountPaid ?? 0),
   canteenAmountPaid: parseCurrencyInput(data.canteenAmountPaid ?? 0),
   eventAmountPaid: parseCurrencyInput(data.eventAmountPaid ?? 0),
+  originalParkAmount: data.originalParkAmount === null || data.originalParkAmount === undefined ? null : parseCurrencyInput(data.originalParkAmount),
+  promotionalAdjustment: Array.isArray(data.promotionalAdjustment)
+    ? data.promotionalAdjustment.map(mapPromotionalAdjustment).filter(Boolean) as PromotionalAdjustmentAudit[]
+    : mapPromotionalAdjustment(data.promotionalAdjustment),
+  promotionalAdjustments: Array.isArray(data.promotionalAdjustments)
+    ? data.promotionalAdjustments.map(mapPromotionalAdjustment).filter(Boolean) as PromotionalAdjustmentAudit[]
+    : [],
   createdBy: data.createdBy ? String(data.createdBy) : null,
   createdByName: String(data.createdByName ?? ''),
 })
@@ -144,6 +169,7 @@ const mapVisit = (id: string, data: Record<string, unknown>): FinanceVisit => ({
   parkPaidAt: dateFromTimestamp(data.parkPaidAt),
   parkPaymentMethod: (data.parkPaymentMethod as PaymentMethod) ?? '',
   defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : parseCurrencyInput(data.defaultAmount),
+  promotionalAdjustment: mapPromotionalAdjustment(data.promotionalAdjustment),
   status: 'active',
   financeStatus: String(data.status ?? 'active'),
   createdAt: dateFromTimestamp(data.createdAt),
@@ -288,5 +314,5 @@ export function useFinanceData(range: DateRange) {
       },
       visitsInRange,
     }
-  }, [activeVisits.items, canteen, closures, events, expenses, payments, range, visits.items])
+  }, [activeVisits.error, activeVisits.isLoading, activeVisits.items, canteen, closures, events, expenses, payments, range, visits.error, visits.isLoading, visits.items])
 }

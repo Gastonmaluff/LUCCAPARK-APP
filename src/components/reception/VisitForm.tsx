@@ -1,4 +1,4 @@
-import { Plus, UserPlus } from 'lucide-react'
+import { ChevronDown, Plus, UserPlus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { timePlans } from '../../config/timePlans'
 import { createNormalVisit, findResponsibleByDocument, normalizeDocumentNumber } from '../../services/visitService'
@@ -9,6 +9,7 @@ import { PaymentMethodSelector } from '../payments/PaymentMethodSelector'
 import type { ChildProfile, CreateVisitInput, PaymentMethod, PaymentStatus, TimePlan } from '../../types'
 
 type ChildEntryMode = 'existing' | 'new'
+type PromotionAdjustmentType = 'percentage' | 'finalAmount'
 
 interface ChildEntry {
   localId: string
@@ -23,6 +24,11 @@ interface ChildEntry {
   startedAtTime: string
   amountCharged: string
   customAmount: boolean
+  isPromotionOpen: boolean
+  promotionType: PromotionAdjustmentType
+  discountPercentage: string
+  specialFinalAmount: string
+  promotionReason: string
   notes: string
 }
 
@@ -67,6 +73,11 @@ const createChildEntry = (overrides: Partial<ChildEntry> = {}): ChildEntry => {
     startedAtTime: formatTimeValue(new Date()),
     amountCharged: String(getPlanPrice(defaultPlan) ?? ''),
     customAmount: false,
+    isPromotionOpen: false,
+    promotionType: 'percentage',
+    discountPercentage: '',
+    specialFinalAmount: '',
+    promotionReason: '',
     notes: '',
     ...overrides,
   }
@@ -89,6 +100,25 @@ const initialResponsibleForm = () => ({
   customerRelation: '',
   paymentStatus: 'paid' as PaymentStatus,
 })
+
+const getPromotionPreview = (entry: ChildEntry, defaultAmount: number | null) => {
+  if (!defaultAmount || !entry.isPromotionOpen) {
+    return { isApplied: false, finalAmount: defaultAmount ?? 0, discountAmount: 0 }
+  }
+  if (entry.promotionType === 'percentage') {
+    const percentage = Number(entry.discountPercentage)
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage >= 100) {
+      return { isApplied: false, finalAmount: defaultAmount, discountAmount: 0 }
+    }
+    const finalAmount = Math.round(defaultAmount * (100 - percentage) / 100)
+    return { isApplied: true, finalAmount, discountAmount: defaultAmount - finalAmount }
+  }
+  const finalAmount = Number(entry.specialFinalAmount)
+  if (!Number.isSafeInteger(finalAmount) || finalAmount <= 0 || finalAmount >= defaultAmount) {
+    return { isApplied: false, finalAmount: defaultAmount, discountAmount: 0 }
+  }
+  return { isApplied: true, finalAmount, discountAmount: defaultAmount - finalAmount }
+}
 
 interface VisitFormProps {
   compact?: boolean
@@ -125,7 +155,8 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
   const totalAmount = useMemo(
     () => childEntries.reduce((sum, entry) => {
       const plan = timePlans.find((item) => item.id === entry.planId)
-      return plan?.isUnlimited ? sum : sum + Number(entry.amountCharged || getPlanPrice(entry.planId) || 0)
+      const preview = getPromotionPreview(entry, plan?.defaultPrice ?? null)
+      return plan?.isUnlimited ? sum : sum + (preview.isApplied ? preview.finalAmount : Number(plan?.defaultPrice ?? entry.amountCharged ?? 0))
     }, 0),
     [childEntries],
   )
@@ -163,8 +194,13 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
           ? {
               ...entry,
               planId,
-              customAmount: nextPlan?.isUnlimited ? false : entry.customAmount,
-              amountCharged: nextPlan?.isUnlimited ? '' : entry.customAmount ? entry.amountCharged : String(nextPrice ?? ''),
+              customAmount: false,
+              isPromotionOpen: false,
+              promotionType: 'percentage',
+              discountPercentage: '',
+              specialFinalAmount: '',
+              promotionReason: '',
+              amountCharged: nextPlan?.isUnlimited ? '' : String(nextPrice ?? ''),
             }
           : entry,
       ),
@@ -193,6 +229,33 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
 
   const removeChildEntry = (localId: string) => {
     setChildEntries((current) => current.filter((entry) => entry.localId !== localId))
+  }
+
+  const cancelPromotionAdjustment = (localId: string) => {
+    setChildEntries((current) =>
+      current.map((entry) => {
+        if (entry.localId !== localId) return entry
+        const defaultAmount = getPlanPrice(entry.planId)
+        return {
+          ...entry,
+          customAmount: false,
+          isPromotionOpen: false,
+          promotionType: 'percentage',
+          discountPercentage: '',
+          specialFinalAmount: '',
+          promotionReason: '',
+          amountCharged: String(defaultAmount ?? ''),
+        }
+      }),
+    )
+  }
+
+  const togglePromotionAdjustment = (entry: ChildEntry) => {
+    if (entry.isPromotionOpen) {
+      cancelPromotionAdjustment(entry.localId)
+      return
+    }
+    updateChildEntry(entry.localId, { isPromotionOpen: true })
   }
 
   const resetForm = () => {
@@ -283,6 +346,12 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       const selectedPlan = timePlans.find((plan) => plan.id === entry.planId) ?? timePlans[0]
       const defaultAmount = selectedPlan.defaultPrice ?? null
       const isUnlimitedPlan = selectedPlan.isUnlimited
+      const promotionPreview = getPromotionPreview(entry, defaultAmount)
+      const hasPromotionInput = entry.isPromotionOpen && (
+        entry.discountPercentage.trim()
+        || entry.specialFinalAmount.trim()
+        || entry.promotionReason.trim()
+      )
 
       if (!childName || !entry.planId) {
         throw new Error('Completá nombre del niño y plan de todos los ingresos.')
@@ -291,6 +360,29 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       if (birthDateResult.error) {
         throw new Error(`${childName}: ${birthDateResult.error}`)
       }
+
+      if (!isUnlimitedPlan && entry.isPromotionOpen) {
+        if (!promotionPreview.isApplied) {
+          throw new Error(`${childName}: completa un descuento o monto final valido menor al precio normal.`)
+        }
+        if (!entry.promotionReason.trim()) {
+          throw new Error(`${childName}: indica el motivo del descuento o monto especial.`)
+        }
+      }
+
+      if (!isUnlimitedPlan && hasPromotionInput && !promotionPreview.isApplied) {
+        throw new Error(`${childName}: cancela el ajuste o completalo correctamente.`)
+      }
+
+      const finalAmount = isUnlimitedPlan ? null : promotionPreview.isApplied ? promotionPreview.finalAmount : defaultAmount
+      const promotionalAdjustment = !isUnlimitedPlan && promotionPreview.isApplied
+        ? {
+            type: entry.promotionType,
+            percentage: entry.promotionType === 'percentage' ? Number(entry.discountPercentage) : null,
+            finalAmount: entry.promotionType === 'finalAmount' ? promotionPreview.finalAmount : null,
+            reason: entry.promotionReason.trim(),
+          }
+        : null
 
       return {
         childId: entry.childId,
@@ -312,9 +404,10 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         paymentStatus: isUnlimitedPlan ? 'payAtExit' : responsibleForm.paymentStatus,
         paymentMethod: responsibleForm.paymentStatus === 'paid' ? '' : '',
         cardType: '',
-        amountCharged: isUnlimitedPlan ? null : entry.amountCharged ? Number(entry.amountCharged) : null,
+        amountCharged: finalAmount,
         defaultAmount: isUnlimitedPlan ? null : defaultAmount,
-        customAmount: isUnlimitedPlan ? false : Boolean(entry.customAmount),
+        customAmount: isUnlimitedPlan ? false : promotionPreview.isApplied,
+        promotionalAdjustment,
         notes: entry.notes,
         groupEntryId,
       } satisfies CreateVisitInput
@@ -611,30 +704,87 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
                       El importe se calculara y confirmara al finalizar la visita.
                     </div>
                   ) : (
-                    <div className="form-inline amount-inline">
-                      <label className="field">
-                        <span>Monto cobrado</span>
-                        <input
-                          disabled={!entry.customAmount}
-                          min={0}
-                          onChange={(event) => updateChildEntry(entry.localId, { amountCharged: event.target.value })}
-                          type="number"
-                          value={entry.amountCharged}
-                        />
-                        <small className="field-hint">Monto sugerido: {defaultAmount ? formatGuarani(defaultAmount) : 'Manual'}</small>
-                      </label>
-                      <label className="field inline-check amount-check">
-                        <input
-                          checked={entry.customAmount}
-                          onChange={(event) => updateChildEntry(entry.localId, {
-                            customAmount: event.target.checked,
-                            amountCharged: event.target.checked ? entry.amountCharged : String(defaultAmount ?? ''),
-                          })}
-                          type="checkbox"
-                        />
-                        Usar monto diferente
-                      </label>
-                    </div>
+                    <section className={`promotion-adjustment ${entry.isPromotionOpen ? 'expanded' : 'collapsed'}`}>
+                      <button
+                        aria-expanded={entry.isPromotionOpen}
+                        className="promotion-adjustment-toggle"
+                        onClick={() => togglePromotionAdjustment(entry)}
+                        type="button"
+                      >
+                        <span>
+                          <strong>Aplicar descuento o monto especial</strong>
+                          <small>Precio normal: {defaultAmount ? formatGuarani(defaultAmount) : 'Sin precio'}</small>
+                        </span>
+                        <ChevronDown size={18} />
+                      </button>
+                      {entry.isPromotionOpen ? (
+                        <div className="promotion-adjustment-panel">
+                          <label className="field">
+                            <span>Tipo de ajuste</span>
+                            <select
+                              onChange={(event) => updateChildEntry(entry.localId, {
+                                promotionType: event.target.value as PromotionAdjustmentType,
+                                discountPercentage: '',
+                                specialFinalAmount: '',
+                              })}
+                              value={entry.promotionType}
+                            >
+                              <option value="percentage">Porcentaje de descuento</option>
+                              <option value="finalAmount">Monto final personalizado</option>
+                            </select>
+                          </label>
+                          {entry.promotionType === 'percentage' ? (
+                            <label className="field">
+                              <span>Porcentaje</span>
+                              <input
+                                inputMode="decimal"
+                                min={0}
+                                max={99}
+                                onChange={(event) => updateChildEntry(entry.localId, { discountPercentage: event.target.value })}
+                                placeholder="Ej. 10"
+                                type="number"
+                                value={entry.discountPercentage}
+                              />
+                            </label>
+                          ) : (
+                            <label className="field">
+                              <span>Monto final</span>
+                              <input
+                                inputMode="numeric"
+                                min={1}
+                                onChange={(event) => updateChildEntry(entry.localId, { specialFinalAmount: event.target.value })}
+                                placeholder={defaultAmount ? String(defaultAmount) : 'Ej. 25000'}
+                                type="number"
+                                value={entry.specialFinalAmount}
+                              />
+                            </label>
+                          )}
+                          {(() => {
+                            const preview = getPromotionPreview(entry, defaultAmount)
+                            return (
+                              <div className="promotion-preview">
+                                <span>Total promocional</span>
+                                <strong>{formatGuarani(preview.finalAmount)}</strong>
+                                <small>Descuento: {formatGuarani(preview.discountAmount)}</small>
+                              </div>
+                            )
+                          })()}
+                          <label className="field promotion-reason">
+                            <span>Motivo *</span>
+                            <textarea
+                              onChange={(event) => updateChildEntry(entry.localId, { promotionReason: event.target.value })}
+                              placeholder="Ej. Promocion remera de Paraguay"
+                              rows={2}
+                              value={entry.promotionReason}
+                            />
+                          </label>
+                          <button className="button ghost promotion-cancel" onClick={() => cancelPromotionAdjustment(entry.localId)} type="button">
+                            <X size={16} />
+                            Cancelar ajuste
+                          </button>
+                        </div>
+                      ) : null}
+                    </section>
                   )}
 
                   {!compact ? (
@@ -704,7 +854,8 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
               <div className="entry-summary-list">
                 {childEntries.map((entry) => {
                   const plan = timePlans.find((item) => item.id === entry.planId) ?? timePlans[0]
-                  const amount = plan.isUnlimited ? 0 : Number(entry.amountCharged || plan.defaultPrice || 0)
+                  const preview = getPromotionPreview(entry, plan.defaultPrice ?? null)
+                  const amount = plan.isUnlimited ? 0 : preview.isApplied ? preview.finalAmount : Number(plan.defaultPrice ?? 0)
                   return (
                     <div key={entry.localId}>
                       <span>{entry.childName || 'Nino sin nombre'} - {plan.name}</span>

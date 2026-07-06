@@ -61,6 +61,24 @@ const mapUnlimitedPricing = (value: unknown): ActiveVisit['unlimitedPricing'] =>
   }
 }
 
+const mapPromotionalAdjustment = (value: unknown): ActiveVisit['promotionalAdjustment'] => {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  return {
+    type: record.type === 'percentage' ? 'percentage' : record.type === 'final_amount' ? 'final_amount' : undefined,
+    originalAmount: Number(record.originalAmount ?? 0),
+    percentage: record.percentage === null || record.percentage === undefined ? null : Number(record.percentage),
+    discountAmount: Number(record.discountAmount ?? 0),
+    finalAmount: Number(record.finalAmount ?? 0),
+    reason: String(record.reason ?? ''),
+    adjustedBy: record.adjustedBy ? String(record.adjustedBy) : null,
+    adjustedByName: String(record.adjustedByName ?? ''),
+    adjustedByRole: (record.adjustedByRole as UserRole | '') ?? '',
+    adjustedAt: dateFromTimestamp(record.adjustedAt),
+    sourceIntegrity: record.sourceIntegrity === 'secure_backend' ? 'secure_backend' : undefined,
+  }
+}
+
 const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   id,
   groupEntryId: data.groupEntryId ? String(data.groupEntryId) : undefined,
@@ -100,6 +118,7 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
   customAmount: Boolean(data.customAmount),
   unlimitedPricing: mapUnlimitedPricing(data.unlimitedPricing),
+  promotionalAdjustment: mapPromotionalAdjustment(data.promotionalAdjustment),
   notes: String(data.notes ?? ''),
   timeExtensions: mapTimeExtensions(data.timeExtensions),
   status: 'active',

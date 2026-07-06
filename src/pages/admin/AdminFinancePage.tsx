@@ -63,6 +63,10 @@ const methodText = (payment: PaymentRecord) => {
 
 const paymentDetail = (payment: PaymentRecord) => payment.description || (payment.concepts === 'canteen' ? 'Consumo de cantina' : payment.concepts === 'event' ? 'Cobro de evento' : 'Cobro')
 const paymentPerson = (payment: PaymentRecord) => payment.childName || payment.eventName || payment.customerName || payment.accountType || 'Cuenta manual'
+const paymentPromotions = (payment: PaymentRecord) => [
+  ...(Array.isArray(payment.promotionalAdjustment) ? payment.promotionalAdjustment : payment.promotionalAdjustment ? [payment.promotionalAdjustment] : []),
+  ...(payment.promotionalAdjustments ?? []),
+]
 const categoryLabel: Record<ExpenseCategory, string> = {
   canteen_purchase: 'Cantina / compra de productos',
   cleaning: 'Limpieza',
@@ -464,6 +468,12 @@ export function AdminFinancePage() {
               <div className="checkout-line"><span>Método</span><strong>{methodText(selectedPayment)}</strong></div>
               <div className="checkout-line"><span>Fecha</span><strong>{selectedPayment.paidAt?.toLocaleString('es-PY') ?? 'Sin fecha'}</strong></div>
               <div className="checkout-line"><span>Usuario</span><strong>{displayUserName(selectedPayment.createdBy, selectedPayment.createdByName)}</strong></div>
+              {paymentPromotions(selectedPayment).map((promotion, index) => (
+                <div className="checkout-line" key={`${promotion.reason ?? 'promo'}-${index}`}>
+                  <span>Descuento aplicado</span>
+                  <strong>{formatGuarani(promotion.discountAmount ?? 0)} - {promotion.reason || 'Sin motivo'}</strong>
+                </div>
+              ))}
             </div>
             <div className="checkout-total-bar">
               <span>Total cobrado</span>

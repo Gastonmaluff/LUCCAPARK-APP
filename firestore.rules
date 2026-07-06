@@ -192,6 +192,7 @@ service cloud.firestore {
         )
         && (!request.resource.data.keys().hasAny(['extensionChargeAmount']) || request.resource.data.extensionChargeAmount == 0)
         && (!request.resource.data.keys().hasAny(['timeExtensions']) || request.resource.data.timeExtensions.size() == 0)
+        && !request.resource.data.keys().hasAny(['promotionalAdjustment', 'promotionAdjustment'])
         && (!request.resource.data.keys().hasAny(['paymentStatus']) || request.resource.data.paymentStatus != 'paid')
         && (!request.resource.data.keys().hasAny(['paidParkAmount']) || request.resource.data.paidParkAmount == 0)
         && (!request.resource.data.keys().hasAny(['parkPaymentStatus']) || request.resource.data.parkPaymentStatus == 'pending')
@@ -207,7 +208,7 @@ service cloud.firestore {
           'parkPaymentMethod', 'timeExtensions', 'expectedEndAt', 'durationMinutes',
           'status', 'endedAt', 'realDurationMinutes', 'sourceIntegrity',
           'groupEntryId', 'planId', 'planName', 'isUnlimited', 'defaultAmount',
-          'customAmount', 'startedAt'
+          'customAmount', 'promotionalAdjustment', 'promotionAdjustment', 'startedAt'
         ]);
     }
 

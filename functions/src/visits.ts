@@ -39,6 +39,20 @@ interface VisitCharge {
   unlimitedPricing?: UnlimitedPricingAudit
 }
 
+interface PromotionalAdjustmentAudit {
+  type: 'percentage' | 'final_amount'
+  originalAmount: number
+  percentage: number | null
+  discountAmount: number
+  finalAmount: number
+  reason: string
+  adjustedBy: string
+  adjustedByName: string
+  adjustedByRole: UserRole
+  adjustedAt: Timestamp
+  sourceIntegrity: 'secure_backend'
+}
+
 interface UnlimitedPricingAudit {
   type: 'unlimited_checkout'
   startedAt: Timestamp
@@ -60,25 +74,75 @@ interface UnlimitedPricingAudit {
 const normalizedDocumentNumber = (value: unknown) => stringValue(value).replace(/\D/g, '')
 const lowerSearchKey = (value: string) => value.trim().toLocaleLowerCase('es')
 
-const resolvePlan = (input: Record<string, unknown>, actor: Actor) => {
+const resolvePromotionalAdjustment = (
+  input: Record<string, unknown>,
+  actor: Actor,
+  originalAmount: number,
+  now: Timestamp,
+): PromotionalAdjustmentAudit | null => {
+  const rawAdjustment = input.promotionalAdjustment ?? input.promotionAdjustment
+  const legacyCustomAmount = input.customAmount === true
+  if (!rawAdjustment && !legacyCustomAmount) return null
+  if (!rawAdjustment) {
+    throw new HttpsError('invalid-argument', 'Usa el ajuste promocional con motivo para aplicar un importe especial.')
+  }
+
+  const adjustment = asRecord(rawAdjustment)
+  const reason = requiredString(adjustment.reason, 'El motivo del descuento', 300)
+  const type = stringValue(adjustment.type)
+  let percentage: number | null = null
+  let finalAmount: number
+
+  if (type === 'percentage') {
+    percentage = Number(adjustment.percentage)
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage >= 100) {
+      throw new HttpsError('invalid-argument', 'El porcentaje de descuento debe ser mayor a 0 y menor a 100.')
+    }
+    finalAmount = Math.round(originalAmount * (100 - percentage) / 100)
+  } else if (type === 'finalAmount' || type === 'final_amount') {
+    finalAmount = positiveMoney(adjustment.finalAmount, 'El monto final promocional')
+  } else {
+    throw new HttpsError('invalid-argument', 'El tipo de descuento no es valido.')
+  }
+
+  if (finalAmount <= 0) {
+    throw new HttpsError('invalid-argument', 'El monto final promocional debe ser mayor a cero.')
+  }
+  if (finalAmount >= originalAmount) {
+    throw new HttpsError('invalid-argument', 'El monto promocional debe ser menor al precio normal.')
+  }
+
+  return {
+    type: type === 'percentage' ? 'percentage' : 'final_amount',
+    originalAmount,
+    percentage,
+    discountAmount: originalAmount - finalAmount,
+    finalAmount,
+    reason,
+    adjustedBy: actor.uid,
+    adjustedByName: actor.name,
+    adjustedByRole: actor.role,
+    adjustedAt: now,
+    sourceIntegrity: 'secure_backend',
+  }
+}
+
+const resolvePlan = (input: Record<string, unknown>, actor: Actor, now: Timestamp) => {
   const planId = stringValue(input.planId) as PlanId
   const plan = plans[planId]
   if (!plan) throw new HttpsError('invalid-argument', 'El plan de visita no es valido.')
   const customAmount = input.customAmount === true
-  if (customAmount && !['admin', 'socio'].includes(actor.role)) {
-    throw new HttpsError('permission-denied', 'Solo Administracion puede aplicar un importe especial.')
-  }
   if (plan.isUnlimited) {
     const hasInitialAmount = input.amountCharged !== null && input.amountCharged !== undefined && Number(input.amountCharged) > 0
-    if (customAmount || hasInitialAmount) {
+    if (customAmount || hasInitialAmount || input.promotionalAdjustment || input.promotionAdjustment) {
       throw new HttpsError('failed-precondition', 'El plan libre se cobra y confirma al finalizar la visita.')
     }
-    return { plan, customAmount: false, chargeAmount: null as number | null }
+    return { plan, customAmount: false, chargeAmount: null as number | null, promotionalAdjustment: null as PromotionalAdjustmentAudit | null }
   }
-  const chargeAmount = customAmount
-    ? positiveMoney(input.amountCharged, 'El importe especial')
-    : plan.defaultPrice ?? 0
-  return { plan, customAmount, chargeAmount }
+  const originalAmount = plan.defaultPrice ?? 0
+  const promotionalAdjustment = resolvePromotionalAdjustment(input, actor, originalAmount, now)
+  const chargeAmount = promotionalAdjustment?.finalAmount ?? originalAmount
+  return { plan, customAmount: Boolean(promotionalAdjustment), chargeAmount, promotionalAdjustment }
 }
 
 const expectedEndAt = (startedAt: Timestamp, durationMinutes: number | null) =>
@@ -276,7 +340,7 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
       if (startedAt.toMillis() > now.toMillis() + 12 * 60 * 60 * 1000 || startedAt.toMillis() < now.toMillis() - 7 * 24 * 60 * 60 * 1000) {
         throw new HttpsError('invalid-argument', 'La hora de ingreso esta fuera del rango operativo permitido.')
       }
-      const { plan, customAmount, chargeAmount } = resolvePlan(input, actor)
+      const { plan, customAmount, chargeAmount, promotionalAdjustment } = resolvePlan(input, actor, now)
       const paymentStatus = stringValue(input.paymentStatus)
       if (!['paid', 'payAtExit', 'pending'].includes(paymentStatus)) throw new HttpsError('invalid-argument', 'El estado de pago no es valido.')
       if (plan.isUnlimited && paymentStatus === 'paid') {
@@ -378,6 +442,7 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
         parkPaymentMethod: paymentMethod,
         defaultAmount: plan.defaultPrice,
         customAmount,
+        promotionalAdjustment,
         notes: optionalString(input.notes),
         timeExtensions: [],
         status: 'active',
@@ -409,12 +474,14 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
           totalPaid: chargeAmount,
           paymentMethod,
           cardType,
+          originalParkAmount: plan.defaultPrice,
+          promotionalAdjustment,
         }))
       }
       writeActivity(transaction, actor, {
         action: 'create', module: 'Recepcion', description: `Registro ingreso de ${childName}`,
         entityId: visitId, entityName: childName,
-        metadata: { amount: chargeAmount, plan: plan.name, responsible: customerName, customerId: customerRef.id, paymentId, reusedCustomer: Boolean(customerSnapshot), previousCustomerName: stringValue(customerData.name) },
+        metadata: { amount: chargeAmount, plan: plan.name, responsible: customerName, customerId: customerRef.id, paymentId, promotionalAdjustment, reusedCustomer: Boolean(customerSnapshot), previousCustomerName: stringValue(customerData.name) },
       })
       return { visitId, customerId: customerRef.id, childId: childRef.id, paymentId, amount: chargeAmount ?? 0 }
     },
@@ -578,6 +645,9 @@ export const checkoutVisitGroupSecure = async (
           unlimitedPricing: visitCharges
             .filter(({ charge }) => Boolean(charge.unlimitedPricing))
             .map(({ document, charge }) => ({ visitId: document.id, childName: stringValue(document.data().childName), ...charge.unlimitedPricing })),
+          promotionalAdjustments: visits
+            .filter((document) => Boolean(document.data().promotionalAdjustment))
+            .map((document) => ({ visitId: document.id, childName: stringValue(document.data().childName), ...asRecord(document.data().promotionalAdjustment) })),
         }))
       }
       writeActivity(transaction, actor, {
@@ -596,6 +666,9 @@ export const checkoutVisitGroupSecure = async (
           unlimitedPricing: visitCharges
             .filter(({ charge }) => Boolean(charge.unlimitedPricing))
             .map(({ document, charge }) => ({ visitId: document.id, childName: stringValue(document.data().childName), ...charge.unlimitedPricing })),
+          promotionalAdjustments: visits
+            .filter((document) => Boolean(document.data().promotionalAdjustment))
+            .map((document) => ({ visitId: document.id, childName: stringValue(document.data().childName), ...asRecord(document.data().promotionalAdjustment) })),
         },
       })
       return { paymentId, visitIds: visits.map((document) => document.id), orderIds: openOrders.map((document) => document.id), parkAmountPaid, canteenAmountPaid, totalPaid, finished: finishVisits }

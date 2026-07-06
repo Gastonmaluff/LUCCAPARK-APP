@@ -108,6 +108,12 @@ export interface CreateVisitInput {
   parkPaymentMethod?: PaymentMethod
   defaultAmount?: number | null
   customAmount?: boolean
+  promotionalAdjustment?: {
+    type: 'percentage' | 'finalAmount'
+    percentage?: number | null
+    finalAmount?: number | null
+    reason: string
+  } | null
   notes?: string
 }
 
@@ -133,6 +139,20 @@ export interface UnlimitedVisitPricing {
   suggestedAmount?: number
   finalAmount?: number
   difference?: number
+  reason?: string
+  adjustedBy?: string | null
+  adjustedByName?: string
+  adjustedByRole?: UserRole | ''
+  adjustedAt?: Date | null
+  sourceIntegrity?: 'secure_backend'
+}
+
+export interface PromotionalAdjustmentAudit {
+  type?: 'percentage' | 'final_amount'
+  originalAmount?: number
+  percentage?: number | null
+  discountAmount?: number
+  finalAmount?: number
   reason?: string
   adjustedBy?: string | null
   adjustedByName?: string
@@ -180,6 +200,7 @@ export interface ActiveVisit {
   defaultAmount?: number | null
   customAmount?: boolean
   unlimitedPricing?: UnlimitedVisitPricing | null
+  promotionalAdjustment?: PromotionalAdjustmentAudit | null
   notes?: string
   timeExtensions?: VisitTimeExtension[]
   status: 'active'
@@ -278,6 +299,9 @@ export interface PaymentRecord {
   parkAmountPaid?: number
   canteenAmountPaid?: number
   eventAmountPaid?: number
+  originalParkAmount?: number | null
+  promotionalAdjustment?: PromotionalAdjustmentAudit | PromotionalAdjustmentAudit[] | null
+  promotionalAdjustments?: PromotionalAdjustmentAudit[]
   createdBy?: string | null
   createdByName?: string
 }

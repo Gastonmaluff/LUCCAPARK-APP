@@ -48,3 +48,22 @@ test('plan libre ingresa sin monto inicial y se cobra al finalizar', () => {
   assert.match(groupCheckoutModal, /pendingUnlimitedVisits/)
   assert.match(groupCheckoutModal, /Cantina compartida/)
 })
+
+test('descuentos temporizados usan seccion colapsable y backend seguro', () => {
+  const visitForm = read('src/components/reception/VisitForm.tsx')
+  const functionsVisits = read('functions/src/visits.ts')
+  const rules = read('firestore.rules')
+
+  assert.match(visitForm, /Aplicar descuento o monto especial/)
+  assert.match(visitForm, /isPromotionOpen:\s*false/)
+  assert.match(visitForm, /Cancelar ajuste/)
+  assert.match(visitForm, /promotionType:\s*'percentage'/)
+  assert.match(visitForm, /promotionalAdjustment/)
+  assert.doesNotMatch(visitForm, /Usar monto diferente/)
+  assert.match(functionsVisits, /resolvePromotionalAdjustment/)
+  assert.match(functionsVisits, /El motivo del descuento/)
+  assert.match(functionsVisits, /finalAmount >= originalAmount/)
+  assert.match(functionsVisits, /sourceIntegrity:\s*'secure_backend'/)
+  assert.match(rules, /promotionalAdjustment/)
+  assert.match(rules, /promotionAdjustment/)
+})

@@ -325,6 +325,10 @@ describe('integridad financiera del cliente', () => {
     await assertFails(setDoc(doc(db, 'activeVisits', 'forged-price'), {
       status: 'active', planId: 'one-hour', parkChargeAmount: 1, paymentStatus: 'pending',
     }))
+    await assertFails(setDoc(doc(db, 'activeVisits', 'forged-promotion'), {
+      status: 'active', planId: 'one-hour', parkChargeAmount: 60000, paymentStatus: 'pending',
+      promotionalAdjustment: { type: 'percentage', percentage: 10, finalAmount: 54000 },
+    }))
     await assertFails(setDoc(doc(db, 'visits', 'forged-payment'), {
       status: 'active', planId: 'one-hour', parkChargeAmount: 60000,
       paymentStatus: 'paid', paidParkAmount: 60000,

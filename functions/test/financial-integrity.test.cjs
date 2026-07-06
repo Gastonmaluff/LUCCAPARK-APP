@@ -387,6 +387,32 @@ describe('checkout grupal atomico', () => {
     assert.equal(result.totalPaid, 140000)
   })
 
+  test('22b. checkout grupal conserva descuento autorizado y no duplica cantina', async () => {
+    await seedGroup()
+    const promotionalAdjustment = {
+      type: 'percentage', originalAmount: 60000, percentage: 10, discountAmount: 6000,
+      finalAmount: 54000, reason: 'Promocion remera de Paraguay', adjustedBy: 'recepcion',
+      adjustedByName: 'Recepcion', adjustedByRole: 'recepcion', adjustedAt: new Date(),
+      sourceIntegrity: 'secure_backend',
+    }
+    await Promise.all([
+      db.collection('activeVisits').doc('visit-a').update({
+        amountCharged: 54000, parkChargeAmount: 54000, customAmount: true, promotionalAdjustment,
+      }),
+      db.collection('visits').doc('visit-a').update({
+        amountCharged: 54000, parkChargeAmount: 54000, customAmount: true, promotionalAdjustment,
+      }),
+    ])
+    const result = await checkoutVisitGroupSecure('recepcion', {
+      groupEntryId: 'group-1', paymentMethod: 'cash', finishVisits: false, source: 'reception', idempotencyKey: key('group-discount'),
+    })
+    assert.equal(result.parkAmountPaid, 114000)
+    assert.equal(result.canteenAmountPaid, 20000)
+    assert.equal(result.totalPaid, 134000)
+    const payment = (await db.collection('payments').doc(result.paymentId).get()).data()
+    assert.equal(payment.promotionalAdjustments[0].discountAmount, 6000)
+  })
+
   test('23. al finalizar se cierran las dos visitas y la cuenta', async () => {
     await seedGroup()
     await checkoutVisitGroupSecure('recepcion', {
@@ -420,11 +446,75 @@ describe('operaciones complementarias protegidas', () => {
     assert.equal((await db.collection('payments').doc(result.paymentId).get()).data().totalPaid, 60000)
   })
 
-  test('26. Recepcion no puede aplicar precios especiales arbitrarios', async () => {
+  test('26. importes especiales legacy sin auditoria son rechazados', async () => {
     await assert.rejects(() => createVisitSecure('recepcion', {
       childName: 'Luna', customerName: 'Maria', planId: 'one-hour', startedAt: new Date().toISOString(),
       paymentStatus: 'pending', amountCharged: 1, customAmount: true, idempotencyKey: key('custom-price'),
-    }), /solo Administracion/i)
+    }), /ajuste promocional/i)
+  })
+
+  test('26b. Recepcion puede aplicar descuento porcentual auditado', async () => {
+    const result = await createVisitSecure('recepcion', {
+      childName: 'Luna', customerName: 'Maria', customerPhone: '0981000000',
+      planId: 'one-hour', startedAt: new Date().toISOString(), paymentStatus: 'paid',
+      paymentMethod: 'cash', amountCharged: 1, customAmount: true,
+      promotionalAdjustment: { type: 'percentage', percentage: 10, reason: 'Promocion remera de Paraguay' },
+      idempotencyKey: key('promo-percent'),
+    })
+    assert.equal(result.amount, 54000)
+    const visit = (await db.collection('visits').doc(result.visitId).get()).data()
+    assert.equal(visit.defaultAmount, 60000)
+    assert.equal(visit.amountCharged, 54000)
+    assert.equal(visit.parkChargeAmount, 54000)
+    assert.equal(visit.promotionalAdjustment.discountAmount, 6000)
+    assert.equal(visit.promotionalAdjustment.reason, 'Promocion remera de Paraguay')
+    assert.equal(visit.promotionalAdjustment.adjustedByRole, 'recepcion')
+    const payment = (await db.collection('payments').doc(result.paymentId).get()).data()
+    assert.equal(payment.totalPaid, 54000)
+    assert.equal(payment.originalParkAmount, 60000)
+    assert.equal(payment.promotionalAdjustment.finalAmount, 54000)
+  })
+
+  test('26c. monto final personalizado se recalcula y queda auditado', async () => {
+    const idempotencyKey = key('promo-final')
+    const input = {
+      childName: 'Luna', customerName: 'Maria', planId: 'one-hour', startedAt: new Date().toISOString(),
+      paymentStatus: 'pending', amountCharged: 1, customAmount: true,
+      promotionalAdjustment: { type: 'finalAmount', finalAmount: 50000, reason: 'Promocion especial autorizada' },
+      idempotencyKey,
+    }
+    const first = await createVisitSecure('recepcion', input)
+    const second = await createVisitSecure('recepcion', input)
+    assert.deepEqual(second, first)
+    assert.equal((await db.collection('visits').doc(first.visitId).get()).data().promotionalAdjustment.discountAmount, 10000)
+    assert.equal((await db.collection('visits').get()).size, 1)
+  })
+
+  test('26d. descuentos invalidos son rechazados por backend', async () => {
+    await assert.rejects(() => createVisitSecure('recepcion', {
+      childName: 'Luna', customerName: 'Maria', planId: 'one-hour', startedAt: new Date().toISOString(),
+      paymentStatus: 'pending', customAmount: true,
+      promotionalAdjustment: { type: 'percentage', percentage: 10 },
+      idempotencyKey: key('promo-no-reason'),
+    }), /motivo/i)
+    await assert.rejects(() => createVisitSecure('recepcion', {
+      childName: 'Luna', customerName: 'Maria', planId: 'one-hour', startedAt: new Date().toISOString(),
+      paymentStatus: 'pending', customAmount: true,
+      promotionalAdjustment: { type: 'percentage', percentage: 100, reason: 'Gratis no autorizado' },
+      idempotencyKey: key('promo-100'),
+    }), /porcentaje/i)
+    await assert.rejects(() => createVisitSecure('recepcion', {
+      childName: 'Luna', customerName: 'Maria', planId: 'one-hour', startedAt: new Date().toISOString(),
+      paymentStatus: 'pending', customAmount: true,
+      promotionalAdjustment: { type: 'finalAmount', finalAmount: 0, reason: 'Cortesia' },
+      idempotencyKey: key('promo-zero'),
+    }), /mayor a cero/i)
+    await assert.rejects(() => createVisitSecure('recepcion', {
+      childName: 'Luna', customerName: 'Maria', planId: 'one-hour', startedAt: new Date().toISOString(),
+      paymentStatus: 'pending', customAmount: true,
+      promotionalAdjustment: { type: 'finalAmount', finalAmount: 70000, reason: 'Recargo no autorizado' },
+      idempotencyKey: key('promo-over'),
+    }), /menor al precio normal/i)
   })
 
   test('27. extension usa importe fijo del servidor', async () => {

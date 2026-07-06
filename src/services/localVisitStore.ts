@@ -123,6 +123,21 @@ export const createLocalNormalVisit = async (input: CreateVisitInput) => {
     parkPaymentMethod: input.paymentStatus === 'paid' ? input.paymentMethod ?? '' : '',
     defaultAmount: input.defaultAmount ?? plan.defaultPrice ?? null,
     customAmount: Boolean(input.customAmount),
+    promotionalAdjustment: input.promotionalAdjustment
+      ? {
+          type: input.promotionalAdjustment.type === 'percentage' ? 'percentage' : 'final_amount',
+          originalAmount: input.defaultAmount ?? plan.defaultPrice ?? 0,
+          percentage: input.promotionalAdjustment.percentage ?? null,
+          discountAmount: Number(input.defaultAmount ?? plan.defaultPrice ?? 0) - Number(input.amountCharged ?? 0),
+          finalAmount: Number(input.amountCharged ?? 0),
+          reason: input.promotionalAdjustment.reason,
+          adjustedBy: 'local',
+          adjustedByName: 'Local',
+          adjustedByRole: 'recepcion',
+          adjustedAt: now,
+          sourceIntegrity: 'secure_backend',
+        }
+      : null,
     notes: optionalText(input.notes),
     timeExtensions: [],
     status: 'active',
