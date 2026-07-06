@@ -25,7 +25,7 @@ const adminModulesByRole: Record<UserRole, AdminModule[]> = {
   admin: ['dashboard', 'reception', 'canteen', 'reservations', 'finance', 'reports', 'clients', 'tasks', 'settings'],
   socio: ['dashboard', 'reception', 'canteen', 'reservations', 'finance', 'reports', 'clients', 'tasks', 'settings'],
   encargado_eventos: ['reception', 'reservations', 'clients', 'tasks'],
-  recepcion: ['reception', 'canteen', 'clients'],
+  recepcion: ['reception', 'canteen'],
   cantina: ['canteen'],
 }
 
