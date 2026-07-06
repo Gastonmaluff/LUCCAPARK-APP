@@ -8,7 +8,7 @@ import { useAuthUser } from '../hooks/useAuthUser'
 
 const readableAuthError = (message: string) => {
   if (message.includes('auth/invalid-credential') || message.includes('auth/wrong-password')) {
-    return 'Email o contraseña incorrectos.'
+    return 'Email o contrasena incorrectos.'
   }
 
   if (message.includes('auth/user-not-found')) {
@@ -16,10 +16,10 @@ const readableAuthError = (message: string) => {
   }
 
   if (message.includes('auth/too-many-requests')) {
-    return 'Demasiados intentos. Probá de nuevo en unos minutos.'
+    return 'Demasiados intentos. Proba de nuevo en unos minutos.'
   }
 
-  return 'No se pudo iniciar sesión. Revisá Firebase Auth y las credenciales.'
+  return 'No se pudo iniciar sesion. Revisa Firebase Auth y las credenciales.'
 }
 
 export function LoginPage() {
@@ -58,7 +58,6 @@ export function LoginPage() {
         <div>
           <p className="eyebrow">Acceso interno</p>
           <h1 style={{ margin: '4px 0' }}>Ingresar al sistema</h1>
-          <p className="muted">Usá el usuario creado en Firebase Authentication para operar recepción, admin y TV.</p>
         </div>
         <form className="form-grid" onSubmit={handleSubmit}>
           {error ? <div className="form-alert error">{error}</div> : null}
@@ -76,7 +75,7 @@ export function LoginPage() {
           </label>
           <label className="field">
             <span>
-              <Lock size={16} /> Contraseña
+              <Lock size={16} /> Contrasena
             </span>
             <input
               autoComplete="current-password"
