@@ -60,18 +60,19 @@ export const getDefaultRouteForRole = (role: UserRole) => {
 export const canAccessTv = (role: UserRole) => tvViewerRoles.includes(role)
 
 export const canAccessPath = (role: UserRole, pathname: string) => {
-  if (pathname === '/admin' || pathname === '/admin/') return true
-  if (pathname === '/admin/tv' || pathname.startsWith('/admin/tv/')) return canAccessTv(role)
-  const adminPath = adminPathModules.find(({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  const normalizedPathname = pathname.toLocaleLowerCase('es')
+  if (normalizedPathname === '/admin' || normalizedPathname === '/admin/') return true
+  if (normalizedPathname === '/admin/tv' || normalizedPathname.startsWith('/admin/tv/')) return canAccessTv(role)
+  const adminPath = adminPathModules.find(({ prefix }) => normalizedPathname === prefix || normalizedPathname.startsWith(`${prefix}/`))
   if (adminPath) return canAccessAdminModule(role, adminPath.module)
-  if (pathname === '/recepcion' || pathname.startsWith('/recepcion/')) {
+  if (normalizedPathname === '/recepcion' || normalizedPathname.startsWith('/recepcion/')) {
     return role === 'admin' || role === 'socio' || role === 'recepcion' || role === 'encargado_eventos'
   }
-  if (pathname === '/cantina' || pathname.startsWith('/cantina/')) {
+  if (normalizedPathname === '/cantina' || normalizedPathname.startsWith('/cantina/')) {
     return role === 'admin' || role === 'socio' || role === 'recepcion' || role === 'cantina'
   }
-  if (pathname === '/tv' || pathname.startsWith('/tv/')) return canAccessTv(role)
-  if (pathname === '/appmovil' || pathname.startsWith('/appmovil/')) return true
+  if (normalizedPathname === '/tv' || normalizedPathname.startsWith('/tv/')) return canAccessTv(role)
+  if (normalizedPathname === '/appmovil' || normalizedPathname.startsWith('/appmovil/')) return true
   return false
 }
 

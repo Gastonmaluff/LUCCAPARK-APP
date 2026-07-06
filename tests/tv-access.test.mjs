@@ -10,9 +10,10 @@ test('admin tv tiene ruta protegida propia y roles autorizados', () => {
 
   assert.match(app, /<Route path="admin\/tv" element=\{<TVPage \/>\} \/>/)
   assert.match(app, /<Route path="tv" element=\{<TVPage \/>\} \/>/)
+  assert.match(accessControl, /const normalizedPathname = pathname\.toLocaleLowerCase\('es'\)/)
   assert.match(accessControl, /const tvViewerRoles: UserRole\[\] = \['admin', 'socio', 'recepcion'\]/)
-  assert.match(accessControl, /pathname === '\/admin\/tv' \|\| pathname\.startsWith\('\/admin\/tv\/'\)/)
-  assert.match(accessControl, /pathname === '\/tv' \|\| pathname\.startsWith\('\/tv\/'\)/)
+  assert.match(accessControl, /normalizedPathname === '\/admin\/tv' \|\| normalizedPathname\.startsWith\('\/admin\/tv\/'\)/)
+  assert.match(accessControl, /normalizedPathname === '\/tv' \|\| normalizedPathname\.startsWith\('\/tv\/'\)/)
   assert.match(accessControl, /export const canAccessTv = \(role: UserRole\) => tvViewerRoles\.includes\(role\)/)
   assert.doesNotMatch(accessControl, /const tvViewerRoles[^\n]*'cantina'/)
   assert.doesNotMatch(accessControl, /const tvViewerRoles[^\n]*'encargado_eventos'/)
