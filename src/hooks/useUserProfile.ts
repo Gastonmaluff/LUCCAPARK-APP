@@ -70,9 +70,23 @@ export function useUserProfile() {
     return unsubscribe
   }, [isCheckingAuth, user])
 
-  const permissions = useMemo(() => {
-    return getRolePermissions(profile?.role ?? null, profile?.isActive === true)
-  }, [profile?.isActive, profile?.role])
+  const profileBelongsToCurrentUser = Boolean(user && profile?.uid === user.uid)
+  const currentProfile = profileBelongsToCurrentUser ? profile : null
+  const currentProfileStatus: UserProfileStatus =
+    user && profile && !profileBelongsToCurrentUser ? 'loading' : profileStatus
+  const currentIsLoadingProfile = isLoadingProfile || Boolean(user && profile && !profileBelongsToCurrentUser)
 
-  return { isLoadingProfile, permissions, profile, profileError, profileStatus, user }
+  const permissions = useMemo(() => {
+    return getRolePermissions(currentProfile?.role ?? null, currentProfile?.isActive === true)
+  }, [currentProfile?.isActive, currentProfile?.role])
+
+  return {
+    isCheckingAuth,
+    isLoadingProfile: currentIsLoadingProfile,
+    permissions,
+    profile: currentProfile,
+    profileError,
+    profileStatus: currentProfileStatus,
+    user,
+  }
 }

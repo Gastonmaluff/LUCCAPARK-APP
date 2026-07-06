@@ -46,6 +46,7 @@ function App() {
           <Route path="contacto" element={<ContactPage />} />
         </Route>
         <Route element={<ProtectedRoute />}>
+          <Route path="admin/tv" element={<TVPage />} />
           <Route path="admin" element={<AdminLayout />}>
             <Route index element={<RoleHomeRedirect />} />
             <Route path="dashboard" element={<AdminDashboardPage />} />

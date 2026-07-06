@@ -3,11 +3,9 @@ import { canAccessPath, getDefaultRouteForRole } from '../auth/accessControl'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { AccessDenied } from './AccessDenied'
 import { LoadingScreen } from './LoadingScreen'
-import { useAuthUser } from '../hooks/useAuthUser'
 
 export function ProtectedRoute() {
-  const { isCheckingAuth, user } = useAuthUser()
-  const { isLoadingProfile, profile, profileError, profileStatus } = useUserProfile()
+  const { isCheckingAuth, isLoadingProfile, profile, profileError, profileStatus, user } = useUserProfile()
   const location = useLocation()
 
   if (isCheckingAuth || (user && isLoadingProfile)) {

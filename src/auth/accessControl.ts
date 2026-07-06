@@ -29,6 +29,8 @@ const adminModulesByRole: Record<UserRole, AdminModule[]> = {
   cantina: ['canteen'],
 }
 
+const tvViewerRoles: UserRole[] = ['admin', 'socio', 'recepcion']
+
 const adminPathModules: Array<{ module: AdminModule; prefix: string }> = [
   { module: 'dashboard', prefix: '/admin/dashboard' },
   { module: 'reception', prefix: '/admin/recepcion' },
@@ -55,8 +57,11 @@ export const getDefaultRouteForRole = (role: UserRole) => {
   return '/admin/cantina'
 }
 
+export const canAccessTv = (role: UserRole) => tvViewerRoles.includes(role)
+
 export const canAccessPath = (role: UserRole, pathname: string) => {
   if (pathname === '/admin' || pathname === '/admin/') return true
+  if (pathname === '/admin/tv' || pathname.startsWith('/admin/tv/')) return canAccessTv(role)
   const adminPath = adminPathModules.find(({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   if (adminPath) return canAccessAdminModule(role, adminPath.module)
   if (pathname === '/recepcion' || pathname.startsWith('/recepcion/')) {
@@ -65,7 +70,7 @@ export const canAccessPath = (role: UserRole, pathname: string) => {
   if (pathname === '/cantina' || pathname.startsWith('/cantina/')) {
     return role === 'admin' || role === 'socio' || role === 'recepcion' || role === 'cantina'
   }
-  if (pathname === '/tv' || pathname.startsWith('/tv/')) return true
+  if (pathname === '/tv' || pathname.startsWith('/tv/')) return canAccessTv(role)
   if (pathname === '/appmovil' || pathname.startsWith('/appmovil/')) return true
   return false
 }
