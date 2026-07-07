@@ -79,6 +79,24 @@ const mapPromotionalAdjustment = (value: unknown): ActiveVisit['promotionalAdjus
   }
 }
 
+const mapBabyFreeEntry = (value: unknown): ActiveVisit['babyFreeEntry'] => {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  return {
+    applied: record.applied === true,
+    mode: record.mode === 'manual' ? 'manual' : 'auto',
+    maxAgeMonths: record.maxAgeMonths === null || record.maxAgeMonths === undefined ? null : Number(record.maxAgeMonths),
+    ageMonthsAtEntry: record.ageMonthsAtEntry === null || record.ageMonthsAtEntry === undefined ? null : Number(record.ageMonthsAtEntry),
+    birthDate: String(record.birthDate ?? ''),
+    reason: String(record.reason ?? ''),
+    appliedBy: record.appliedBy ? String(record.appliedBy) : null,
+    appliedByName: String(record.appliedByName ?? ''),
+    appliedByRole: (record.appliedByRole as UserRole | '') ?? '',
+    appliedAt: dateFromTimestamp(record.appliedAt),
+    sourceIntegrity: record.sourceIntegrity === 'secure_backend' ? 'secure_backend' : undefined,
+  }
+}
+
 const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   id,
   groupEntryId: data.groupEntryId ? String(data.groupEntryId) : undefined,
@@ -117,6 +135,8 @@ const mapVisit = (id: string, data: Record<string, unknown>): ActiveVisit => ({
   parkPaymentMethod: (data.parkPaymentMethod as ActiveVisit['parkPaymentMethod']) ?? '',
   defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
   customAmount: Boolean(data.customAmount),
+  isBaby: Boolean(data.isBaby),
+  babyFreeEntry: mapBabyFreeEntry(data.babyFreeEntry),
   unlimitedPricing: mapUnlimitedPricing(data.unlimitedPricing),
   promotionalAdjustment: mapPromotionalAdjustment(data.promotionalAdjustment),
   notes: String(data.notes ?? ''),

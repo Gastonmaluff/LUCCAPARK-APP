@@ -73,6 +73,43 @@ export const calculateAgeYears = (birthDateIso: string) => {
   return Math.max(0, age)
 }
 
+/**
+ * Edad en meses completos entre la fecha de nacimiento (ISO YYYY-MM-DD) y una fecha de referencia.
+ * Usa fechas reales para evitar cálculos imprecisos. Devuelve null si falta o es inválida.
+ */
+export const calculateAgeMonths = (birthDateIso: string, reference: Date = new Date()): number | null => {
+  if (!birthDateIso) {
+    return null
+  }
+
+  const [year, month, day] = birthDateIso.split('-').map(Number)
+  const birth = new Date(year, (month || 1) - 1, day || 1)
+
+  if (!year || !month || !day || Number.isNaN(birth.getTime()) || birth.getTime() > reference.getTime()) {
+    return null
+  }
+
+  let months = (reference.getFullYear() - year) * 12 + (reference.getMonth() - (month - 1))
+  if (reference.getDate() < day) {
+    months -= 1
+  }
+
+  return Math.max(0, months)
+}
+
+export const formatMonthsLabel = (months: number | null) => {
+  if (months === null) {
+    return ''
+  }
+  if (months < 12) {
+    return `${months} mes${months === 1 ? '' : 'es'}`
+  }
+  const years = Math.floor(months / 12)
+  const rest = months % 12
+  const yearsLabel = `${years} año${years === 1 ? '' : 's'}`
+  return rest === 0 ? yearsLabel : `${yearsLabel} y ${rest} mes${rest === 1 ? '' : 'es'}`
+}
+
 export const formatAgeLabel = (age: number | null) => {
   if (age === null) {
     return ''

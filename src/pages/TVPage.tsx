@@ -29,6 +29,11 @@ const paymentIcon: Record<PaymentStatus, typeof Check> = {
 const pad = (value: number) => String(value).padStart(2, '0')
 
 const formatTvTime = (visit: ActiveVisit, now: Date) => {
+  // Un bebe se muestra siempre como BEBE, nunca como LIBRE ni vencido.
+  if (visit.isBaby) {
+    return 'BEBÉ'
+  }
+
   const remainingMs = calculateRemainingMs(visit, now)
 
   if (remainingMs === null) {

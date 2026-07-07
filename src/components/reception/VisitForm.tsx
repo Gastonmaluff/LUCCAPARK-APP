@@ -1,8 +1,9 @@
 import { ChevronDown, Plus, UserPlus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { timePlans } from '../../config/timePlans'
+import { useVisitPricing } from '../../hooks/useVisitPricing'
 import { createNormalVisit, findResponsibleByDocument, normalizeDocumentNumber } from '../../services/visitService'
-import { calculateAgeYears, formatAgeLabel, formatBirthDateInput, parseBirthDateDisplay } from '../../utils/birthDate'
+import { calculateAgeMonths, calculateAgeYears, formatAgeLabel, formatBirthDateInput, formatMonthsLabel, parseBirthDateDisplay } from '../../utils/birthDate'
 import { formatGuarani } from '../../utils/money'
 import { formatParaguayanPhone, formatPersonName, phoneDigits } from '../../utils/textFormat'
 import { PaymentMethodSelector } from '../payments/PaymentMethodSelector'
@@ -29,6 +30,8 @@ interface ChildEntry {
   discountPercentage: string
   specialFinalAmount: string
   promotionReason: string
+  babyFreeRequested: boolean
+  babyFreeReason: string
   notes: string
 }
 
@@ -78,6 +81,8 @@ const createChildEntry = (overrides: Partial<ChildEntry> = {}): ChildEntry => {
     discountPercentage: '',
     specialFinalAmount: '',
     promotionReason: '',
+    babyFreeRequested: false,
+    babyFreeReason: '',
     notes: '',
     ...overrides,
   }
@@ -120,6 +125,24 @@ const getPromotionPreview = (entry: ChildEntry, defaultAmount: number | null) =>
   return { isApplied: true, finalAmount, discountAmount: defaultAmount - finalAmount }
 }
 
+interface BabyEligibility {
+  ageMonths: number | null
+  hasBirthDate: boolean
+  autoEligible: boolean
+  configReady: boolean
+}
+
+const getBabyEligibility = (
+  birthDateIso: string,
+  reference: Date,
+  config: { babyFreeEntryEnabled: boolean; babyFreeMaxAgeMonths: number | null },
+): BabyEligibility => {
+  const ageMonths = calculateAgeMonths(birthDateIso, reference)
+  const configReady = config.babyFreeEntryEnabled && config.babyFreeMaxAgeMonths !== null
+  const autoEligible = configReady && ageMonths !== null && ageMonths <= (config.babyFreeMaxAgeMonths ?? 0)
+  return { ageMonths, hasBirthDate: Boolean(birthDateIso), autoEligible, configReady }
+}
+
 interface VisitFormProps {
   compact?: boolean
   onCancel?: () => void
@@ -139,6 +162,7 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
   const [entryCardType, setEntryCardType] = useState<'debit' | 'credit' | ''>('')
   const [responsibleLookup, setResponsibleLookup] = useState<Awaited<ReturnType<typeof findResponsibleByDocument>> | null>(null)
   const [showRegisteredPicker, setShowRegisteredPicker] = useState(false)
+  const babyConfig = useVisitPricing().config
 
   const normalizedDocumentNumber = useMemo(
     () => normalizeDocumentNumber(responsibleForm.customerDocumentNumber),
@@ -346,6 +370,9 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       const selectedPlan = timePlans.find((plan) => plan.id === entry.planId) ?? timePlans[0]
       const defaultAmount = selectedPlan.defaultPrice ?? null
       const isUnlimitedPlan = selectedPlan.isUnlimited
+      const startedAt = parseTodayTime(entry.startedAtTime)
+      const babyEligibility = getBabyEligibility(birthDateResult.iso, startedAt, babyConfig)
+      const applyBaby = babyEligibility.autoEligible || entry.babyFreeRequested
       const promotionPreview = getPromotionPreview(entry, defaultAmount)
       const hasPromotionInput = entry.isPromotionOpen && (
         entry.discountPercentage.trim()
@@ -361,7 +388,16 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         throw new Error(`${childName}: ${birthDateResult.error}`)
       }
 
-      if (!isUnlimitedPlan && entry.isPromotionOpen) {
+      if (applyBaby && isUnlimitedPlan) {
+        throw new Error(`${childName}: la entrada gratuita por bebé no se combina con el plan libre. Elegí otro plan.`)
+      }
+
+      // Selección manual (no cumple por edad o no hay config automática) exige motivo.
+      if (applyBaby && !babyEligibility.autoEligible && !entry.babyFreeReason.trim()) {
+        throw new Error(`${childName}: indica el motivo de la entrada gratuita por bebé.`)
+      }
+
+      if (!applyBaby && !isUnlimitedPlan && entry.isPromotionOpen) {
         if (!promotionPreview.isApplied) {
           throw new Error(`${childName}: completa un descuento o monto final valido menor al precio normal.`)
         }
@@ -370,12 +406,16 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         }
       }
 
-      if (!isUnlimitedPlan && hasPromotionInput && !promotionPreview.isApplied) {
+      if (!applyBaby && !isUnlimitedPlan && hasPromotionInput && !promotionPreview.isApplied) {
         throw new Error(`${childName}: cancela el ajuste o completalo correctamente.`)
       }
 
-      const finalAmount = isUnlimitedPlan ? null : promotionPreview.isApplied ? promotionPreview.finalAmount : defaultAmount
-      const promotionalAdjustment = !isUnlimitedPlan && promotionPreview.isApplied
+      const babyFreeEntry = applyBaby
+        ? { requested: true, reason: babyEligibility.autoEligible ? '' : entry.babyFreeReason.trim() }
+        : null
+
+      const finalAmount = applyBaby ? 0 : isUnlimitedPlan ? null : promotionPreview.isApplied ? promotionPreview.finalAmount : defaultAmount
+      const promotionalAdjustment = !applyBaby && !isUnlimitedPlan && promotionPreview.isApplied
         ? {
             type: entry.promotionType,
             percentage: entry.promotionType === 'percentage' ? Number(entry.discountPercentage) : null,
@@ -400,14 +440,15 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
         customerDocumentNumberNormalized: normalizedDocumentNumber,
         childrenCount: 1,
         planId: selectedPlan.id,
-        startedAt: parseTodayTime(entry.startedAtTime),
-        paymentStatus: isUnlimitedPlan ? 'payAtExit' : responsibleForm.paymentStatus,
+        startedAt,
+        paymentStatus: applyBaby ? 'paid' : isUnlimitedPlan ? 'payAtExit' : responsibleForm.paymentStatus,
         paymentMethod: responsibleForm.paymentStatus === 'paid' ? '' : '',
         cardType: '',
         amountCharged: finalAmount,
-        defaultAmount: isUnlimitedPlan ? null : defaultAmount,
-        customAmount: isUnlimitedPlan ? false : promotionPreview.isApplied,
+        defaultAmount: applyBaby || isUnlimitedPlan ? null : defaultAmount,
+        customAmount: applyBaby ? false : isUnlimitedPlan ? false : promotionPreview.isApplied,
         promotionalAdjustment,
+        babyFreeEntry,
         notes: entry.notes,
         groupEntryId,
       } satisfies CreateVisitInput
@@ -437,7 +478,8 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
       return
     }
 
-    if (responsibleForm.paymentStatus === 'paid' && !hasUnlimitedEntry) {
+    const paidTotal = payloads.reduce((sum, payload) => sum + Number(payload.amountCharged ?? payload.defaultAmount ?? 0), 0)
+    if (responsibleForm.paymentStatus === 'paid' && !hasUnlimitedEntry && paidTotal > 0) {
       setPendingPaidEntries(payloads)
       setEntryPaymentMethod('')
       setEntryCardType('')
@@ -613,6 +655,8 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
               const ageLabel = formatAgeLabel(calculatedAge)
               const defaultAmount = selectedPlan.defaultPrice ?? null
               const isUnlimitedPlan = selectedPlan.isUnlimited
+              const babyEligibility = getBabyEligibility(birthDateResult.iso, parseTodayTime(entry.startedAtTime), babyConfig)
+              const babyApplied = babyEligibility.autoEligible || entry.babyFreeRequested
 
               return (
                 <article className="child-entry-card" key={entry.localId}>
@@ -698,6 +742,47 @@ export function VisitForm({ compact = false, onCancel, onCreated }: VisitFormPro
                       />
                     </label>
                   </div>
+
+                  {!isUnlimitedPlan ? (
+                    <section className={`baby-free-entry ${babyApplied ? 'active' : ''}`}>
+                      <label className="checkbox-option compact baby-free-toggle">
+                        <input
+                          checked={babyApplied}
+                          disabled={babyEligibility.autoEligible}
+                          onChange={(event) => updateChildEntry(entry.localId, {
+                            babyFreeRequested: event.target.checked,
+                            babyFreeReason: event.target.checked ? entry.babyFreeReason : '',
+                          })}
+                          type="checkbox"
+                        />
+                        <span className="baby-tag">BEBÉ</span>
+                        Entrada gratuita por bebé
+                      </label>
+                      {babyEligibility.autoEligible ? (
+                        <small className="baby-note">
+                          Aplicada automáticamente por edad ({formatMonthsLabel(babyEligibility.ageMonths)}). No genera cargo del parque.
+                        </small>
+                      ) : entry.babyFreeRequested ? (
+                        <>
+                          {!babyEligibility.hasBirthDate ? (
+                            <small className="field-error">No se puede determinar la edad porque falta la fecha de nacimiento. Selección manual auditada.</small>
+                          ) : babyEligibility.configReady ? (
+                            <small className="baby-note">El niño ({formatMonthsLabel(babyEligibility.ageMonths)}) supera la edad configurada: se aplica como excepción manual.</small>
+                          ) : (
+                            <small className="baby-note">Detección automática sin configurar: excepción manual auditada.</small>
+                          )}
+                          <label className="field">
+                            <span>Motivo de la excepción *</span>
+                            <input
+                              onChange={(event) => updateChildEntry(entry.localId, { babyFreeReason: event.target.value })}
+                              placeholder="Bebé sin documento, autorización del dueño..."
+                              value={entry.babyFreeReason}
+                            />
+                          </label>
+                        </>
+                      ) : null}
+                    </section>
+                  ) : null}
 
                   {isUnlimitedPlan ? (
                     <div className="form-alert info">

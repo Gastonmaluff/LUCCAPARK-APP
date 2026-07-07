@@ -40,6 +40,12 @@ const statusLabel = (status: ReturnType<typeof getVisitTimeStatus>, visit: Activ
   }
   if (status === 'unlimited') {
     const elapsedTime = formatElapsedTime(visit.startedAt, now)
+    if (visit.isBaby) {
+      return {
+        title: elapsedTime === missingVisitStartTimeLabel ? 'BEBÉ' : elapsedTime,
+        detail: 'Bebé · transcurrido',
+      }
+    }
     return {
       title: elapsedTime,
       detail: elapsedTime === missingVisitStartTimeLabel ? 'Plan libre' : 'Libre · transcurrido',
@@ -59,7 +65,7 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
   const billing = getVisitBillingSummary(visit, canteenOrders)
   const hasPendingUnlimited = isPendingUnlimitedVisit(visit)
   const hasPendingBalance = billing.totalPendingAmount > 0 || hasPendingUnlimited
-  const canExtendTime = !visit.isUnlimited
+  const canExtendTime = !visit.isUnlimited && !visit.isBaby
 
   const finishWithoutDebt = async () => {
     if (hasPendingBalance) {
@@ -100,7 +106,10 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
       <div className="visit-identity-block">
         <span className="visit-initials">{initialsFromName(visit.childName)}</span>
         <div>
-          <strong>{visit.childName}</strong>
+          <strong>
+            {visit.childName}
+            {visit.isBaby ? <span className="baby-tag">BEBÉ</span> : null}
+          </strong>
           <p>Responsable: {visit.customerName || 'Sin responsable'}</p>
           <small>
             <Clock3 size={15} />
@@ -119,11 +128,13 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
         <div className="account-line">
           <span>Parque</span>
           <strong className={billing.pendingParkAmount > 0 || hasPendingUnlimited ? 'pending' : 'paid'}>
-            {hasPendingUnlimited
-              ? 'Monto a definir al finalizar'
-              : billing.pendingParkAmount > 0
-                ? `${formatGuarani(billing.pendingParkAmount)} pendiente`
-                : 'Pagado'}
+            {visit.isBaby
+              ? 'Bebé · entrada gratuita'
+              : hasPendingUnlimited
+                ? 'Monto a definir al finalizar'
+                : billing.pendingParkAmount > 0
+                  ? `${formatGuarani(billing.pendingParkAmount)} pendiente`
+                  : 'Pagado'}
           </strong>
         </div>
         <div className="account-line">
