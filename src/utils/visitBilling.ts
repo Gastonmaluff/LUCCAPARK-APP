@@ -19,6 +19,17 @@ export interface VisitBillingSummary {
 export const getVisitParkChargeAmount = (visit: Pick<ActiveVisit, 'amountCharged' | 'defaultAmount' | 'parkChargeAmount'>) =>
   Number(visit.parkChargeAmount ?? visit.amountCharged ?? visit.defaultAmount ?? 0)
 
+/** Importe ya pagado de una cuenta de cantina (compatibilidad legacy con paymentStatus). */
+export const getOrderPaidAmount = (order: CanteenOrder) => {
+  if (order.paidAmount === null || order.paidAmount === undefined) {
+    return order.status === 'paid' || order.paymentStatus === 'paid' ? order.total : 0
+  }
+  return Math.min(Math.max(0, order.paidAmount), order.total)
+}
+
+/** Saldo pendiente de una cuenta de cantina (total menos lo ya pagado parcialmente). */
+export const getOrderPendingAmount = (order: CanteenOrder) => Math.max(0, order.total - getOrderPaidAmount(order))
+
 export const getVisitBillingSummary = (visit: ActiveVisit, orders: CanteenOrder[] = []): VisitBillingSummary => {
   const relatedCanteenOrders = getOrdersForVisit(orders, visit)
   const openCanteenOrders = relatedCanteenOrders.filter((order) => order.status === 'open' || order.paymentStatus !== 'paid')
@@ -31,8 +42,9 @@ export const getVisitBillingSummary = (visit: ActiveVisit, orders: CanteenOrder[
         : 0
       : Number(visit.paidParkAmount)
   const pendingParkAmount = Math.max(0, parkChargeAmount - paidParkAmount)
-  const pendingCanteenAmount = openCanteenOrders.reduce((sum, order) => sum + order.total, 0)
+  const pendingCanteenAmount = openCanteenOrders.reduce((sum, order) => sum + getOrderPendingAmount(order), 0)
   const paidCanteenAmount = paidCanteenOrders.reduce((sum, order) => sum + order.total, 0)
+    + openCanteenOrders.reduce((sum, order) => sum + getOrderPaidAmount(order), 0)
   const hasPendingUnlimitedPricing = isPendingUnlimitedVisit(visit)
 
   return {
@@ -66,8 +78,9 @@ export const getVisitGroupBillingSummary = (visits: ActiveVisit[], orders: Cante
     return sum + visitPaid
   }, 0)
   const pendingParkAmount = Math.max(0, parkChargeAmount - paidParkAmount)
-  const pendingCanteenAmount = openCanteenOrders.reduce((sum, order) => sum + order.total, 0)
+  const pendingCanteenAmount = openCanteenOrders.reduce((sum, order) => sum + getOrderPendingAmount(order), 0)
   const paidCanteenAmount = paidCanteenOrders.reduce((sum, order) => sum + order.total, 0)
+    + openCanteenOrders.reduce((sum, order) => sum + getOrderPaidAmount(order), 0)
   const hasPendingUnlimitedPricing = visits.some(isPendingUnlimitedVisit)
 
   return {

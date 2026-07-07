@@ -105,6 +105,8 @@ const mapOrder = (id: string, data: Record<string, unknown>): CanteenOrder => ({
     data.estimatedProfit === null || data.estimatedProfit === undefined ? undefined : Number(data.estimatedProfit),
   status: (data.status as CanteenOrderStatus) ?? 'open',
   paymentStatus: (data.paymentStatus as CanteenOrder['paymentStatus']) ?? 'pending',
+  paidAmount: data.paidAmount === null || data.paidAmount === undefined ? undefined : Number(data.paidAmount),
+  lastPartialPaymentAt: dateFromTimestamp(data.lastPartialPaymentAt),
   paymentMethod: (data.paymentMethod as PaymentMethod) ?? '',
   cardType: (data.cardType as CanteenOrder['cardType']) ?? '',
   notes: String(data.notes ?? ''),

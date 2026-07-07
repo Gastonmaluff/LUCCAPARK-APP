@@ -20,6 +20,7 @@ import {
   createVisitSecure as createVisit,
   extendVisitTimeSecure as extendVisit,
   finishVisitSecure as finishVisit,
+  registerPartialPaymentSecure as registerPartialPayment,
 } from './visits'
 import { resetOperationalTestDataSecure as resetOperationalData } from './adminReset'
 
@@ -52,6 +53,7 @@ export const adjustCanteenStockSecure = callable('adjustCanteenStockSecure', adj
 export const createVisitSecure = callable('createVisitSecure', createVisit)
 export const checkoutVisitGroup = callable('checkoutVisitGroup', checkoutGroup)
 export const chargeVisitSecure = callable('chargeVisitSecure', chargeVisit)
+export const registerPartialPaymentSecure = callable('registerPartialPaymentSecure', registerPartialPayment)
 export const extendVisitTimeSecure = callable('extendVisitTimeSecure', extendVisit)
 export const finishVisitSecure = callable('finishVisitSecure', finishVisit)
 

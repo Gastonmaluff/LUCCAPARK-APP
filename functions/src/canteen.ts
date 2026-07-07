@@ -96,6 +96,19 @@ const normalizeTrustedLine = (value: unknown, index: number): TrustedLine => {
   }
 }
 
+/**
+ * Importe ya pagado de una cuenta de cantina.
+ * Compatibilidad legacy: si no existe paidAmount se infiere del estado (paid => total, resto => 0).
+ */
+export const orderPaidAmount = (data: DocumentData, total: number): number => {
+  const raw = data.paidAmount
+  if (raw === null || raw === undefined) {
+    return data.paymentStatus === 'paid' || data.status === 'paid' ? total : 0
+  }
+  const paid = nonNegativeMoney(raw, 'El importe pagado de la cuenta')
+  return Math.min(paid, total)
+}
+
 export const calculateTrustedOrderTotals = (data: DocumentData): OrderTotals => {
   const lines = Array.isArray(data.items) ? data.items.map(normalizeTrustedLine) : []
   const activeItems = lines.filter((line) => !inactiveLineStates.has(line.status))
@@ -349,6 +362,8 @@ export const createCanteenOrderSecure = async (uid: string | null | undefined, r
         estimatedProfit: totals.estimatedProfit,
         status: chargeNow ? 'paid' : 'open',
         paymentStatus: chargeNow ? 'paid' : 'pending',
+        // paidAmount rastrea pagos parciales; al cobrar todo => total, si sigue abierta se conserva lo ya pagado.
+        paidAmount: chargeNow ? totals.total : nonNegativeMoney(existingData?.paidAmount ?? 0, 'El importe pagado de la cuenta'),
         paymentMethod,
         cardType,
         notes: optionalString(input.notes),
@@ -458,12 +473,15 @@ export const chargeCanteenOrderSecure = async (uid: string | null | undefined, r
       }
       const totals = calculateTrustedOrderTotals(order)
       if (totals.total <= 0) throw new HttpsError('failed-precondition', 'No se puede cobrar una cuenta vacia.')
+      const alreadyPaid = orderPaidAmount(order, totals.total)
+      const due = totals.total - alreadyPaid
+      if (due <= 0) throw new HttpsError('failed-precondition', 'La cuenta ya fue cobrada o no esta abierta.')
       const productRefs = [...new Set(totals.activeItems.map((item) => item.productId))].map((productId) => db.collection('canteenProducts').doc(productId))
       const productSnapshots = await Promise.all(productRefs.map((ref) => transaction.get(ref)))
       if (productSnapshots.some((snapshot) => !snapshot.exists)) {
         throw new HttpsError('failed-precondition', 'La cuenta contiene un producto historico inexistente y requiere revision.')
       }
-      const payment = buildPayment(actor, orderId, order, totals.total, paymentMethod, cardType)
+      const payment = buildPayment(actor, orderId, order, due, paymentMethod, cardType)
       transaction.create(paymentRefFor(payment), payment)
       transaction.update(orderRef, {
         total: totals.total,
@@ -471,6 +489,7 @@ export const chargeCanteenOrderSecure = async (uid: string | null | undefined, r
         estimatedProfit: totals.estimatedProfit,
         status: 'paid',
         paymentStatus: 'paid',
+        paidAmount: totals.total,
         paymentMethod,
         cardType,
         paidAt: serverTimestamp(),

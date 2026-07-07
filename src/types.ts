@@ -114,6 +114,11 @@ export interface CreateVisitInput {
     finalAmount?: number | null
     reason: string
   } | null
+  babyFreeEntry?: {
+    requested: boolean
+    reason?: string
+    overrideReason?: string
+  } | null
   notes?: string
 }
 
@@ -161,6 +166,20 @@ export interface PromotionalAdjustmentAudit {
   sourceIntegrity?: 'secure_backend'
 }
 
+export interface BabyFreeEntryAudit {
+  applied?: boolean
+  mode?: 'auto' | 'manual'
+  maxAgeMonths?: number | null
+  ageMonthsAtEntry?: number | null
+  birthDate?: string
+  reason?: string
+  appliedBy?: string | null
+  appliedByName?: string
+  appliedByRole?: UserRole | ''
+  appliedAt?: Date | null
+  sourceIntegrity?: 'secure_backend'
+}
+
 export interface ActiveVisit {
   id: string
   groupEntryId?: string
@@ -194,11 +213,13 @@ export interface ActiveVisit {
   parkChargeAmount?: number | null
   paidParkAmount?: number | null
   extensionChargeAmount?: number | null
-  parkPaymentStatus?: 'pending' | 'paid'
+  parkPaymentStatus?: 'pending' | 'paid' | 'partial'
   parkPaidAt?: Date | null
   parkPaymentMethod?: PaymentMethod
   defaultAmount?: number | null
   customAmount?: boolean
+  isBaby?: boolean
+  babyFreeEntry?: BabyFreeEntryAudit | null
   unlimitedPricing?: UnlimitedVisitPricing | null
   promotionalAdjustment?: PromotionalAdjustmentAudit | null
   notes?: string
@@ -603,6 +624,8 @@ export interface CanteenOrder {
   estimatedProfit?: number
   status: CanteenOrderStatus
   paymentStatus: 'pending' | 'paid'
+  paidAmount?: number
+  lastPartialPaymentAt?: Date | null
   paymentMethod?: PaymentMethod
   cardType?: 'debit' | 'credit' | ''
   notes?: string

@@ -1,6 +1,6 @@
 import { FieldValue, Timestamp, type DocumentData, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore'
 import { HttpsError } from 'firebase-functions/v2/https'
-import { calculateTrustedOrderTotals } from './canteen'
+import { calculateTrustedOrderTotals, orderPaidAmount } from './canteen'
 import {
   asRecord,
   db,
@@ -148,7 +148,50 @@ const resolvePlan = (input: Record<string, unknown>, actor: Actor, now: Timestam
 const expectedEndAt = (startedAt: Timestamp, durationMinutes: number | null) =>
   durationMinutes === null ? null : Timestamp.fromMillis(startedAt.toMillis() + durationMinutes * 60 * 1000)
 
+interface OperationalSettings {
+  babyFreeEntryEnabled: boolean
+  babyFreeMaxAgeMonths: number | null
+}
+
+const readOperationalSettings = async (transaction: Transaction): Promise<OperationalSettings> => {
+  const snapshot = await transaction.get(db.collection('settings').doc('visitPricing'))
+  const data = snapshot.data() ?? {}
+  const rawMonths = data.babyFreeMaxAgeMonths
+  const maxAgeMonths = rawMonths === null || rawMonths === undefined || rawMonths === ''
+    ? null
+    : Number(rawMonths)
+  const validMonths = maxAgeMonths !== null && Number.isSafeInteger(maxAgeMonths) && maxAgeMonths > 0 && maxAgeMonths <= 216
+    ? maxAgeMonths
+    : null
+  return {
+    babyFreeEntryEnabled: data.babyFreeEntryEnabled === true,
+    babyFreeMaxAgeMonths: validMonths,
+  }
+}
+
+/**
+ * Edad en meses completos entre la fecha de nacimiento (YYYY-MM-DD) y la fecha de la visita.
+ * Usa fechas reales, nunca "anio actual - anio de nacimiento". Devuelve null si no hay fecha valida.
+ */
+const ageInMonths = (birthDateIso: string, at: Timestamp): number | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDateIso.trim())
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const birth = new Date(year, month - 1, day)
+  if (birth.getFullYear() !== year || birth.getMonth() !== month - 1 || birth.getDate() !== day) return null
+  const reference = at.toDate()
+  if (birth.getTime() > reference.getTime()) return null
+  let months = (reference.getFullYear() - year) * 12 + (reference.getMonth() - (month - 1))
+  if (reference.getDate() < day) months -= 1
+  return Math.max(0, months)
+}
+
+const BABY_OVERRIDE_ROLES = new Set<UserRole>(['admin', 'socio'])
+
 const resolveVisitCharge = (visit: DocumentData): VisitCharge => {
+  if (visit.isBaby === true) return { charge: 0, paid: 0, pending: 0, legacyPricing: false }
   const planId = stringValue(visit.planId) as PlanId
   const plan = plans[planId]
   const secureDocument = visit.sourceIntegrity === 'secure_backend'
@@ -341,13 +384,75 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
         throw new HttpsError('invalid-argument', 'La hora de ingreso esta fuera del rango operativo permitido.')
       }
       const { plan, customAmount, chargeAmount, promotionalAdjustment } = resolvePlan(input, actor, now)
-      const paymentStatus = stringValue(input.paymentStatus)
+
+      // --- Entrada gratuita por bebe (politica operativa separada; afecta solo el cargo del parque) ---
+      const operational = await readOperationalSettings(transaction)
+      const birthDateIso = optionalString(input.childBirthDate)
+      const ageMonthsAtEntry = birthDateIso ? ageInMonths(birthDateIso, startedAt) : null
+      const autoEligible = operational.babyFreeEntryEnabled
+        && operational.babyFreeMaxAgeMonths !== null
+        && ageMonthsAtEntry !== null
+        && ageMonthsAtEntry <= operational.babyFreeMaxAgeMonths
+      const babyEntryRecord = asRecord(input.babyFreeEntry)
+      const babyRequested = input.babyFreeEntry === true || babyEntryRecord.requested === true
+      // La gratuidad automatica se aplica por defecto; cobrar un bebe elegible exige un rechazo EXPLICITO.
+      const explicitlyDeclined = babyEntryRecord.requested === false
+      const overrideReason = optionalString(babyEntryRecord.overrideReason ?? input.babyFreeOverrideReason, 300)
+
+      // Recepcion no puede desactivar accidentalmente una gratuidad automatica: cobrar requiere Admin/Socio + motivo.
+      const wantsToChargeEligible = autoEligible && explicitlyDeclined
+      if (wantsToChargeEligible && (!BABY_OVERRIDE_ROLES.has(actor.role) || !overrideReason)) {
+        throw new HttpsError('permission-denied', 'Esta entrada es gratuita por edad. Solo Admin o Socio pueden cobrarla, indicando un motivo.')
+      }
+      const applyBaby = autoEligible ? !wantsToChargeEligible : babyRequested
+      const babyMode: 'auto' | 'manual' = autoEligible && applyBaby ? 'auto' : 'manual'
+      const manualReason = applyBaby && babyMode === 'manual'
+        ? requiredString(asRecord(input.babyFreeEntry).reason ?? input.babyFreeReason, 'El motivo de la entrada gratuita por bebe', 300)
+        : ''
+
+      if (applyBaby && plan.isUnlimited) {
+        throw new HttpsError('failed-precondition', 'La entrada gratuita por bebe no usa el plan libre.')
+      }
+
+      const babyFreeEntry = applyBaby ? {
+        applied: true,
+        mode: babyMode,
+        maxAgeMonths: operational.babyFreeMaxAgeMonths,
+        ageMonthsAtEntry,
+        birthDate: birthDateIso,
+        reason: manualReason,
+        appliedBy: actor.uid,
+        appliedByName: actor.name,
+        appliedByRole: actor.role,
+        appliedAt: now,
+        sourceIntegrity: 'secure_backend' as const,
+      } : null
+
+      const babyOverride = wantsToChargeEligible ? {
+        chargedEligibleBaby: true,
+        ageMonthsAtEntry,
+        maxAgeMonths: operational.babyFreeMaxAgeMonths,
+        reason: overrideReason,
+        authorizedBy: actor.uid,
+        authorizedByName: actor.name,
+        authorizedByRole: actor.role,
+        authorizedAt: now,
+        sourceIntegrity: 'secure_backend' as const,
+      } : null
+
+      const paymentStatus = applyBaby ? 'paid' : stringValue(input.paymentStatus)
       if (!['paid', 'payAtExit', 'pending'].includes(paymentStatus)) throw new HttpsError('invalid-argument', 'El estado de pago no es valido.')
-      if (plan.isUnlimited && paymentStatus === 'paid') {
+      if (!applyBaby && plan.isUnlimited && paymentStatus === 'paid') {
         throw new HttpsError('failed-precondition', 'El plan libre se cobra al finalizar la visita.')
       }
-      const paymentMethod = paymentStatus === 'paid' ? validPaymentMethod(input.paymentMethod) : ''
-      const cardType = paymentStatus === 'paid' ? validCardType(paymentMethod, input.cardType) : ''
+      // Un bebe no genera cargo del parque: no requiere metodo de pago aunque quede "pagado" en Gs. 0.
+      const createParkPayment = paymentStatus === 'paid' && !applyBaby
+      const paymentMethod = createParkPayment ? validPaymentMethod(input.paymentMethod) : ''
+      const cardType = createParkPayment ? validCardType(paymentMethod, input.cardType) : ''
+
+      const parkChargeAmount = applyBaby ? 0 : chargeAmount
+      const babyPlanName = applyBaby ? 'Bebe - entrada gratuita' : plan.name
+      const babyDurationMinutes = applyBaby ? null : plan.durationMinutes
 
       const customerSnapshot = await queryCustomer(transaction, input)
       const customerRef = customerSnapshot?.ref ?? db.collection('customers').doc()
@@ -425,24 +530,27 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
         guardianDocumentNumberNormalized: documentNormalized,
         childrenCount: 1,
         planId: plan.id,
-        planName: plan.name,
-        durationMinutes: plan.durationMinutes,
-        isUnlimited: plan.isUnlimited,
+        planName: babyPlanName,
+        durationMinutes: babyDurationMinutes,
+        isUnlimited: applyBaby ? false : plan.isUnlimited,
         startedAt,
-        expectedEndAt: expectedEndAt(startedAt, plan.durationMinutes),
+        expectedEndAt: applyBaby ? null : expectedEndAt(startedAt, plan.durationMinutes),
         paymentStatus,
         paymentMethod,
         cardType,
-        amountCharged: chargeAmount,
-        parkChargeAmount: chargeAmount,
-        paidParkAmount: paymentStatus === 'paid' ? chargeAmount ?? 0 : 0,
+        amountCharged: applyBaby ? 0 : chargeAmount,
+        parkChargeAmount,
+        paidParkAmount: applyBaby ? 0 : (paymentStatus === 'paid' ? chargeAmount ?? 0 : 0),
         extensionChargeAmount: 0,
-        parkPaymentStatus: paymentStatus === 'paid' ? 'paid' : 'pending',
-        parkPaidAt: paymentStatus === 'paid' ? serverTimestamp() : null,
+        parkPaymentStatus: applyBaby ? 'paid' : (paymentStatus === 'paid' ? 'paid' : 'pending'),
+        parkPaidAt: applyBaby || paymentStatus === 'paid' ? serverTimestamp() : null,
         parkPaymentMethod: paymentMethod,
-        defaultAmount: plan.defaultPrice,
-        customAmount,
-        promotionalAdjustment,
+        defaultAmount: applyBaby ? 0 : plan.defaultPrice,
+        customAmount: applyBaby ? false : customAmount,
+        promotionalAdjustment: applyBaby ? null : promotionalAdjustment,
+        isBaby: applyBaby,
+        babyFreeEntry,
+        babyFreeOverride: babyOverride,
         notes: optionalString(input.notes),
         timeExtensions: [],
         status: 'active',
@@ -457,7 +565,7 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
       transaction.create(activeRef, visitPayload)
 
       let paymentId = ''
-      if (paymentStatus === 'paid') {
+      if (createParkPayment) {
         if (!chargeAmount || chargeAmount <= 0) throw new HttpsError('failed-precondition', 'No se puede registrar como pagada una visita sin importe.')
         paymentId = newDocumentId('payments')
         transaction.create(db.collection('payments').doc(paymentId), paymentBase(actor, {
@@ -479,11 +587,28 @@ export const createVisitSecure = async (uid: string | null | undefined, rawInput
         }))
       }
       writeActivity(transaction, actor, {
-        action: 'create', module: 'Recepcion', description: `Registro ingreso de ${childName}`,
-        entityId: visitId, entityName: childName,
-        metadata: { amount: chargeAmount, plan: plan.name, responsible: customerName, customerId: customerRef.id, paymentId, promotionalAdjustment, reusedCustomer: Boolean(customerSnapshot), previousCustomerName: stringValue(customerData.name) },
+        action: 'create',
+        module: 'Recepcion',
+        description: applyBaby
+          ? `Registro ingreso de ${childName} (entrada gratuita por bebe ${babyMode === 'auto' ? 'automatica' : 'manual'})`
+          : `Registro ingreso de ${childName}`,
+        entityId: visitId,
+        entityName: childName,
+        metadata: {
+          amount: applyBaby ? 0 : chargeAmount,
+          plan: babyPlanName,
+          responsible: customerName,
+          customerId: customerRef.id,
+          paymentId,
+          promotionalAdjustment: applyBaby ? null : promotionalAdjustment,
+          isBaby: applyBaby,
+          babyFreeEntry,
+          babyFreeOverride: babyOverride,
+          reusedCustomer: Boolean(customerSnapshot),
+          previousCustomerName: stringValue(customerData.name),
+        },
       })
-      return { visitId, customerId: customerRef.id, childId: childRef.id, paymentId, amount: chargeAmount ?? 0 }
+      return { visitId, customerId: customerRef.id, childId: childRef.id, paymentId, amount: applyBaby ? 0 : chargeAmount ?? 0, isBaby: applyBaby, babyMode: applyBaby ? babyMode : '' }
     },
   })
 }
@@ -556,14 +681,18 @@ export const checkoutVisitGroupSecure = async (
         document,
         charge: resolveCheckoutVisitCharge(document.id, document.data(), input, actor, now, unlimitedHourlyRate, finishVisits),
       }))
-      const orderTotals = openOrders.map((document) => ({ document, totals: calculateTrustedOrderTotals(document.data()) }))
+      const orderTotals = openOrders.map((document) => {
+        const totals = calculateTrustedOrderTotals(document.data())
+        const paid = orderPaidAmount(document.data(), totals.total)
+        return { document, totals, due: Math.max(0, totals.total - paid) }
+      })
       const productIds = [...new Set(orderTotals.flatMap(({ totals }) => totals.activeItems.map((item) => item.productId)))]
       const productSnapshots = await Promise.all(productIds.map((productId) => transaction.get(db.collection('canteenProducts').doc(productId))))
       if (productSnapshots.some((snapshot) => !snapshot.exists)) {
         throw new HttpsError('failed-precondition', 'Una cuenta contiene productos historicos inexistentes y requiere revision.')
       }
       const parkAmountPaid = visitCharges.reduce((sum, item) => sum + item.charge.pending, 0)
-      const canteenAmountPaid = orderTotals.reduce((sum, item) => sum + item.totals.total, 0)
+      const canteenAmountPaid = orderTotals.reduce((sum, item) => sum + item.due, 0)
       const totalPaid = parkAmountPaid + canteenAmountPaid
       const paymentMethod = totalPaid > 0 ? validPaymentMethod(input.paymentMethod) : ''
       const cardType = totalPaid > 0 ? validCardType(paymentMethod, input.cardType) : ''
@@ -611,6 +740,7 @@ export const checkoutVisitGroupSecure = async (
         estimatedProfit: totals.estimatedProfit,
         status: 'paid',
         paymentStatus: 'paid',
+        paidAmount: totals.total,
         paymentMethod,
         cardType,
         paidAt: serverTimestamp(),
@@ -672,6 +802,207 @@ export const checkoutVisitGroupSecure = async (
         },
       })
       return { paymentId, visitIds: visits.map((document) => document.id), orderIds: openOrders.map((document) => document.id), parkAmountPaid, canteenAmountPaid, totalPaid, finished: finishVisits }
+    },
+  })
+}
+
+/**
+ * Cargo de parque para un pago parcial. Para una visita libre aun sin tarifar,
+ * el parque no puede cobrarse hasta finalizar, por lo que su pendiente es 0.
+ */
+const resolvePartialParkCharge = (visit: DocumentData): VisitCharge => {
+  if (visit.isUnlimited !== true) return resolveVisitCharge(visit)
+  const storedCharge = nonNegativeMoney(visit.parkChargeAmount ?? visit.amountCharged ?? 0, 'El importe historico de la visita libre')
+  const storedPaid = nonNegativeMoney(visit.paidParkAmount ?? 0, 'El importe historico pagado')
+  const alreadyPriced = storedPaid > 0 || storedCharge > 0 || visit.parkPaymentStatus === 'paid' || visit.paymentStatus === 'paid'
+  if (!alreadyPriced) return { charge: 0, paid: 0, pending: 0, legacyPricing: true }
+  if (storedPaid > storedCharge) throw new HttpsError('failed-precondition', 'La visita registra un pago mayor a su cargo y requiere revision administrativa.')
+  return { charge: storedCharge, paid: storedPaid, pending: Math.max(0, storedCharge - storedPaid), legacyPricing: true }
+}
+
+const visitStartMillis = (visit: DocumentData, fallback: Timestamp) =>
+  (visit.startedAt instanceof Timestamp ? visit.startedAt : timestampFromUnknown(visit.startedAt, fallback)).toMillis()
+
+const orderCreatedMillis = (order: DocumentData) =>
+  order.createdAt instanceof Timestamp ? order.createdAt.toMillis() : 0
+
+/**
+ * Registra un pago parcial sobre una cuenta abierta (visita o grupo) SIN cerrar la cuenta ni finalizar la visita.
+ * Regla de aplicacion determinista: cargos mas antiguos primero (parque primero, luego cantina por antiguedad).
+ * target === 'park' aplica exclusivamente al cargo del parque.
+ */
+export const registerPartialPaymentSecure = async (uid: string | null | undefined, rawInput: unknown) => {
+  const input = asRecord(rawInput)
+  const entityId = stringValue(input.groupEntryId) || stringValue(input.visitId)
+    || (Array.isArray(input.visitIds) ? input.visitIds.map(stringValue).filter(Boolean).join(',') : '')
+  const target = stringValue(input.target) === 'park' ? 'park' : 'general'
+
+  return executeIdempotent({
+    uid,
+    roles: CHECKOUT_ROLES,
+    operationType: 'register_partial_payment',
+    entityId: requiredString(entityId, 'La visita o grupo'),
+    idempotencyKey: input.idempotencyKey,
+    fingerprint: { entityId, target, amount: input.amount, paymentMethod: input.paymentMethod, cardType: input.cardType, note: optionalString(input.note, 300), clientPaymentId: stringValue(input.clientPaymentId) },
+    handler: async (transaction, actor) => {
+      const now = Timestamp.now()
+      const visits = await getActiveVisits(transaction, input)
+      const orders = await getRelatedOrders(transaction, visits)
+
+      const parkCharges = visits
+        .map((document) => ({ document, charge: resolvePartialParkCharge(document.data()) }))
+        .sort((left, right) => visitStartMillis(left.document.data(), now) - visitStartMillis(right.document.data(), now))
+
+      const openOrders = orders
+        .filter((document) => document.data().status === 'open' && document.data().paymentStatus !== 'paid')
+        .sort((left, right) => orderCreatedMillis(left.data()) - orderCreatedMillis(right.data()))
+      const orderBalances = openOrders.map((document) => {
+        const totals = calculateTrustedOrderTotals(document.data())
+        const paid = orderPaidAmount(document.data(), totals.total)
+        return { document, totals, paid, due: Math.max(0, totals.total - paid) }
+      })
+
+      const parkPendingTotal = parkCharges.reduce((sum, item) => sum + item.charge.pending, 0)
+      const canteenPendingTotal = orderBalances.reduce((sum, item) => sum + item.due, 0)
+      const totalPending = parkPendingTotal + canteenPendingTotal
+
+      const amount = positiveMoney(input.amount, 'El monto a pagar')
+      const maxAllowed = target === 'park' ? parkPendingTotal : totalPending
+      if (maxAllowed <= 0) {
+        throw new HttpsError('failed-precondition', target === 'park'
+          ? 'No hay saldo pendiente del parque para cobrar.'
+          : 'La cuenta no tiene saldo pendiente.')
+      }
+      if (amount > maxAllowed) {
+        throw new HttpsError('invalid-argument', 'El monto a pagar supera el saldo pendiente.')
+      }
+
+      const paymentMethod = validPaymentMethod(input.paymentMethod)
+      const cardType = validCardType(paymentMethod, input.cardType)
+      const note = optionalString(input.note, 300)
+
+      let remaining = amount
+      let parkApplied = 0
+      const parkUpdates: { document: QueryDocumentSnapshot; charge: VisitCharge; newPaid: number; applied: number }[] = []
+      for (const { document, charge } of parkCharges) {
+        if (remaining <= 0) break
+        const applied = Math.min(remaining, charge.pending)
+        if (applied <= 0) continue
+        parkUpdates.push({ document, charge, newPaid: charge.paid + applied, applied })
+        parkApplied += applied
+        remaining -= applied
+      }
+
+      let canteenApplied = 0
+      const orderUpdates: { document: QueryDocumentSnapshot; totals: ReturnType<typeof calculateTrustedOrderTotals>; newPaid: number; applied: number }[] = []
+      if (target === 'general') {
+        for (const balance of orderBalances) {
+          if (remaining <= 0) break
+          const applied = Math.min(remaining, balance.due)
+          if (applied <= 0) continue
+          orderUpdates.push({ document: balance.document, totals: balance.totals, newPaid: balance.paid + applied, applied })
+          canteenApplied += applied
+          remaining -= applied
+        }
+      }
+
+      if (remaining > 0) {
+        // Salvaguarda: la asignacion no pudo distribuir todo el monto (no deberia ocurrir por la validacion previa).
+        throw new HttpsError('failed-precondition', 'No se pudo aplicar el monto al saldo pendiente.')
+      }
+
+      const appliedConcepts = parkApplied > 0 && canteenApplied > 0 ? 'both' : parkApplied > 0 ? 'park' : 'canteen'
+
+      parkUpdates.forEach(({ document, charge, newPaid }) => {
+        const fullyPaid = newPaid >= charge.charge
+        const payload: Record<string, unknown> = {
+          parkChargeAmount: charge.charge,
+          paidParkAmount: newPaid,
+          parkPaymentStatus: fullyPaid ? 'paid' : 'partial',
+          paymentStatus: fullyPaid ? 'paid' : 'payAtExit',
+          parkPaymentMethod: paymentMethod,
+          parkPaidAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: actor.uid,
+          sourceIntegrity: 'secure_backend',
+        }
+        transaction.update(db.collection('visits').doc(document.id), payload)
+        transaction.update(document.ref, payload)
+      })
+
+      orderUpdates.forEach(({ document, totals, newPaid }) => {
+        // La cuenta permanece ABIERTA aunque el saldo llegue a cero: pueden agregarse nuevos consumos.
+        transaction.update(document.ref, {
+          total: totals.total,
+          paidAmount: newPaid,
+          // paymentStatus se mantiene 'pending' (la cuenta sigue abierta); el saldo real es total - paidAmount.
+          paymentStatus: 'pending',
+          lastPartialPaymentAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: actor.uid,
+          sourceIntegrity: 'secure_backend',
+        })
+      })
+
+      const first = visits[0].data()
+      const childNames = visits.map((document) => stringValue(document.data().childName)).filter(Boolean)
+      const paymentId = newDocumentId('payments')
+      transaction.create(db.collection('payments').doc(paymentId), paymentBase(actor, {
+        id: paymentId,
+        visitId: visits[0].id,
+        visitIds: visits.map((document) => document.id),
+        groupEntryId: stringValue(first.groupEntryId),
+        source: 'reception_partial',
+        concepts: appliedConcepts,
+        canteenOrderIds: orderUpdates.map(({ document }) => document.id),
+        parkAmountPaid: parkApplied,
+        canteenAmountPaid: canteenApplied,
+        eventAmountPaid: 0,
+        totalPaid: amount,
+        paymentMethod,
+        cardType,
+        childName: childNames.join(' y '),
+        childNames,
+        customerName: stringValue(first.customerName),
+        description: `Pago parcial ${childNames.join(' y ') || visits[0].id}`,
+        note,
+        target,
+        balanceBefore: totalPending,
+        balanceAfter: totalPending - amount,
+        appliedConcepts,
+      }))
+
+      writeActivity(transaction, actor, {
+        action: 'creation',
+        module: 'Recepcion',
+        description: `Registro pago parcial de Gs. ${amount.toLocaleString('es-PY')} sobre ${visits.length} visita(s)`,
+        entityId,
+        entityName: childNames.join(' y '),
+        metadata: {
+          paymentId,
+          target,
+          amount,
+          parkApplied,
+          canteenApplied,
+          balanceBefore: totalPending,
+          balanceAfter: totalPending - amount,
+          paymentMethod,
+          visitIds: visits.map((document) => document.id),
+          orderIds: orderUpdates.map(({ document }) => document.id),
+        },
+      })
+
+      return {
+        paymentId,
+        target,
+        amountPaid: amount,
+        parkAmountPaid: parkApplied,
+        canteenAmountPaid: canteenApplied,
+        balanceBefore: totalPending,
+        balanceAfter: totalPending - amount,
+        visitIds: visits.map((document) => document.id),
+        orderIds: orderUpdates.map(({ document }) => document.id),
+      }
     },
   })
 }
@@ -762,7 +1093,10 @@ export const finishVisitSecure = async (uid: string | null | undefined, rawInput
       const charge = resolveVisitCharge(visit)
       const openOrderTotals = orders
         .filter((document) => document.data().status === 'open' && document.data().paymentStatus !== 'paid')
-        .map((document) => calculateTrustedOrderTotals(document.data()).total)
+        .map((document) => {
+          const totals = calculateTrustedOrderTotals(document.data())
+          return Math.max(0, totals.total - orderPaidAmount(document.data(), totals.total))
+        })
       const pendingCanteen = openOrderTotals.reduce((sum, amount) => sum + amount, 0)
       if (charge.pending > 0 || pendingCanteen > 0) {
         throw new HttpsError('failed-precondition', 'La visita tiene saldo pendiente y debe cobrarse antes de finalizar.')

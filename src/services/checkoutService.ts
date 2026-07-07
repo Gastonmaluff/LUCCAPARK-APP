@@ -52,6 +52,61 @@ export const checkoutVisitBalance = async ({
   )
 }
 
+interface RegisterPartialPaymentInput {
+  visits: ActiveVisit[]
+  amount: number
+  paymentMethod: Exclude<PaymentMethod, ''>
+  cardType?: 'debit' | 'credit' | ''
+  target: 'park' | 'general'
+  note?: string
+  /** Identificador unico de este intento de pago (para idempotencia; reintentos por doble clic reutilizan la misma clave). */
+  clientPaymentId: string
+}
+
+export interface PartialPaymentResult {
+  paymentId: string
+  target: 'park' | 'general'
+  amountPaid: number
+  parkAmountPaid: number
+  canteenAmountPaid: number
+  balanceBefore: number
+  balanceAfter: number
+  visitIds: string[]
+  orderIds: string[]
+}
+
+/**
+ * Registra un pago parcial sobre una cuenta abierta (visita o grupo) sin cerrarla ni finalizar la visita.
+ * Aplica el pago de forma determinista en el backend (parque primero, luego cantina por antiguedad).
+ */
+export const registerPartialPayment = async ({
+  amount,
+  cardType = '',
+  clientPaymentId,
+  note = '',
+  paymentMethod,
+  target,
+  visits,
+}: RegisterPartialPaymentInput): Promise<PartialPaymentResult> => {
+  const groupEntryId = visits.find((visit) => visit.groupEntryId)?.groupEntryId ?? ''
+  const visitIds = visits.map((visit) => visit.id)
+  return callSecureFunction<PartialPaymentResult>(
+    'registerPartialPaymentSecure',
+    {
+      groupEntryId,
+      visitId: visitIds[0] ?? '',
+      visitIds,
+      amount,
+      paymentMethod,
+      cardType,
+      target,
+      note,
+      clientPaymentId,
+    },
+    `partial-payment:${clientPaymentId}`,
+  )
+}
+
 export const checkoutVisitGroupBalance = async ({
   cardType = '',
   finishVisits = false,

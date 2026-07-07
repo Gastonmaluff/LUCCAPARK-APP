@@ -14,7 +14,7 @@
     "test:restore": "firebase emulators:exec --only firestore --project demo-luccapark-restore \"node --test tests/backupRestoreSafety.test.mjs\"",
     "test:rules": "firebase emulators:exec --only firestore --project demo-luccapark-rules \"node --test tests/firestore.rules.test.mjs\"",
     "test:storage": "firebase emulators:exec --only firestore,storage --project demo-luccapark-storage \"node --test tests/storage.rules.test.mjs\"",
-    "test:functions": "npm --prefix functions run build && firebase emulators:exec --only firestore --project demo-luccapark-functions \"node --test functions/test/financial-integrity.test.cjs\"",
+    "test:functions": "npm --prefix functions run build && firebase emulators:exec --only firestore --project demo-luccapark-functions \"node --test functions/test/financial-integrity.test.cjs functions/test/partial-and-baby.test.cjs\"",
     "test:reset": "npm --prefix functions run build && firebase emulators:exec --only firestore --project demo-luccapark-reset \"node --test functions/test/admin-reset.test.cjs\"",
     "test:feature": "node --test tests/canteen-categories-reservations.test.mjs",
     "typecheck:functions": "npm --prefix functions run typecheck",

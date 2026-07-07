@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import { CreditCard, X } from 'lucide-react'
-import { checkoutVisitBalance } from '../../services/checkoutService'
+import { useMemo, useRef, useState } from 'react'
+import { CreditCard, Wallet, X } from 'lucide-react'
+import { checkoutVisitBalance, registerPartialPayment } from '../../services/checkoutService'
 import { useVisitPricing } from '../../hooks/useVisitPricing'
 import { formatGuarani } from '../../utils/money'
 import { formatElapsedMinutes, getUnlimitedPricingPreview, isPendingUnlimitedVisit } from '../../utils/unlimitedPricing'
@@ -19,6 +19,11 @@ interface ConsolidatedCheckoutModalProps {
   onDone?: () => void
 }
 
+const newClientPaymentId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `partial-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
 export function ConsolidatedCheckoutModal({
   allowFinishChoice = false,
   finishByDefault = false,
@@ -35,6 +40,13 @@ export function ConsolidatedCheckoutModal({
   const [unlimitedReason, setUnlimitedReason] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  // Modo de pago parcial: 'park' precarga el saldo del parque; 'general' permite un monto libre.
+  const [partialMode, setPartialMode] = useState<'park' | 'general' | null>(null)
+  const [partialAmount, setPartialAmount] = useState('')
+  const [partialNote, setPartialNote] = useState('')
+  // Se genera en openPartial (siempre previo a confirmar) para evitar llamadas impuras en render.
+  const clientPaymentIdRef = useRef('')
   const pricing = useVisitPricing()
   const summary = getVisitBillingSummary(visit, orders)
   const closeTime = useMemo(() => new Date(), [])
@@ -43,6 +55,70 @@ export function ConsolidatedCheckoutModal({
   const unlimitedFinalValue = hasPendingUnlimited ? Number(unlimitedFinalAmount || unlimitedPreview?.suggestedAmount || 0) : 0
   const unlimitedDifference = unlimitedPreview ? unlimitedFinalValue - unlimitedPreview.suggestedAmount : 0
   const totalPendingAmount = summary.totalPendingAmount + (finishVisit && hasPendingUnlimited ? unlimitedFinalValue : 0)
+  const totalCharges = summary.totalPaidAmount + summary.totalPendingAmount
+
+  // El pago parcial no aplica a un plan libre aun sin tarifar (se cobra al finalizar).
+  const canPartialPay = !hasPendingUnlimited && summary.totalPendingAmount > 0
+  const canChargeParkOnly = canPartialPay && summary.pendingParkAmount > 0
+  const partialMax = partialMode === 'park' ? summary.pendingParkAmount : summary.totalPendingAmount
+  const partialValue = Number(partialAmount || 0)
+  const partialRemaining = Math.max(0, summary.totalPendingAmount - (Number.isFinite(partialValue) ? partialValue : 0))
+
+  const openPartial = (mode: 'park' | 'general') => {
+    setError(null)
+    setNotice(null)
+    clientPaymentIdRef.current = newClientPaymentId()
+    setPartialMode(mode)
+    setPartialAmount(mode === 'park' ? String(summary.pendingParkAmount) : '')
+    setPartialNote('')
+  }
+
+  const confirmPartial = async () => {
+    if (!partialMode) return
+    const amount = Math.round(partialValue)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Ingresa un monto mayor a cero.')
+      return
+    }
+    if (amount > partialMax) {
+      setError('El monto supera el saldo pendiente.')
+      return
+    }
+    if (!paymentMethod) {
+      setError('Selecciona un metodo de pago.')
+      return
+    }
+    if (paymentMethod === 'card' && !cardType) {
+      setError('Selecciona si la tarjeta es debito o credito.')
+      return
+    }
+    setError(null)
+    setIsSaving(true)
+    try {
+      const result = await registerPartialPayment({
+        visits: [visit],
+        amount,
+        paymentMethod,
+        cardType,
+        target: partialMode,
+        note: partialNote.trim(),
+        clientPaymentId: clientPaymentIdRef.current,
+      })
+      onDone?.()
+      setPartialMode(null)
+      setPartialAmount('')
+      setPartialNote('')
+      setNotice(
+        result.balanceAfter > 0
+          ? `Pago registrado. La cuenta continua abierta con un saldo pendiente de ${formatGuarani(result.balanceAfter)}.`
+          : 'Pago registrado. La cuenta queda con saldo Gs. 0 y continua abierta mientras la visita siga activa.',
+      )
+    } catch (partialError) {
+      setError(partialError instanceof Error ? partialError.message : 'No se pudo registrar el pago parcial.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const confirmCheckout = async () => {
     if (hasPendingUnlimited && !finishVisit) {
@@ -113,7 +189,10 @@ export function ConsolidatedCheckoutModal({
         <div className="panel-header">
           <div>
             <p className="eyebrow">Cobro consolidado</p>
-            <h2>{visit.childName}</h2>
+            <h2>
+              {visit.childName}
+              {visit.isBaby ? <span className="baby-tag" style={{ marginLeft: 8 }}>BEBÉ</span> : null}
+            </h2>
             <p className="muted">Responsable: {visit.customerName}</p>
           </div>
           <button className="button ghost" onClick={onClose} type="button" aria-label="Cerrar cobro">
@@ -123,17 +202,20 @@ export function ConsolidatedCheckoutModal({
         </div>
 
         {error ? <div className="form-alert error">{error}</div> : null}
+        {notice ? <div className="form-alert success">{notice}</div> : null}
 
         <div className="checkout-block">
           <h3>Parque</h3>
           <div className="checkout-line">
             <span>{visit.planName}</span>
             <strong>
-              {hasPendingUnlimited
-                ? 'Monto a definir al finalizar'
-                : summary.pendingParkAmount > 0
-                  ? formatGuarani(summary.pendingParkAmount)
-                  : 'Pagado'}
+              {visit.isBaby
+                ? 'Entrada gratuita (Gs. 0)'
+                : hasPendingUnlimited
+                  ? 'Monto a definir al finalizar'
+                  : summary.pendingParkAmount > 0
+                    ? formatGuarani(summary.pendingParkAmount)
+                    : 'Pagado'}
             </strong>
           </div>
 
@@ -202,45 +284,124 @@ export function ConsolidatedCheckoutModal({
             )),
           )}
           <div className="checkout-line subtotal">
-            <span>Subtotal cantina</span>
+            <span>Saldo cantina</span>
             <strong>{formatGuarani(summary.pendingCanteenAmount)}</strong>
           </div>
         </div>
 
+        <div className="checkout-block checkout-balance-summary">
+          <div className="checkout-line">
+            <span>Total acumulado</span>
+            <strong>{formatGuarani(totalCharges)}</strong>
+          </div>
+          {summary.totalPaidAmount > 0 ? (
+            <div className="checkout-line">
+              <span>Pagado anteriormente</span>
+              <strong>{formatGuarani(summary.totalPaidAmount)}</strong>
+            </div>
+          ) : null}
+        </div>
+
         <div className="checkout-total">
-          <span>Total pendiente</span>
+          <span>Saldo pendiente actual</span>
           <strong>{formatGuarani(totalPendingAmount)}</strong>
         </div>
 
-        <PaymentMethodSelector
-          cardType={cardType}
-          disabled={isSaving}
-          onCardTypeChange={setCardType}
-          onPaymentMethodChange={setPaymentMethod}
-          paymentMethod={paymentMethod}
-        />
+        {partialMode ? (
+          <div className="checkout-block partial-payment-box">
+            <h3>{partialMode === 'park' ? 'Cobrar entrada del parque' : 'Registrar pago parcial'}</h3>
+            <div className="checkout-line">
+              <span>Saldo actual</span>
+              <strong>{formatGuarani(summary.totalPendingAmount)}</strong>
+            </div>
+            <label className="field">
+              <span>Monto a pagar ahora</span>
+              <input
+                disabled={isSaving}
+                max={partialMax}
+                min={1}
+                onChange={(event) => setPartialAmount(event.target.value)}
+                type="number"
+                value={partialAmount}
+              />
+              {partialMode === 'park' ? <small>Precargado con el saldo pendiente del parque.</small> : null}
+            </label>
+            <label className="field">
+              <span>Observación (opcional)</span>
+              <input disabled={isSaving} onChange={(event) => setPartialNote(event.target.value)} value={partialNote} />
+            </label>
+            <div className="checkout-line subtotal">
+              <span>Saldo restante</span>
+              <strong>{formatGuarani(partialRemaining)}</strong>
+            </div>
+            <PaymentMethodSelector
+              cardType={cardType}
+              disabled={isSaving}
+              onCardTypeChange={setCardType}
+              onPaymentMethodChange={setPaymentMethod}
+              paymentMethod={paymentMethod}
+            />
+            <div className="module-actions">
+              <button className="button ghost" disabled={isSaving} onClick={() => setPartialMode(null)} type="button">
+                Cancelar
+              </button>
+              <button
+                className="button primary"
+                disabled={isSaving || !paymentMethod || partialValue <= 0 || partialValue > partialMax}
+                onClick={confirmPartial}
+                type="button"
+              >
+                <Wallet size={18} />
+                Confirmar pago parcial
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {canPartialPay ? (
+              <div className="checkout-partial-actions">
+                {canChargeParkOnly ? (
+                  <button className="button secondary" disabled={isSaving} onClick={() => openPartial('park')} type="button">
+                    Cobrar entrada del parque
+                  </button>
+                ) : null}
+                <button className="button ghost" disabled={isSaving} onClick={() => openPartial('general')} type="button">
+                  Registrar pago parcial
+                </button>
+              </div>
+            ) : null}
 
-        {allowFinishChoice ? (
-          <label className="field inline-check checkout-finish-check">
-            <input checked={finishVisit} onChange={(event) => setFinishVisit(event.target.checked)} type="checkbox" />
-            El cliente se retira ahora
-          </label>
-        ) : null}
+            <PaymentMethodSelector
+              cardType={cardType}
+              disabled={isSaving}
+              onCardTypeChange={setCardType}
+              onPaymentMethodChange={setPaymentMethod}
+              paymentMethod={paymentMethod}
+            />
 
-        <div className="module-actions">
-          <button className="button ghost" onClick={onClose} type="button">
-            Cancelar
-          </button>
-          <button
-            className="button primary"
-            disabled={isSaving || (!paymentMethod && totalPendingAmount > 0) || (totalPendingAmount <= 0 && !finishVisit)}
-            onClick={confirmCheckout}
-            type="button"
-          >
-            <CreditCard size={18} />
-            {finishVisit ? 'Cobrar y finalizar' : 'Confirmar cobro'}
-          </button>
-        </div>
+            {allowFinishChoice ? (
+              <label className="field inline-check checkout-finish-check">
+                <input checked={finishVisit} onChange={(event) => setFinishVisit(event.target.checked)} type="checkbox" />
+                El cliente se retira ahora
+              </label>
+            ) : null}
+
+            <div className="module-actions">
+              <button className="button ghost" onClick={onClose} type="button">
+                Cerrar
+              </button>
+              <button
+                className="button primary"
+                disabled={isSaving || (!paymentMethod && totalPendingAmount > 0) || (totalPendingAmount <= 0 && !finishVisit)}
+                onClick={confirmCheckout}
+                type="button"
+              >
+                <CreditCard size={18} />
+                {finishVisit ? 'Cobrar y finalizar' : 'Cobrar saldo completo'}
+              </button>
+            </div>
+          </>
+        )}
       </section>
     </div>
   )
