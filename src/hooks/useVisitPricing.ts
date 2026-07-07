@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { subscribeVisitPricing, type VisitPricingConfig } from '../services/visitPricingService'
 
 export function useVisitPricing() {
-  const [config, setConfig] = useState<VisitPricingConfig>({ unlimitedHourlyRate: null })
+  const [config, setConfig] = useState<VisitPricingConfig>({
+    unlimitedHourlyRate: null,
+    babyFreeEntryEnabled: false,
+    babyFreeMaxAgeMonths: null,
+  })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 

@@ -84,6 +84,8 @@ export const getRolePermissions = (role: UserRole | null, isActive: boolean) => 
     canManageTasks: hasAccess && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
     canAssignTasks: hasAccess && (role === 'admin' || role === 'socio' || role === 'encargado_eventos'),
     canManageUsers: hasAccess && role === 'admin',
+    // Ajustes operativos (tarifa plan libre, edad gratuita bebe): solo Admin y Socio, nunca Recepcion.
+    canManageOperationalSettings: hasAccess && (role === 'admin' || role === 'socio'),
     roleLabel: role ? roleLabels[role] : 'Sin acceso',
   }
 }

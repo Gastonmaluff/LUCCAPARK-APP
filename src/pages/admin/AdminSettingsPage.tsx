@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, Trash2, Users } from 'lucide-react'
+import { Baby, ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, SlidersHorizontal, Trash2, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { BackupSettingsPanel } from '../../components/settings/BackupSettingsPanel'
@@ -18,7 +18,7 @@ import {
   type PublicPageConfig,
 } from '../../services/publicPageService'
 import { saveUserProfile } from '../../services/userService'
-import { saveVisitPricing } from '../../services/visitPricingService'
+import { saveBabyFreeEntrySettings, saveVisitPricing } from '../../services/visitPricingService'
 import { formatGuarani } from '../../utils/money'
 import type { UserRole } from '../../types'
 
@@ -335,64 +335,155 @@ export function AdminSettingsPage() {
           <PublicPageEditor config={publicPage.config} error={publicPage.error} isLoading={publicPage.isLoading} />
         ) : null}
       </article>
-      <VisitPricingPanel />
+      {permissions.canManageOperationalSettings ? <OperationalSettingsPanel /> : null}
       <BackupSettingsPanel />
     </>
   )
 }
 
-function VisitPricingPanel() {
+function OperationalSettingsPanel() {
   const pricing = useVisitPricing()
+  const [isOpen, setIsOpen] = useState(false)
   const [hourlyRate, setHourlyRate] = useState('')
-  const [status, setStatus] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
+  const [rateStatus, setRateStatus] = useState<string | null>(null)
+  const [isSavingRate, setIsSavingRate] = useState(false)
+  const [babyEnabled, setBabyEnabled] = useState(false)
+  const [babyMonths, setBabyMonths] = useState('')
+  const [babyStatus, setBabyStatus] = useState<string | null>(null)
+  const [isSavingBaby, setIsSavingBaby] = useState(false)
 
   useEffect(() => {
     setHourlyRate(pricing.config.unlimitedHourlyRate ? String(pricing.config.unlimitedHourlyRate) : '')
   }, [pricing.config.unlimitedHourlyRate])
 
+  useEffect(() => {
+    setBabyEnabled(pricing.config.babyFreeEntryEnabled)
+    setBabyMonths(pricing.config.babyFreeMaxAgeMonths ? String(pricing.config.babyFreeMaxAgeMonths) : '')
+  }, [pricing.config.babyFreeEntryEnabled, pricing.config.babyFreeMaxAgeMonths])
+
   const savePricing = async () => {
-    setStatus(null)
-    setIsSaving(true)
+    setRateStatus(null)
+    setIsSavingRate(true)
     try {
       await saveVisitPricing({ unlimitedHourlyRate: Number(hourlyRate) })
-      setStatus('Tarifa del plan libre guardada.')
+      setRateStatus('Tarifa del plan libre guardada.')
+      void logActivity({ action: 'update', description: 'Actualizó la tarifa por hora del plan libre', entityName: 'Ajustes operativos', module: 'Configuración', metadata: { unlimitedHourlyRate: Number(hourlyRate) } })
     } catch (saveError) {
-      setStatus(saveError instanceof Error ? saveError.message : 'No se pudo guardar la tarifa.')
+      setRateStatus(saveError instanceof Error ? saveError.message : 'No se pudo guardar la tarifa.')
     } finally {
-      setIsSaving(false)
+      setIsSavingRate(false)
     }
   }
 
+  const saveBaby = async () => {
+    setBabyStatus(null)
+    setIsSavingBaby(true)
+    try {
+      const trimmed = babyMonths.trim()
+      if (babyEnabled && !/^\d+$/.test(trimmed)) {
+        throw new Error('Indica la edad maxima en meses (numero entero, sin decimales).')
+      }
+      const maxAgeMonths = trimmed === '' ? null : Number(trimmed)
+      await saveBabyFreeEntrySettings({ enabled: babyEnabled, maxAgeMonths })
+      setBabyStatus('Configuración de entrada gratuita por bebé guardada.')
+      void logActivity({ action: 'update', description: `Configuró entrada gratuita por bebé (${babyEnabled ? `hasta ${maxAgeMonths} meses` : 'desactivada'})`, entityName: 'Ajustes operativos', module: 'Configuración', metadata: { babyFreeEntryEnabled: babyEnabled, babyFreeMaxAgeMonths: maxAgeMonths } })
+    } catch (saveError) {
+      setBabyStatus(saveError instanceof Error ? saveError.message : 'No se pudo guardar la configuración.')
+    } finally {
+      setIsSavingBaby(false)
+    }
+  }
+
+  const previewMonths = Number(babyMonths)
+  const babyPreview = babyEnabled && /^\d+$/.test(babyMonths.trim()) && previewMonths > 0
+    ? `Entrada gratuita automática hasta los ${previewMonths} meses${previewMonths % 12 === 0 ? ` (${previewMonths / 12} año${previewMonths / 12 === 1 ? '' : 's'})` : ''}.`
+    : babyEnabled
+      ? 'Configuración pendiente: indica una edad válida en meses.'
+      : 'Regla automática desactivada. Recepción puede aplicar la entrada gratuita manualmente con motivo.'
+
   return (
-    <article className="panel settings-pricing-panel">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Recepcion</p>
-          <h2>Tarifa del plan Libre</h2>
-          <p className="muted">Se usa como precio por hora al finalizar visitas Libre / sin limite.</p>
-        </div>
+    <article className="panel settings-operational-panel">
+      <button className="finance-collapsible-header" onClick={() => setIsOpen((current) => !current)} type="button">
+        <span className="finance-collapsible-title">
+          {isOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+          <SlidersHorizontal color="var(--turquoise)" size={20} />
+          <span>
+            <strong>Ajustes operativos</strong>
+            <small>Parámetros de operación diaria: tarifa del plan libre y entrada gratuita por bebé.</small>
+          </span>
+        </span>
         <strong>{pricing.config.unlimitedHourlyRate ? formatGuarani(pricing.config.unlimitedHourlyRate) : 'Sin tarifa'}</strong>
-      </div>
-      {pricing.error ? <div className="form-alert error">No se pudo cargar la tarifa: {pricing.error}</div> : null}
-      {status ? <div className={status.includes('No se') ? 'form-alert error' : 'form-alert success'}>{status}</div> : null}
-      <div className="form-inline">
-        <label className="field">
-          <span>Tarifa por hora</span>
-          <input
-            disabled={isSaving || pricing.isLoading}
-            min={1}
-            onChange={(event) => setHourlyRate(event.target.value)}
-            placeholder="Ej. 30000"
-            type="number"
-            value={hourlyRate}
-          />
-        </label>
-        <button className="button primary" disabled={isSaving || pricing.isLoading} onClick={savePricing} type="button">
-          <Save size={16} />
-          {isSaving ? 'Guardando...' : 'Guardar tarifa'}
-        </button>
-      </div>
+      </button>
+      {isOpen ? (
+        <div className="settings-operational-body">
+          {pricing.error ? <div className="form-alert error">No se pudo cargar la configuración: {pricing.error}</div> : null}
+
+          <section className="operational-setting-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Recepción</p>
+                <h3>Tarifa por hora del plan libre</h3>
+                <p className="muted">Se usa como precio por hora al finalizar visitas Libre / sin límite.</p>
+              </div>
+              <strong>{pricing.config.unlimitedHourlyRate ? formatGuarani(pricing.config.unlimitedHourlyRate) : 'Sin tarifa'}</strong>
+            </div>
+            {rateStatus ? <div className={rateStatus.includes('No se') ? 'form-alert error' : 'form-alert success'}>{rateStatus}</div> : null}
+            <div className="form-inline">
+              <label className="field">
+                <span>Tarifa por hora</span>
+                <input
+                  disabled={isSavingRate || pricing.isLoading}
+                  min={1}
+                  onChange={(event) => setHourlyRate(event.target.value)}
+                  placeholder="Ej. 30000"
+                  type="number"
+                  value={hourlyRate}
+                />
+              </label>
+              <button className="button primary" disabled={isSavingRate || pricing.isLoading} onClick={savePricing} type="button">
+                <Save size={16} />
+                {isSavingRate ? 'Guardando...' : 'Guardar tarifa'}
+              </button>
+            </div>
+          </section>
+
+          <section className="operational-setting-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Recepción</p>
+                <h3>Edad máxima para entrada gratuita de bebés</h3>
+                <p className="muted">Cuando el niño está dentro del límite, se aplica automáticamente la entrada gratuita por bebé (solo afecta el cargo del parque).</p>
+              </div>
+              <Baby color="var(--orange)" size={22} />
+            </div>
+            {babyStatus ? <div className={babyStatus.includes('No se') || babyStatus.includes('Indica') ? 'form-alert error' : 'form-alert success'}>{babyStatus}</div> : null}
+            <label className="checkbox-option">
+              <input checked={babyEnabled} disabled={isSavingBaby || pricing.isLoading} onChange={(event) => setBabyEnabled(event.target.checked)} type="checkbox" />
+              Activar detección automática por edad
+            </label>
+            <div className="form-inline">
+              <label className="field">
+                <span>Edad máxima (en meses)</span>
+                <input
+                  disabled={isSavingBaby || pricing.isLoading || !babyEnabled}
+                  min={1}
+                  onChange={(event) => setBabyMonths(event.target.value)}
+                  placeholder="Ej. 24"
+                  step={1}
+                  type="number"
+                  value={babyMonths}
+                />
+                <small>Se almacena en meses para un cálculo preciso (12, 18, 24, 36...).</small>
+              </label>
+              <button className="button primary" disabled={isSavingBaby || pricing.isLoading} onClick={saveBaby} type="button">
+                <Save size={16} />
+                {isSavingBaby ? 'Guardando...' : 'Guardar edad'}
+              </button>
+            </div>
+            <div className="form-alert info">{babyPreview}</div>
+          </section>
+        </div>
+      ) : null}
     </article>
   )
 }
