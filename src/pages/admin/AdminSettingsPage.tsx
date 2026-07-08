@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Baby, ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, SlidersHorizontal, Trash2, Users } from 'lucide-react'
+import { Baby, ChevronDown, ChevronRight, Eye, History, ImagePlus, Plus, Save, SlidersHorizontal, TimerReset, Trash2, Users } from 'lucide-react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { BackupSettingsPanel } from '../../components/settings/BackupSettingsPanel'
@@ -18,7 +18,7 @@ import {
   type PublicPageConfig,
 } from '../../services/publicPageService'
 import { saveUserProfile } from '../../services/userService'
-import { saveBabyFreeEntrySettings, saveVisitPricing } from '../../services/visitPricingService'
+import { saveBabyFreeEntrySettings, saveExtensionPriceSettings, saveVisitPricing } from '../../services/visitPricingService'
 import { formatGuarani } from '../../utils/money'
 import type { UserRole } from '../../types'
 
@@ -62,6 +62,32 @@ const formatActivityDate = (date: Date | null) =>
     : 'Sin fecha'
 
 const createEditorId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+const parseGuaraniDraft = (value: string, label: string) => {
+  const normalized = value.replace(/\./g, '').trim()
+  if (!/^\d+$/.test(normalized)) throw new Error(`${label} debe ser un número entero mayor a cero.`)
+  const amount = Number(normalized)
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error(`${label} debe ser mayor a cero.`)
+  return amount
+}
+
+const moneyDraft = (value: number | null | undefined) => (value ? String(value) : '')
+
+const previewGuaraniDraft = (value: string, fallback: string, label: string) => {
+  try {
+    return formatGuarani(parseGuaraniDraft(value || fallback, label))
+  } catch {
+    return 'Gs. inválido'
+  }
+}
+
+const normalizeGuaraniDraft = (value: string, label: string) => {
+  try {
+    return String(parseGuaraniDraft(value, label))
+  } catch {
+    return value
+  }
+}
 
 const updateInstallationItem = (
   config: PublicPageConfig,
@@ -142,8 +168,9 @@ export function AdminSettingsPage() {
         description="Administracion de usuarios, historial y contenido visible del sitio publico."
       />
 
-      {permissions.canManageUsers ? (
-        <article className="panel users-permissions-panel">
+      <div className="settings-panel-stack">
+        {permissions.canManageUsers ? (
+          <article className="panel users-permissions-panel">
           <button className="finance-collapsible-header" onClick={() => setIsUsersOpen((current) => !current)} type="button">
             <span className="finance-collapsible-title">
               {isUsersOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
@@ -277,10 +304,10 @@ export function AdminSettingsPage() {
               </div>
             </div>
           ) : null}
-        </article>
-      ) : null}
+          </article>
+        ) : null}
 
-      <article className="panel settings-activity-panel">
+        <article className="panel settings-activity-panel">
         <button className="finance-collapsible-header" onClick={() => setIsActivityOpen((current) => !current)} type="button">
           <span className="finance-collapsible-title">
             {isActivityOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
@@ -317,9 +344,9 @@ export function AdminSettingsPage() {
             </div>
           </div>
         ) : null}
-      </article>
+        </article>
 
-      <article className="panel settings-public-page-panel">
+        <article className="panel settings-public-page-panel">
         <button className="finance-collapsible-header" onClick={() => setIsPublicEditorOpen((current) => !current)} type="button">
           <span className="finance-collapsible-title">
             {isPublicEditorOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
@@ -334,9 +361,10 @@ export function AdminSettingsPage() {
         {isPublicEditorOpen ? (
           <PublicPageEditor config={publicPage.config} error={publicPage.error} isLoading={publicPage.isLoading} />
         ) : null}
-      </article>
-      {permissions.canManageOperationalSettings ? <OperationalSettingsPanel /> : null}
-      <BackupSettingsPanel />
+        </article>
+        {permissions.canManageOperationalSettings ? <OperationalSettingsPanel /> : null}
+        <BackupSettingsPanel />
+      </div>
     </>
   )
 }
@@ -351,6 +379,10 @@ function OperationalSettingsPanel() {
   const [babyMonths, setBabyMonths] = useState('')
   const [babyStatus, setBabyStatus] = useState<string | null>(null)
   const [isSavingBaby, setIsSavingBaby] = useState(false)
+  const [extension30Price, setExtension30Price] = useState('')
+  const [extension60Price, setExtension60Price] = useState('')
+  const [extensionStatus, setExtensionStatus] = useState<string | null>(null)
+  const [isSavingExtensionPrices, setIsSavingExtensionPrices] = useState(false)
 
   useEffect(() => {
     setHourlyRate(pricing.config.unlimitedHourlyRate ? String(pricing.config.unlimitedHourlyRate) : '')
@@ -360,6 +392,11 @@ function OperationalSettingsPanel() {
     setBabyEnabled(pricing.config.babyFreeEntryEnabled)
     setBabyMonths(pricing.config.babyFreeMaxAgeMonths ? String(pricing.config.babyFreeMaxAgeMonths) : '')
   }, [pricing.config.babyFreeEntryEnabled, pricing.config.babyFreeMaxAgeMonths])
+
+  useEffect(() => {
+    setExtension30Price(moneyDraft(pricing.config.extension30MinutePrice))
+    setExtension60Price(moneyDraft(pricing.config.extension60MinutePrice))
+  }, [pricing.config.extension30MinutePrice, pricing.config.extension60MinutePrice])
 
   const savePricing = async () => {
     setRateStatus(null)
@@ -372,6 +409,28 @@ function OperationalSettingsPanel() {
       setRateStatus(saveError instanceof Error ? saveError.message : 'No se pudo guardar la tarifa.')
     } finally {
       setIsSavingRate(false)
+    }
+  }
+
+  const saveExtensionPrices = async () => {
+    setExtensionStatus(null)
+    setIsSavingExtensionPrices(true)
+    try {
+      const next30 = parseGuaraniDraft(extension30Price, 'El precio de extensión por 30 minutos')
+      const next60 = parseGuaraniDraft(extension60Price, 'El precio de extensión por 60 minutos')
+      await saveExtensionPriceSettings({ extension30MinutePrice: next30, extension60MinutePrice: next60 })
+      setExtensionStatus('Precios de extensión guardados.')
+      void logActivity({
+        action: 'update',
+        description: 'Actualizó precios de extensión de tiempo',
+        entityName: 'Ajustes operativos',
+        metadata: { extension30MinutePrice: next30, extension60MinutePrice: next60 },
+        module: 'Configuración',
+      })
+    } catch (saveError) {
+      setExtensionStatus(saveError instanceof Error ? saveError.message : 'No se pudieron guardar los precios de extensión.')
+    } finally {
+      setIsSavingExtensionPrices(false)
     }
   }
 
@@ -404,31 +463,28 @@ function OperationalSettingsPanel() {
   return (
     <article className="panel settings-operational-panel">
       <button className="finance-collapsible-header" onClick={() => setIsOpen((current) => !current)} type="button">
-        <span className="finance-collapsible-title">
-          {isOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
-          <SlidersHorizontal color="var(--turquoise)" size={20} />
-          <span>
-            <strong>Ajustes operativos</strong>
-            <small>Parámetros de operación diaria: tarifa del plan libre y entrada gratuita por bebé.</small>
+          <span className="finance-collapsible-title">
+            {isOpen ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
+            <SlidersHorizontal color="var(--turquoise)" size={20} />
+            <span>
+              <strong>Ajustes operativos</strong>
+              <small>Parámetros de operación diaria: plan libre, bebés y extensiones de tiempo.</small>
+            </span>
           </span>
-        </span>
         <strong>{pricing.config.unlimitedHourlyRate ? formatGuarani(pricing.config.unlimitedHourlyRate) : 'Sin tarifa'}</strong>
       </button>
       {isOpen ? (
         <div className="settings-operational-body">
           {pricing.error ? <div className="form-alert error">No se pudo cargar la configuración: {pricing.error}</div> : null}
 
-          <section className="operational-setting-block">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Recepción</p>
-                <h3>Tarifa por hora del plan libre</h3>
-                <p className="muted">Se usa como precio por hora al finalizar visitas Libre / sin límite.</p>
-              </div>
-              <strong>{pricing.config.unlimitedHourlyRate ? formatGuarani(pricing.config.unlimitedHourlyRate) : 'Sin tarifa'}</strong>
-            </div>
+          <OperationalSettingCard
+            description="Se usa como precio por hora al finalizar visitas Libre / sin límite."
+            eyebrow="Recepción"
+            summary={pricing.config.unlimitedHourlyRate ? formatGuarani(pricing.config.unlimitedHourlyRate) : 'Sin tarifa'}
+            title="Tarifa por hora del plan libre"
+          >
             {rateStatus ? <div className={rateStatus.includes('No se') ? 'form-alert error' : 'form-alert success'}>{rateStatus}</div> : null}
-            <div className="form-inline">
+            <div className="operational-setting-fields">
               <label className="field">
                 <span>Tarifa por hora</span>
                 <input
@@ -439,29 +495,29 @@ function OperationalSettingsPanel() {
                   type="number"
                   value={hourlyRate}
                 />
+                <small>{hourlyRate ? formatGuarani(Number(hourlyRate) || 0) : 'Gs. 0'}</small>
               </label>
-              <button className="button primary" disabled={isSavingRate || pricing.isLoading} onClick={savePricing} type="button">
+            </div>
+            <div className="operational-setting-actions">
+              <button className="button primary compact-save-button" disabled={isSavingRate || pricing.isLoading} onClick={savePricing} type="button">
                 <Save size={16} />
                 {isSavingRate ? 'Guardando...' : 'Guardar tarifa'}
               </button>
             </div>
-          </section>
+          </OperationalSettingCard>
 
-          <section className="operational-setting-block">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Recepción</p>
-                <h3>Edad máxima para entrada gratuita de bebés</h3>
-                <p className="muted">Cuando el niño está dentro del límite, se aplica automáticamente la entrada gratuita por bebé (solo afecta el cargo del parque).</p>
-              </div>
-              <Baby color="var(--orange)" size={22} />
-            </div>
+          <OperationalSettingCard
+            description="Cuando el niño está dentro del límite, se aplica automáticamente la entrada gratuita por bebé. Solo afecta el cargo del parque."
+            eyebrow="Recepción"
+            summary={<Baby color="var(--orange)" size={22} />}
+            title="Edad máxima para entrada gratuita de bebés"
+          >
             {babyStatus ? <div className={babyStatus.includes('No se') || babyStatus.includes('Indica') ? 'form-alert error' : 'form-alert success'}>{babyStatus}</div> : null}
             <label className="checkbox-option">
               <input checked={babyEnabled} disabled={isSavingBaby || pricing.isLoading} onChange={(event) => setBabyEnabled(event.target.checked)} type="checkbox" />
               Activar detección automática por edad
             </label>
-            <div className="form-inline">
+            <div className="operational-setting-fields">
               <label className="field">
                 <span>Edad máxima (en meses)</span>
                 <input
@@ -475,16 +531,87 @@ function OperationalSettingsPanel() {
                 />
                 <small>Se almacena en meses para un cálculo preciso (12, 18, 24, 36...).</small>
               </label>
-              <button className="button primary" disabled={isSavingBaby || pricing.isLoading} onClick={saveBaby} type="button">
+            </div>
+            <div className="form-alert info">{babyPreview}</div>
+            <div className="operational-setting-actions">
+              <button className="button primary compact-save-button" disabled={isSavingBaby || pricing.isLoading} onClick={saveBaby} type="button">
                 <Save size={16} />
                 {isSavingBaby ? 'Guardando...' : 'Guardar edad'}
               </button>
             </div>
-            <div className="form-alert info">{babyPreview}</div>
-          </section>
+          </OperationalSettingCard>
+
+          <OperationalSettingCard
+            description="Estos importes se aplican a extensiones futuras desde Recepción. Cada extensión conserva el precio usado al momento de registrarse."
+            eyebrow="Recepción"
+            summary={<TimerReset color="var(--turquoise)" size={22} />}
+            title="Precios de extensión de tiempo"
+          >
+            {extensionStatus ? <div className={extensionStatus.includes('No se') || extensionStatus.includes('debe') ? 'form-alert error' : 'form-alert success'}>{extensionStatus}</div> : null}
+            <div className="operational-setting-fields two-columns">
+              <label className="field">
+                <span>Precio de extensión por 30 minutos</span>
+                <input
+                  disabled={isSavingExtensionPrices || pricing.isLoading}
+                  inputMode="numeric"
+                  onBlur={() => setExtension30Price(normalizeGuaraniDraft(extension30Price, 'El precio de extensión por 30 minutos'))}
+                  onChange={(event) => setExtension30Price(event.target.value)}
+                  placeholder="30.000"
+                  value={extension30Price}
+                />
+                <small>{previewGuaraniDraft(extension30Price, '30000', 'El precio de extensión por 30 minutos')}</small>
+              </label>
+              <label className="field">
+                <span>Precio de extensión por 60 minutos</span>
+                <input
+                  disabled={isSavingExtensionPrices || pricing.isLoading}
+                  inputMode="numeric"
+                  onBlur={() => setExtension60Price(normalizeGuaraniDraft(extension60Price, 'El precio de extensión por 60 minutos'))}
+                  onChange={(event) => setExtension60Price(event.target.value)}
+                  placeholder="60.000"
+                  value={extension60Price}
+                />
+                <small>{previewGuaraniDraft(extension60Price, '60000', 'El precio de extensión por 60 minutos')}</small>
+              </label>
+            </div>
+            <div className="operational-setting-actions">
+              <button className="button primary compact-save-button" disabled={isSavingExtensionPrices || pricing.isLoading} onClick={saveExtensionPrices} type="button">
+                <Save size={16} />
+                {isSavingExtensionPrices ? 'Guardando...' : 'Guardar precios'}
+              </button>
+            </div>
+          </OperationalSettingCard>
         </div>
       ) : null}
     </article>
+  )
+}
+
+function OperationalSettingCard({
+  children,
+  description,
+  eyebrow,
+  summary,
+  title,
+}: {
+  children: ReactNode
+  description: string
+  eyebrow: string
+  summary: ReactNode
+  title: string
+}) {
+  return (
+    <section className="operational-setting-block">
+      <div className="operational-setting-header">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h3>{title}</h3>
+          <p className="muted">{description}</p>
+        </div>
+        <strong className="operational-setting-summary">{summary}</strong>
+      </div>
+      {children}
+    </section>
   )
 }
 

@@ -132,6 +132,12 @@ export interface VisitTimeExtension {
   createdAt?: Date | null
   createdBy?: string | null
   createdByName?: string
+  createdByRole?: UserRole
+  pricingSnapshot?: {
+    amount: number
+    key: 'extension30MinutePrice' | 'extension60MinutePrice'
+    source: 'settings/visitPricing'
+  }
 }
 
 export interface UnlimitedVisitPricing {

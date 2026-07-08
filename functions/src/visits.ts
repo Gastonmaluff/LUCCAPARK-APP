@@ -22,6 +22,8 @@ import {
 
 const VISIT_ROLES: readonly UserRole[] = ['admin', 'socio', 'recepcion']
 const CHECKOUT_ROLES: readonly UserRole[] = ['admin', 'socio', 'recepcion', 'cantina']
+const DEFAULT_EXTENSION_30_MINUTE_PRICE = 30000
+const DEFAULT_EXTENSION_60_MINUTE_PRICE = 60000
 
 const plans = {
   'one-hour': { id: 'one-hour', name: '1 hora', durationMinutes: 60, isUnlimited: false, defaultPrice: 60000 },
@@ -212,8 +214,11 @@ const resolveVisitCharge = (visit: DocumentData): VisitCharge => {
   const extensionAmount = extensions.reduce((sum: number, raw: unknown) => {
     const extension = asRecord(raw)
     const minutes = Number(extension.minutes)
-    if (minutes === 30) return sum + 30000
-    if (minutes === 60) return sum + 60000
+    if (extension.amount !== undefined && extension.amount !== null) {
+      return sum + positiveMoney(extension.amount, 'El importe historico de la extension')
+    }
+    if (minutes === 30) return sum + DEFAULT_EXTENSION_30_MINUTE_PRICE
+    if (minutes === 60) return sum + DEFAULT_EXTENSION_60_MINUTE_PRICE
     throw new HttpsError('failed-precondition', 'La visita contiene una extension historica invalida y requiere revision.')
   }, 0)
   const trustedCharge = baseAmount + extensionAmount
@@ -233,6 +238,16 @@ const readUnlimitedHourlyRate = async (transaction: Transaction) => {
   const snapshot = await transaction.get(db.collection('settings').doc('visitPricing'))
   const data = snapshot.data() ?? {}
   return positiveMoney(data.unlimitedHourlyRate, 'La tarifa por hora del plan libre')
+}
+
+const readExtensionPrice = async (transaction: Transaction, minutes: 30 | 60) => {
+  const snapshot = await transaction.get(db.collection('settings').doc('visitPricing'))
+  const data = snapshot.data() ?? {}
+  const key = minutes === 30 ? 'extension30MinutePrice' : 'extension60MinutePrice'
+  const fallback = minutes === 30 ? DEFAULT_EXTENSION_30_MINUTE_PRICE : DEFAULT_EXTENSION_60_MINUTE_PRICE
+  const rawPrice = data[key]
+  if (rawPrice === null || rawPrice === undefined || rawPrice === '') return fallback
+  return positiveMoney(rawPrice, `El precio de extension por ${minutes} minutos`)
 }
 
 const billableHoursForUnlimited = (startedAt: Timestamp, endedAt: Timestamp) => {
@@ -1012,7 +1027,6 @@ export const extendVisitTimeSecure = async (uid: string | null | undefined, rawI
   const visitId = requiredString(input.visitId, 'La visita')
   const minutes = Number(input.minutes)
   if (minutes !== 30 && minutes !== 60) throw new HttpsError('invalid-argument', 'La extension debe ser de 30 o 60 minutos.')
-  const amount = minutes === 30 ? 30000 : 60000
   return executeIdempotent({
     uid,
     roles: VISIT_ROLES,
@@ -1027,6 +1041,7 @@ export const extendVisitTimeSecure = async (uid: string | null | undefined, rawI
       if (!activeSnapshot.exists || !historicalSnapshot.exists || activeSnapshot.data()?.status !== 'active') {
         throw new HttpsError('failed-precondition', 'La visita no esta activa y no puede extenderse.')
       }
+      const amount = await readExtensionPrice(transaction, minutes)
       const visit = activeSnapshot.data() ?? {}
       if (visit.isUnlimited === true) throw new HttpsError('failed-precondition', 'Una visita libre no necesita extension.')
       const now = Timestamp.now()
@@ -1045,6 +1060,12 @@ export const extendVisitTimeSecure = async (uid: string | null | undefined, rawI
         createdAt: now,
         createdBy: actor.uid,
         createdByName: actor.name,
+        createdByRole: actor.role,
+        pricingSnapshot: {
+          source: 'settings/visitPricing',
+          key: minutes === 30 ? 'extension30MinutePrice' : 'extension60MinutePrice',
+          amount,
+        },
         sourceIntegrity: 'secure_backend',
       }
       const payload = {

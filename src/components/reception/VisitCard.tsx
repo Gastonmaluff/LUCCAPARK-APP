@@ -1,6 +1,7 @@
 import { Clock3, Eye, LogOut, Receipt, TimerReset, WalletCards } from 'lucide-react'
 import { useState } from 'react'
 import { ConsolidatedCheckoutModal } from './ConsolidatedCheckoutModal'
+import { useVisitPricing } from '../../hooks/useVisitPricing'
 import { extendVisitTime, finishVisit } from '../../services/visitService'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
@@ -55,6 +56,7 @@ const statusLabel = (status: ReturnType<typeof getVisitTimeStatus>, visit: Activ
 }
 
 export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }: VisitCardProps) {
+  const pricing = useVisitPricing()
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [isExtensionOpen, setIsExtensionOpen] = useState(false)
@@ -66,6 +68,8 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
   const hasPendingUnlimited = isPendingUnlimitedVisit(visit)
   const hasPendingBalance = billing.totalPendingAmount > 0 || hasPendingUnlimited
   const canExtendTime = !visit.isUnlimited && !visit.isBaby
+  const extension30Price = pricing.config.extension30MinutePrice
+  const extension60Price = pricing.config.extension60MinutePrice
 
   const finishWithoutDebt = async () => {
     if (hasPendingBalance) {
@@ -88,7 +92,7 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
   }
 
   const handleExtendTime = async (minutes: 30 | 60) => {
-    const amount = minutes === 30 ? 30000 : 60000
+    const amount = minutes === 30 ? extension30Price : extension60Price
     setActionError(null)
     setIsSavingAction(true)
     try {
@@ -189,14 +193,14 @@ export function VisitCard({ canteenOrders = [], now, onOpenConsumption, visit }:
         <div className="visit-extension-panel">
           <div>
             <strong>Extender tiempo</strong>
-            <p>Si ya venció, el nuevo tiempo corre desde este momento.</p>
+            <p>{pricing.isLoading ? 'Cargando precios configurados...' : 'Si ya venció, el nuevo tiempo corre desde este momento.'}</p>
           </div>
           <div className="visit-extension-options">
-            <button className="button secondary" disabled={isSavingAction} onClick={() => handleExtendTime(30)} type="button">
-              +30 min · {formatGuarani(30000)}
+            <button className="button secondary" disabled={isSavingAction || pricing.isLoading} onClick={() => handleExtendTime(30)} type="button">
+              +30 min · {formatGuarani(extension30Price)}
             </button>
-            <button className="button primary" disabled={isSavingAction} onClick={() => handleExtendTime(60)} type="button">
-              +1 hora · {formatGuarani(60000)}
+            <button className="button primary" disabled={isSavingAction || pricing.isLoading} onClick={() => handleExtendTime(60)} type="button">
+              +1 hora · {formatGuarani(extension60Price)}
             </button>
           </div>
         </div>

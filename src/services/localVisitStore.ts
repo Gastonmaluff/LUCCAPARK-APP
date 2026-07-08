@@ -193,6 +193,12 @@ export const extendLocalVisitTime = async (visit: ActiveVisit, input: { minutes:
     createdAt: now,
     createdBy: 'local',
     createdByName: 'Local',
+    createdByRole: 'recepcion' as const,
+    pricingSnapshot: {
+      amount: input.amount,
+      key: input.minutes === 30 ? 'extension30MinutePrice' as const : 'extension60MinutePrice' as const,
+      source: 'settings/visitPricing' as const,
+    },
   }
   const updatedVisit: ActiveVisit = {
     ...visit,

@@ -517,13 +517,36 @@ describe('operaciones complementarias protegidas', () => {
     }), /menor al precio normal/i)
   })
 
-  test('27. extension usa importe fijo del servidor', async () => {
+  test('27. extension usa precio configurado del servidor e ignora importe cliente', async () => {
     await seedGroup({ withOrder: false })
+    await db.collection('settings').doc('visitPricing').set({ extension30MinutePrice: 45000, extension60MinutePrice: 80000 }, { merge: true })
     const result = await extendVisitTimeSecure('recepcion', {
       visitId: 'visit-a', minutes: 30, amount: 1, idempotencyKey: key('extension-price'),
     })
-    assert.equal(result.amount, 30000)
-    assert.equal((await db.collection('activeVisits').doc('visit-a').get()).data().parkChargeAmount, 90000)
+    const visit = (await db.collection('activeVisits').doc('visit-a').get()).data()
+    assert.equal(result.amount, 45000)
+    assert.equal(visit.parkChargeAmount, 105000)
+    assert.equal(visit.extensionChargeAmount, 45000)
+    assert.equal(visit.timeExtensions[0].amount, 45000)
+    assert.equal(visit.timeExtensions[0].pricingSnapshot.key, 'extension30MinutePrice')
+    assert.equal(visit.timeExtensions[0].pricingSnapshot.amount, 45000)
+  })
+
+  test('27b. extension historica conserva el precio aplicado tras cambiar configuracion', async () => {
+    await seedGroup({ withOrder: false })
+    await db.collection('settings').doc('visitPricing').set({ extension30MinutePrice: 40000, extension60MinutePrice: 70000 }, { merge: true })
+    await extendVisitTimeSecure('recepcion', {
+      visitId: 'visit-a', minutes: 60, amount: 1, idempotencyKey: key('extension-history'),
+    })
+    await db.collection('settings').doc('visitPricing').set({ extension30MinutePrice: 50000, extension60MinutePrice: 90000 }, { merge: true })
+    const result = await extendVisitTimeSecure('recepcion', {
+      visitId: 'visit-a', minutes: 30, amount: 1, idempotencyKey: key('extension-history-next'),
+    })
+    const visit = (await db.collection('activeVisits').doc('visit-a').get()).data()
+    assert.equal(result.amount, 50000)
+    assert.equal(visit.timeExtensions[0].amount, 70000)
+    assert.equal(visit.timeExtensions[1].amount, 50000)
+    assert.equal(visit.parkChargeAmount, 180000)
   })
 
   test('28. reembolso conserva pago original y es idempotente', async () => {

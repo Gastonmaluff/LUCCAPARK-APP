@@ -1,6 +1,7 @@
 import { Clock3, Eye, LogOut, Receipt, TimerReset, Users, WalletCards } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useVisitPricing } from '../../hooks/useVisitPricing'
 import { extendVisitTime, finishVisit } from '../../services/visitService'
 import type { ActiveVisit, CanteenOrder } from '../../types'
 import { formatGuarani } from '../../utils/money'
@@ -42,6 +43,7 @@ const statusLabel = (visit: ActiveVisit, now: Date) => {
 }
 
 export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: VisitGroupCardProps) {
+  const pricing = useVisitPricing()
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [isConsumptionOpen, setIsConsumptionOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
@@ -58,6 +60,8 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
   const hasPendingUnlimited = visits.some(isPendingUnlimitedVisit)
   const hasPendingBalance = billing.totalPendingAmount > 0 || hasPendingUnlimited
   const canExtendVisits = visits.filter((visit) => !visit.isUnlimited)
+  const extension30Price = pricing.config.extension30MinutePrice
+  const extension60Price = pricing.config.extension60MinutePrice
 
   const selectedVisits = useMemo(
     () => visits.filter((visit) => selectedVisitIds.includes(visit.id) && !visit.isUnlimited),
@@ -73,7 +77,7 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
   }
 
   const handleExtendTime = async (minutes: 30 | 60) => {
-    const amount = minutes === 30 ? 30000 : 60000
+    const amount = minutes === 30 ? extension30Price : extension60Price
     if (selectedVisits.length === 0) {
       setActionError('Seleccioná al menos un niño para extender el tiempo.')
       return
@@ -216,7 +220,7 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
         <div className="visit-extension-panel visit-group-extension-panel">
           <div>
             <strong>Extender tiempo</strong>
-            <p>Elegí uno o varios niños. Si ya venció, el tiempo corre desde este momento.</p>
+            <p>{pricing.isLoading ? 'Cargando precios configurados...' : 'Elegí uno o varios niños. Si ya venció, el tiempo corre desde este momento.'}</p>
           </div>
           <div className="visit-group-extension-list">
             <button className="button ghost" disabled={isSavingAction} onClick={selectAllExtensions} type="button">
@@ -230,11 +234,11 @@ export function VisitGroupCard({ canteenOrders, canteenPath, now, visits }: Visi
             ))}
           </div>
           <div className="visit-extension-options">
-            <button className="button secondary" disabled={isSavingAction || selectedVisits.length === 0} onClick={() => handleExtendTime(30)} type="button">
-              +30 min · {selectedVisits.length} x {formatGuarani(30000)} = {formatGuarani(selectedVisits.length * 30000)}
+            <button className="button secondary" disabled={isSavingAction || pricing.isLoading || selectedVisits.length === 0} onClick={() => handleExtendTime(30)} type="button">
+              +30 min · {selectedVisits.length} x {formatGuarani(extension30Price)} = {formatGuarani(selectedVisits.length * extension30Price)}
             </button>
-            <button className="button primary" disabled={isSavingAction || selectedVisits.length === 0} onClick={() => handleExtendTime(60)} type="button">
-              +1 hora · {selectedVisits.length} x {formatGuarani(60000)} = {formatGuarani(selectedVisits.length * 60000)}
+            <button className="button primary" disabled={isSavingAction || pricing.isLoading || selectedVisits.length === 0} onClick={() => handleExtendTime(60)} type="button">
+              +1 hora · {selectedVisits.length} x {formatGuarani(extension60Price)} = {formatGuarani(selectedVisits.length * extension60Price)}
             </button>
           </div>
         </div>
