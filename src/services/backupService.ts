@@ -11,8 +11,9 @@ import {
   setDoc,
   type DocumentData,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { db, storage } from '../config/firebase'
+import { db, functions, storage } from '../config/firebase'
 import { logActivity } from './activityLogService'
 import { firestoreCollections, getCollectionRef } from './firestoreCollections'
 import { getCurrentUserAudit } from './userAudit'
@@ -58,6 +59,26 @@ export interface BackupMetadata {
   storagePath: string
   totalDocuments: number
   type: BackupType
+}
+
+export interface NativeBackupStatus {
+  checkedAt: string
+  databaseId: string
+  databaseName: string
+  databaseUid: string
+  frequency: 'daily' | 'weekly' | 'none' | 'unknown'
+  isActive: boolean
+  latestBackup: {
+    expireTime: string | null
+    name: string
+    snapshotTime: string | null
+    state: string
+  } | null
+  locationId: string
+  retentionDays: number | null
+  scheduleName: string
+  scheduleUpdatedAt: string | null
+  unreachableLocations: string[]
 }
 
 const backupCollections = [
@@ -236,4 +257,10 @@ export const generateBackup = async (type: ExportableBackupType) => {
 export const getBackupDownloadUrl = async (backup: BackupMetadata) => {
   if (!backup.storagePath) throw new Error('Este backup no tiene archivo asociado.')
   return getDownloadURL(ref(storage, backup.storagePath))
+}
+
+export const getNativeBackupStatus = async () => {
+  const callable = httpsCallable<Record<string, never>, NativeBackupStatus>(functions, 'getNativeBackupStatusSecure')
+  const response = await callable({})
+  return response.data
 }

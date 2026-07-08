@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Download, ShieldCheck } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, Download, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useUserProfile } from '../../hooks/useUserProfile'
 import {
   generateBackup,
   getBackupDownloadUrl,
+  getNativeBackupStatus,
   subscribeBackups,
   type BackupMetadata,
+  type NativeBackupStatus,
 } from '../../services/backupService'
 import { StatusPill } from '../StatusPill'
 
@@ -20,7 +22,20 @@ const formatDateTime = (date: Date | null) =>
       }).format(date)
     : 'Sin fecha'
 
+const formatIsoDateTime = (value: string | null | undefined) => {
+  if (!value) return 'Sin fecha'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Sin fecha' : formatDateTime(date)
+}
+
 const formatNumber = (value: number) => new Intl.NumberFormat('es-PY').format(value)
+
+const frequencyLabel = (frequency: NativeBackupStatus['frequency'] | undefined) => {
+  if (frequency === 'daily') return 'Diaria'
+  if (frequency === 'weekly') return 'Semanal'
+  if (frequency === 'none') return 'Sin schedule'
+  return 'Sin dato'
+}
 
 const downloadBlob = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob)
@@ -55,10 +70,11 @@ export function BackupSettingsPanel() {
   const [backupsError, setBackupsError] = useState<string | null>(null)
   const [isGeneratingManual, setIsGeneratingManual] = useState(false)
   const [manualMessage, setManualMessage] = useState<string | null>(null)
+  const [nativeStatus, setNativeStatus] = useState<NativeBackupStatus | null>(null)
+  const [nativeStatusError, setNativeStatusError] = useState<string | null>(null)
+  const [isLoadingNativeStatus, setIsLoadingNativeStatus] = useState(false)
   const canManageBackups = profile?.role === 'admin' || profile?.role === 'socio'
   const manualBackups = useMemo(() => backups.filter((backup) => backup.type === 'manual'), [backups])
-  const automaticBackups = useMemo(() => backups.filter((backup) => backup.type === 'automatic'), [backups])
-  const lastLegacyAutomatic = automaticBackups.find((backup) => backup.status === 'success')
 
   useEffect(() => {
     if (isLoadingProfile) return undefined
@@ -81,6 +97,24 @@ export function BackupSettingsPanel() {
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }))
   }
+
+  const loadNativeStatus = useCallback(async () => {
+    if (!canManageBackups) return
+    setIsLoadingNativeStatus(true)
+    setNativeStatusError(null)
+    try {
+      setNativeStatus(await getNativeBackupStatus())
+    } catch (error) {
+      setNativeStatusError(error instanceof Error ? error.message : 'No se pudo verificar el backup nativo.')
+    } finally {
+      setIsLoadingNativeStatus(false)
+    }
+  }, [canManageBackups])
+
+  useEffect(() => {
+    if (!isOpen || isLoadingProfile || !canManageBackups) return
+    void loadNativeStatus()
+  }, [canManageBackups, isLoadingProfile, isOpen, loadNativeStatus])
 
   const handleGenerateManualBackup = async () => {
     setManualMessage(null)
@@ -107,7 +141,7 @@ export function BackupSettingsPanel() {
             <small>Copias de respaldo y restauración de datos del sistema.</small>
           </span>
         </span>
-        <strong>{backups.length} backups</strong>
+        <strong>{manualBackups.length} backups JSON</strong>
       </button>
 
       {isOpen ? (
@@ -131,37 +165,43 @@ export function BackupSettingsPanel() {
 
           <BackupSubsection isOpen={openSections.automatic} onToggle={() => toggleSection('automatic')} title="Backup automático">
             <div className="backup-auto-status">
-              <StatusPill tone="available">Scheduled Backups activo</StatusPill>
+              <StatusPill tone={nativeStatus?.isActive ? 'available' : nativeStatus ? 'warning' : 'info'}>
+                {isLoadingNativeStatus ? 'Verificando...' : nativeStatus?.isActive ? 'Scheduled Backups activo' : 'No verificado'}
+              </StatusPill>
               <p>
                 La copia automática oficial la realiza Firestore Scheduled Backups de forma diaria. La recuperación completa es un procedimiento administrativo desde Firebase o Google Cloud.
               </p>
+              <button className="button ghost small-button" disabled={!canManageBackups || isLoadingNativeStatus} onClick={() => void loadNativeStatus()} type="button">
+                <RefreshCw size={15} />
+                Actualizar estado
+              </button>
             </div>
+            {nativeStatusError ? <div className="form-alert error">No se pudo verificar el backup nativo: {nativeStatusError}</div> : null}
             <div className="backup-native-card">
               <div className="backup-native-card-heading">
                 <div>
                   <h3>Backup nativo de Firestore</h3>
                   <p className="muted">Administrado por Firebase/Google Cloud.</p>
                 </div>
-                <StatusPill tone="available">Activo</StatusPill>
+                <StatusPill tone={nativeStatus?.isActive ? 'available' : nativeStatus ? 'warning' : 'info'}>
+                  {nativeStatus?.isActive ? 'Activo' : nativeStatus ? 'Sin schedule' : 'Verificando'}
+                </StatusPill>
               </div>
               <p>
-                Este proyecto tiene activo Firestore Scheduled Backups: copia diaria de la base de datos con retención de 30 días. La exportación JSON manual queda disponible como respaldo auxiliar descargable.
+                Este indicador consulta el estado nativo de Firestore Scheduled Backups. La exportación JSON manual queda disponible como respaldo auxiliar descargable.
               </p>
               <div className="backup-native-facts">
-                <span><small>Frecuencia</small><strong>Diaria</strong></span>
-                <span><small>Retención</small><strong>30 días</strong></span>
-                <span><small>Base de datos</small><strong>(default)</strong></span>
+                <span><small>Frecuencia</small><strong>{frequencyLabel(nativeStatus?.frequency)}</strong></span>
+                <span><small>Retención</small><strong>{nativeStatus?.retentionDays ? `${nativeStatus.retentionDays} días` : 'Sin dato'}</strong></span>
+                <span><small>Base de datos</small><strong>{nativeStatus?.databaseId ?? '(default)'}</strong></span>
+                <span><small>Último backup nativo</small><strong>{formatIsoDateTime(nativeStatus?.latestBackup?.snapshotTime)}</strong></span>
+                <span><small>Estado última copia</small><strong>{nativeStatus?.latestBackup?.state || 'Sin dato'}</strong></span>
+                <span><small>Verificado</small><strong>{formatIsoDateTime(nativeStatus?.checkedAt)}</strong></span>
               </div>
               <p className="backup-native-note">
-                Los backups nativos se restauran mediante las herramientas administrativas de Firebase o Google Cloud.
+                Los backups nativos se restauran mediante las herramientas administrativas de Firebase o Google Cloud. Los JSON automáticos anteriores ya no se usan como indicador del backup diario.
               </p>
             </div>
-            <div className="backup-summary-grid">
-              <span><small>Frecuencia oficial</small><strong>Diaria</strong></span>
-              <span><small>Recuperación</small><strong>Administrativa</strong></span>
-              <span><small>Último JSON automático anterior</small><strong>{formatDateTime(lastLegacyAutomatic?.createdAt ?? null)}</strong></span>
-            </div>
-            <BackupList backups={automaticBackups} />
           </BackupSubsection>
 
           <BackupSubsection isOpen={openSections.restore} onToggle={() => toggleSection('restore')} title="Restaurar desde JSON">

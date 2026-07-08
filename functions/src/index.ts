@@ -23,11 +23,12 @@ import {
   registerPartialPaymentSecure as registerPartialPayment,
 } from './visits'
 import { resetOperationalTestDataSecure as resetOperationalData } from './adminReset'
+import { getNativeBackupStatusSecure as getNativeBackupStatus } from './backups'
 
 type SecureHandler = (uid: string | null | undefined, data: unknown) => Promise<unknown>
 
 const callable = (name: string, handler: SecureHandler) => onCall(
-  { region, timeoutSeconds: 60, memory: '256MiB' },
+  { region, timeoutSeconds: 60, memory: '256MiB', invoker: 'public' },
   async (request: CallableRequest<unknown>) => {
     try {
       return await handler(request.auth?.uid, request.data)
@@ -59,3 +60,4 @@ export const finishVisitSecure = callable('finishVisitSecure', finishVisit)
 
 export const registerEventPaymentSecure = callable('registerEventPaymentSecure', registerEventPayment)
 export const resetOperationalTestData = callable('resetOperationalTestData', resetOperationalData)
+export const getNativeBackupStatusSecure = callable('getNativeBackupStatusSecure', getNativeBackupStatus)

@@ -97,14 +97,22 @@ describe('backup JSON automatico obsoleto deshabilitado', () => {
 
   test('la seccion de Scheduled Backups sigue visible como mecanismo oficial', () => {
     assert.match(backupPanelSource, /Scheduled Backups activo/)
-    assert.match(backupPanelSource, /copia diaria de la base de datos con retención de 30 días/i)
+    assert.match(backupPanelSource, /consulta el estado nativo de Firestore Scheduled Backups/i)
     assert.match(backupPanelSource, /recuperación completa es un procedimiento administrativo/i)
   })
 
-  test('la interfaz no muestra el antiguo estado automatico por uso ni el error de Storage', () => {
+  test('la interfaz no muestra el antiguo estado automatico por uso, JSON heredado ni el error de Storage', () => {
     assert.equal(backupPanelSource.includes('Activo por uso del sistema'), false)
     assert.equal(backupPanelSource.includes('más de 12 horas'), false)
+    assert.equal(backupPanelSource.includes('Último JSON automático anterior'), false)
     assert.equal(backupPanelSource.includes('storage/unauthorized'), false)
+  })
+
+  test('la interfaz consulta el estado nativo real desde una Function segura', () => {
+    assert.match(backupPanelSource, /getNativeBackupStatus/)
+    assert.match(backupPanelSource, /Último backup nativo/)
+    assert.match(backupPanelSource, /Estado última copia/)
+    assert.match(backupServiceSource, /getNativeBackupStatusSecure/)
   })
 })
 
