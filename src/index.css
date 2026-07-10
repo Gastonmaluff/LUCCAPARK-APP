@@ -7061,6 +7061,11 @@ img {
   color: var(--orange);
 }
 
+.report-period-controls.compact button {
+  min-height: 36px;
+  padding: 0 11px;
+}
+
 .report-custom-range {
   align-items: end;
   display: grid;
@@ -7191,6 +7196,13 @@ img {
   font-weight: 720;
 }
 
+.report-collapsible-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
 .report-collapse-icon {
   color: var(--orange);
   flex: 0 0 auto;
@@ -7246,6 +7258,66 @@ img {
   outline: 0;
   text-align: center;
   width: 58px;
+}
+
+.reception-visit-history-card {
+  width: 100%;
+}
+
+.reception-visit-history-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.reception-visit-date-field,
+.reception-visit-search-field {
+  margin: 0;
+}
+
+.input-with-icon {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.input-with-icon svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.input-with-icon input {
+  border: 0;
+  color: var(--ink);
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  outline: 0;
+}
+
+.reception-visit-history-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reception-visit-history-error {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.reception-visit-history-row {
+  align-items: start;
 }
 
 .report-wide-panel {

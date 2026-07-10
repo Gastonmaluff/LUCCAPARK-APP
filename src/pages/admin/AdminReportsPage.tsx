@@ -5,21 +5,26 @@ import {
   ChevronDown,
   Clock3,
   MessageCircle,
+  RefreshCw,
+  Search,
   TrendingUp,
   UsersRound,
   Utensils,
 } from 'lucide-react'
+import { Timestamp, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import type React from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { useClientsData, type ClientVisitHistoryItem } from '../../hooks/useClients'
-import { getLocalDateKey } from '../../utils/date'
+import { addDaysToDateKey, getAsuncionDateKey, getAsuncionDayRange, getLocalDateKey } from '../../utils/date'
+import { getCollectionRef } from '../../services/firestoreCollections'
 import { formatGuarani } from '../../utils/money'
 import { formatParaguayanPhone, phoneDigits } from '../../utils/textFormat'
 import type { CanteenOrder, ChildProfile, LuccaEvent } from '../../types'
 
 type PeriodPreset = 'today' | 'week' | 'month' | 'custom'
+type ReceptionVisitDateFilter = 'today' | 'yesterday' | 'custom'
 
 const DAY_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 const SHORT_DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -34,6 +39,55 @@ const HOUR_BUCKETS = [
 ]
 
 const emptyGender = 'sin especificar'
+const RECEPTION_VISIT_HISTORY_LIMIT = 150
+
+interface ReceptionVisitHistoryItem {
+  id: string
+  childName: string
+  customerName: string
+  customerDocumentNumber?: string
+  customerPhone?: string
+  planId?: string
+  planName?: string
+  isUnlimited?: boolean
+  isBaby?: boolean
+  startedAt: Date | null
+  endedAt: Date | null
+  createdAt: Date | null
+  status: string
+  paymentStatus?: string
+  amountCharged: number | null
+  defaultAmount: number | null
+  parkChargeAmount: number | null
+  paidParkAmount: number | null
+}
+
+const dateFromTimestamp = (value: unknown): Date | null => {
+  if (value instanceof Timestamp) return value.toDate()
+  if (value instanceof Date) return value
+  return null
+}
+
+const mapReceptionVisit = (id: string, data: Record<string, unknown>): ReceptionVisitHistoryItem => ({
+  id,
+  amountCharged: data.amountCharged === null || data.amountCharged === undefined ? null : Number(data.amountCharged),
+  childName: String(data.childName ?? ''),
+  createdAt: dateFromTimestamp(data.createdAt),
+  customerDocumentNumber: String(data.customerDocumentNumber ?? data.guardianDocumentNumber ?? ''),
+  customerName: String(data.customerName ?? data.guardianName ?? ''),
+  customerPhone: String(data.customerPhone ?? data.guardianPhone ?? ''),
+  defaultAmount: data.defaultAmount === null || data.defaultAmount === undefined ? null : Number(data.defaultAmount),
+  endedAt: dateFromTimestamp(data.endedAt),
+  isBaby: Boolean(data.isBaby || (data.babyFreeEntry as { applied?: boolean } | undefined)?.applied),
+  isUnlimited: Boolean(data.isUnlimited || data.planId === 'unlimited'),
+  paidParkAmount: data.paidParkAmount === null || data.paidParkAmount === undefined ? null : Number(data.paidParkAmount),
+  parkChargeAmount: data.parkChargeAmount === null || data.parkChargeAmount === undefined ? null : Number(data.parkChargeAmount),
+  paymentStatus: String(data.paymentStatus ?? data.parkPaymentStatus ?? ''),
+  planId: String(data.planId ?? ''),
+  planName: String(data.planName ?? ''),
+  startedAt: dateFromTimestamp(data.startedAt),
+  status: String(data.status ?? ''),
+})
 
 const normalizeGender = (value?: string) => {
   const text = String(value ?? '').trim().toLocaleLowerCase('es-PY')
@@ -165,6 +219,51 @@ function KpiCard({ icon, label, note, value }: { icon: React.ReactNode; label: s
 
 function EmptyReportState({ children }: { children: React.ReactNode }) {
   return <div className="empty-state report-empty">{children}</div>
+}
+
+function useReceptionVisitHistory(dateKey: string) {
+  const [visits, setVisits] = useState<ReceptionVisitHistoryItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+
+  useEffect(() => {
+    setIsLoading(true)
+    setError(null)
+    setVisits([])
+
+    const { end, start } = getAsuncionDayRange(dateKey)
+    const historyQuery = query(
+      getCollectionRef('visits'),
+      where('startedAt', '>=', Timestamp.fromDate(start)),
+      where('startedAt', '<', Timestamp.fromDate(end)),
+      orderBy('startedAt', 'desc'),
+      limit(RECEPTION_VISIT_HISTORY_LIMIT),
+    )
+
+    const unsubscribe = onSnapshot(
+      historyQuery,
+      (snapshot) => {
+        setVisits(snapshot.docs.map((docSnapshot) => mapReceptionVisit(docSnapshot.id, docSnapshot.data())))
+        setIsLoading(false)
+        setError(null)
+      },
+      (snapshotError) => {
+        setVisits([])
+        setIsLoading(false)
+        setError(snapshotError.message)
+      },
+    )
+
+    return () => unsubscribe()
+  }, [dateKey, retryCount])
+
+  return {
+    error,
+    isLoading,
+    retry: () => setRetryCount((current) => current + 1),
+    visits,
+  }
 }
 
 function Bars({ data, suffix = '' }: { data: Array<{ label: string; value: number; hint?: string }>; suffix?: string }) {
@@ -389,15 +488,217 @@ function VisitEvolutionChart({ data }: { data: Array<{ label: string; value: num
   )
 }
 
+const asuncionDateFormatter = new Intl.DateTimeFormat('es-PY', {
+  day: '2-digit',
+  month: 'long',
+  timeZone: 'America/Asuncion',
+  year: 'numeric',
+})
+
+const asuncionTimeFormatter = new Intl.DateTimeFormat('es-PY', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'America/Asuncion',
+})
+
+const formatAsuncionDateLabel = (dateKeyValue: string) => asuncionDateFormatter.format(getAsuncionDayRange(dateKeyValue).start)
+
+const formatAsuncionTime = (date: Date | null) => (date ? asuncionTimeFormatter.format(date) : 'Sin dato')
+
+const normalizeSearchText = (value: string) => value.trim().toLocaleLowerCase('es-PY')
+
+const receptionVisitStatus = (visit: ReceptionVisitHistoryItem) => {
+  const status = visit.status.toLocaleLowerCase('es-PY')
+  if (status === 'cancelled' || status === 'canceled' || status === 'voided') return { label: 'Cancelado', tone: 'blocked' as const }
+  if (status === 'finished' || status === 'closed') return { label: 'Finalizado', tone: 'info' as const }
+  if (status === 'active') return { label: 'Dentro del parque', tone: 'available' as const }
+  return { label: visit.status || 'Sin estado', tone: 'warning' as const }
+}
+
+const receptionVisitPlanLabel = (visit: ReceptionVisitHistoryItem) => {
+  if (visit.isBaby) return 'Bebé'
+  if (visit.isUnlimited) return 'Libre'
+  if (visit.planName) return visit.planName
+  if (visit.planId === 'one-hour') return '1 hora'
+  if (visit.planId === 'two-hours') return '2 horas'
+  return 'Sin plan'
+}
+
+const receptionVisitAmountLabel = (visit: ReceptionVisitHistoryItem) => {
+  const amount = visit.paidParkAmount ?? visit.amountCharged ?? visit.parkChargeAmount ?? visit.defaultAmount
+  if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) {
+    return formatGuarani(amount)
+  }
+  if (visit.isUnlimited && visit.status === 'active') return 'Monto a definir'
+  if (visit.paymentStatus === 'payAtExit' || visit.paymentStatus === 'pending') return 'Saldo pendiente'
+  return 'Sin monto'
+}
+
+function ReceptionVisitHistorySection({
+  dateKeyValue,
+  filter,
+  onDateChange,
+  onFilterChange,
+  onToggle,
+  open,
+}: {
+  dateKeyValue: string
+  filter: ReceptionVisitDateFilter
+  onDateChange: (value: string) => void
+  onFilterChange: (value: ReceptionVisitDateFilter) => void
+  onToggle: () => void
+  open: boolean
+}) {
+  const [search, setSearch] = useState('')
+  const { error, isLoading, retry, visits } = useReceptionVisitHistory(dateKeyValue)
+
+  const filteredVisits = useMemo(() => {
+    const term = normalizeSearchText(search)
+    if (!term) return visits
+    return visits.filter((visit) => {
+      const haystack = [
+        visit.childName,
+        visit.customerName,
+        visit.customerDocumentNumber ?? '',
+        visit.customerPhone ?? '',
+      ].join(' ').toLocaleLowerCase('es-PY')
+      return haystack.includes(term)
+    })
+  }, [search, visits])
+
+  const handleFilterChange = (value: ReceptionVisitDateFilter) => {
+    setSearch('')
+    onFilterChange(value)
+  }
+
+  const handleDateChange = (value: string) => {
+    setSearch('')
+    onDateChange(value)
+  }
+
+  return (
+    <article className={`panel report-panel report-collapsible-card reception-visit-history-card ${open ? 'open' : 'closed'}`}>
+      <button
+        aria-expanded={open}
+        className="report-collapsible-header"
+        onClick={onToggle}
+        type="button"
+      >
+        <span>
+          <strong>Niños ingresados por Recepción</strong>
+          <small>Consultá los niños que ingresaron al parque en una fecha determinada.</small>
+        </span>
+        <ChevronDown className="report-collapse-icon" size={18} />
+      </button>
+
+      {open ? (
+        <>
+          <div className="reception-visit-history-toolbar">
+            <div className="report-period-controls compact" aria-label="Filtro de fecha de ingresos">
+              {([
+                ['today', 'Hoy'],
+                ['yesterday', 'Ayer'],
+                ['custom', 'Elegir fecha'],
+              ] as Array<[ReceptionVisitDateFilter, string]>).map(([value, label]) => (
+                <button className={filter === value ? 'active' : ''} key={value} onClick={() => handleFilterChange(value)} type="button">
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filter === 'custom' ? (
+              <label className="field reception-visit-date-field">
+                <span>Fecha</span>
+                <input type="date" value={dateKeyValue} onChange={(event) => handleDateChange(event.target.value)} />
+              </label>
+            ) : null}
+            <label className="field reception-visit-search-field">
+              <span>Buscar</span>
+              <div className="input-with-icon">
+                <Search size={16} />
+                <input
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar niño o responsable"
+                  value={search}
+                />
+              </div>
+            </label>
+          </div>
+
+          <div className="reception-visit-history-summary">
+            <StatusPill tone="info">{formatAsuncionDateLabel(dateKeyValue)}</StatusPill>
+            <StatusPill tone={filteredVisits.length > 0 ? 'available' : 'warning'}>
+              {filteredVisits.length} {filteredVisits.length === 1 ? 'ingreso' : 'ingresos'}
+            </StatusPill>
+          </div>
+
+          {isLoading ? <EmptyReportState>Cargando ingresos...</EmptyReportState> : null}
+          {error ? (
+            <div className="form-alert error reception-visit-history-error">
+              <span>No se pudieron consultar los ingresos: {error}</span>
+              <button className="button secondary small-button" onClick={retry} type="button">
+                <RefreshCw size={15} /> Reintentar
+              </button>
+            </div>
+          ) : null}
+          {!isLoading && !error && visits.length === 0 ? (
+            <EmptyReportState>No se registraron ingresos en esta fecha. Fecha consultada: {formatAsuncionDateLabel(dateKeyValue)}.</EmptyReportState>
+          ) : null}
+          {!isLoading && !error && visits.length > 0 && filteredVisits.length === 0 ? (
+            <EmptyReportState>No hay coincidencias para la búsqueda en {formatAsuncionDateLabel(dateKeyValue)}.</EmptyReportState>
+          ) : null}
+          {!isLoading && !error && filteredVisits.length > 0 ? (
+            <div className="report-action-list compact reception-visit-history-list">
+              {filteredVisits.map((visit) => {
+                const status = receptionVisitStatus(visit)
+                return (
+                  <article className="report-action-row compact reception-visit-history-row" key={visit.id}>
+                    <div>
+                      <strong>{visit.childName || 'Sin nombre del niño'}</strong>
+                      <p>
+                        Responsable: {visit.customerName || 'Sin responsable'} · Ingreso: {formatAsuncionTime(visit.startedAt)} · Salida: {visit.endedAt ? formatAsuncionTime(visit.endedAt) : 'Sin salida'}
+                      </p>
+                      <small>
+                        {visit.customerDocumentNumber ? `Cédula: ${visit.customerDocumentNumber} · ` : ''}
+                        {visit.customerPhone ? `Teléfono: ${formatParaguayanPhone(visit.customerPhone)} · ` : ''}
+                        {receptionVisitPlanLabel(visit)} · {receptionVisitAmountLabel(visit)}
+                      </small>
+                    </div>
+                    <StatusPill tone={status.tone}>{status.label}</StatusPill>
+                  </article>
+                )
+              })}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </article>
+  )
+}
+
 export function AdminReportsPage() {
   const { canteenOrders, children, error, events, isLoading, visits } = useClientsData()
   const today = useMemo(() => new Date(), [])
   const [period, setPeriod] = useState<PeriodPreset>('month')
   const [customFrom, setCustomFrom] = useState(dateKey(startOfMonth(today)))
   const [customTo, setCustomTo] = useState(dateKey(today))
-  const [frequentOpen, setFrequentOpen] = useState(true)
-  const [reactivateOpen, setReactivateOpen] = useState(true)
+  const [birthdaysOpen, setBirthdaysOpen] = useState(false)
+  const [receptionVisitsOpen, setReceptionVisitsOpen] = useState(true)
+  const [receptionVisitFilter, setReceptionVisitFilter] = useState<ReceptionVisitDateFilter>('today')
+  const [receptionVisitDate, setReceptionVisitDate] = useState(getAsuncionDateKey(today))
+  const [frequentOpen, setFrequentOpen] = useState(false)
+  const [reactivateOpen, setReactivateOpen] = useState(false)
   const [reactivationDays, setReactivationDays] = useState(60)
+
+  const handleReceptionVisitFilterChange = (value: ReceptionVisitDateFilter) => {
+    setReceptionVisitFilter(value)
+    if (value === 'today') {
+      setReceptionVisitDate(getAsuncionDateKey(new Date()))
+      return
+    }
+    if (value === 'yesterday') {
+      setReceptionVisitDate(addDaysToDateKey(getAsuncionDateKey(new Date()), -1))
+    }
+  }
 
   const range = useMemo(() => {
     if (period === 'today') return { from: dateKey(today), to: dateKey(today) }
@@ -784,36 +1085,63 @@ export function AdminReportsPage() {
 
       <section className="report-section">
         <SectionTitle icon={<CalendarHeart color="var(--green)" />}>Oportunidades comerciales</SectionTitle>
-        <article className="panel report-panel">
-          <div className="panel-header">
-            <h3>Cumpleaños próximos</h3>
-            <StatusPill tone="info">Próximos 30 días</StatusPill>
-          </div>
-          {opportunities.birthdays.length === 0 ? <EmptyReportState>No hay cumpleaños próximos registrados.</EmptyReportState> : null}
-          <div className="report-action-list">
-            {opportunities.birthdays.map(({ child, nextBirthday, turns }) => {
-              const phone = child.mainCustomerPhone || child.customerPhone
-              const hasEvent = events.some((event) => event.childId === child.id || event.birthdayChildName.toLocaleLowerCase('es-PY') === child.name.toLocaleLowerCase('es-PY'))
-              return (
-                <article className="report-action-row" key={child.id}>
-                  <div>
-                    <strong>{child.name}</strong>
-                    <p>{formatDate(nextBirthday)} · cumple {turns} años</p>
-                    <small>Responsable: {child.mainCustomerName || child.customerName || 'Sin responsable'} · {phone ? formatParaguayanPhone(phone) : 'Sin teléfono'}</small>
-                  </div>
-                  <StatusPill tone={hasEvent ? 'available' : 'warning'}>{hasEvent ? 'Con evento/reserva' : 'Sin evento'}</StatusPill>
-                  {whatsappHref(phone) ? (
-                    <a className="button whatsapp" href={whatsappHref(phone)} rel="noreferrer" target="_blank">
-                      <MessageCircle size={17} /> WhatsApp
-                    </a>
-                  ) : null}
-                </article>
-              )
-            })}
-          </div>
+        <article className={`panel report-panel report-collapsible-card ${birthdaysOpen ? 'open' : 'closed'}`}>
+          <button
+            aria-expanded={birthdaysOpen}
+            className="report-collapsible-header"
+            onClick={() => setBirthdaysOpen((current) => !current)}
+            type="button"
+          >
+            <span>
+              <strong>Próximos cumpleaños</strong>
+              <small>Niños que cumplen años en los próximos 30 días</small>
+            </span>
+            <span className="report-collapsible-actions">
+              <StatusPill tone="info">Próximos 30 días</StatusPill>
+              <ChevronDown className="report-collapse-icon" size={18} />
+            </span>
+          </button>
+          {birthdaysOpen ? (
+            <>
+              {opportunities.birthdays.length === 0 ? <EmptyReportState>No hay cumpleaños próximos registrados.</EmptyReportState> : null}
+              <div className="report-action-list">
+                {opportunities.birthdays.map(({ child, nextBirthday, turns }) => {
+                  const phone = child.mainCustomerPhone || child.customerPhone
+                  const hasEvent = events.some((event) => event.childId === child.id || event.birthdayChildName.toLocaleLowerCase('es-PY') === child.name.toLocaleLowerCase('es-PY'))
+                  return (
+                    <article className="report-action-row" key={child.id}>
+                      <div>
+                        <strong>{child.name}</strong>
+                        <p>{formatDate(nextBirthday)} · cumple {turns} años</p>
+                        <small>Responsable: {child.mainCustomerName || child.customerName || 'Sin responsable'} · {phone ? formatParaguayanPhone(phone) : 'Sin teléfono'}</small>
+                      </div>
+                      <StatusPill tone={hasEvent ? 'available' : 'warning'}>{hasEvent ? 'Con evento/reserva' : 'Sin evento'}</StatusPill>
+                      {whatsappHref(phone) ? (
+                        <a className="button whatsapp" href={whatsappHref(phone)} rel="noreferrer" target="_blank">
+                          <MessageCircle size={17} /> WhatsApp
+                        </a>
+                      ) : null}
+                    </article>
+                  )
+                })}
+              </div>
+            </>
+          ) : null}
         </article>
 
-        <div className="report-grid two">
+        <ReceptionVisitHistorySection
+          dateKeyValue={receptionVisitDate}
+          filter={receptionVisitFilter}
+          onDateChange={(value) => {
+            setReceptionVisitFilter('custom')
+            setReceptionVisitDate(value)
+          }}
+          onFilterChange={handleReceptionVisitFilterChange}
+          onToggle={() => setReceptionVisitsOpen((current) => !current)}
+          open={receptionVisitsOpen}
+        />
+
+        <div className="report-grid two report-opportunities-grid">
           <article className={`panel report-panel report-collapsible-card ${frequentOpen ? 'open' : 'closed'}`}>
             <button
               aria-expanded={frequentOpen}
