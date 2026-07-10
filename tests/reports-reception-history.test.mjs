@@ -31,6 +31,7 @@ test('historial de ingresos consulta visits por rango diario de America/Asuncion
   assert.match(dateUtils, /ASUNCION_TIME_ZONE = 'America\/Asuncion'/)
   assert.match(dateUtils, /getAsuncionDayRange/)
   assert.match(dateUtils, /asuncionDateTimeToUtc/)
+  assert.match(dateUtils, /\(day \|\| 1\) \+ days/)
   assert.match(reports, /getCollectionRef\('visits'\)/)
   assert.match(reports, /where\('startedAt', '>=', Timestamp\.fromDate\(start\)\)/)
   assert.match(reports, /where\('startedAt', '<', Timestamp\.fromDate\(end\)\)/)
