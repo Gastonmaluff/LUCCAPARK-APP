@@ -7276,6 +7276,204 @@ img {
   margin: 0;
 }
 
+.reception-visit-date-field {
+  position: relative;
+}
+
+.smart-date-picker {
+  position: relative;
+}
+
+.smart-date-picker-trigger {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-weight: 760;
+  gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  min-height: 44px;
+  padding: 0 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.smart-date-picker-trigger:hover,
+.smart-date-picker-trigger:focus-visible {
+  border-color: var(--orange);
+  outline: none;
+}
+
+.smart-date-picker-trigger svg {
+  color: var(--orange);
+}
+
+.smart-date-picker-trigger svg:last-child {
+  color: var(--muted);
+}
+
+.smart-date-calendar {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 10px;
+  left: 0;
+  margin-top: 6px;
+  padding: 14px;
+  position: absolute;
+  top: 100%;
+  width: min(350px, calc(100vw - 48px));
+  z-index: 30;
+}
+
+.smart-date-calendar-header {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+}
+
+.smart-date-calendar-header strong {
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.smart-date-calendar-header button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  width: 36px;
+}
+
+.smart-date-calendar-header button:hover,
+.smart-date-calendar-header button:focus-visible {
+  background: #f8fafc;
+  border-color: var(--orange);
+  outline: none;
+}
+
+.smart-date-calendar-weekdays,
+.smart-date-calendar-grid {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.smart-date-calendar-weekdays span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.smart-date-calendar-day {
+  align-items: center;
+  aspect-ratio: 1;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 780;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+}
+
+.smart-date-calendar-day.has-visits {
+  background: #eaf7df;
+  border-color: #8fcf68;
+  color: #357a13;
+}
+
+.smart-date-calendar-day.has-visits i {
+  align-items: center;
+  background: #4b9d1b;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  display: flex;
+  font-size: 0.56rem;
+  font-style: normal;
+  height: 16px;
+  justify-content: center;
+  min-width: 16px;
+  padding: 0 3px;
+  position: absolute;
+  right: -3px;
+  top: -4px;
+}
+
+.smart-date-calendar-day.outside-month {
+  opacity: 0.42;
+}
+
+.smart-date-calendar-day.today {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.smart-date-calendar-day.selected {
+  background: #fff0e8;
+  border-color: var(--orange);
+  color: #c2410c;
+  box-shadow: inset 0 0 0 1px var(--orange);
+}
+
+.smart-date-calendar-day:hover,
+.smart-date-calendar-day:focus-visible {
+  border-color: var(--orange);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.smart-date-calendar-legend {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.smart-date-calendar-legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.smart-date-calendar-legend i {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+.smart-date-calendar-legend i.has-visits {
+  background: #eaf7df;
+  border-color: #8fcf68;
+}
+
 .input-with-icon {
   align-items: center;
   background: #fff;
@@ -8539,6 +8737,22 @@ img {
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
+  }
+
+  .reception-visit-history-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .smart-date-calendar {
+    left: 50%;
+    padding: 12px;
+    transform: translateX(-50%);
+    width: min(350px, calc(100vw - 32px));
+  }
+
+  .smart-date-calendar-weekdays,
+  .smart-date-calendar-grid {
+    gap: 4px;
   }
 }
 

@@ -45,7 +45,7 @@ test('historial de ingresos implementa filtros, busqueda y estados de resultado'
   assert.match(reports, /\['today', 'Hoy'\]/)
   assert.match(reports, /\['yesterday', 'Ayer'\]/)
   assert.match(reports, /\['custom', 'Elegir fecha'\]/)
-  assert.match(reports, /type="date"/)
+  assert.match(reports, /<ReceptionVisitDatePicker/)
   assert.match(reports, /placeholder="Buscar niño o responsable"/)
   assert.match(reports, /visit\.childName/)
   assert.match(reports, /visit\.customerName/)
@@ -54,6 +54,30 @@ test('historial de ingresos implementa filtros, busqueda y estados de resultado'
   assert.match(reports, /Cargando ingresos\.\.\./)
   assert.match(reports, /No se registraron ingresos en esta fecha/)
   assert.match(reports, /Reintentar/)
+})
+
+test('calendario inteligente distingue dias con y sin ingresos', () => {
+  const reports = read('src/pages/admin/AdminReportsPage.tsx')
+  const styles = read('src/index.css')
+
+  assert.match(reports, /const visitCounts = useMemo/)
+  assert.match(reports, /getAsuncionDateKey\(visit\.startedAt\)/)
+  assert.match(reports, /count > 0 \? 'has-visits' : 'without-visits'/)
+  assert.match(reports, /Con ingresos/)
+  assert.match(reports, /Sin ingresos/)
+  assert.match(styles, /\.smart-date-calendar-day\.has-visits\s*\{[\s\S]*background:\s*#eaf7df/)
+  assert.match(styles, /\.smart-date-calendar-day\s*\{[\s\S]*background:\s*#f8fafc/)
+})
+
+test('calendario inteligente permite navegar, seleccionar y usarlo con teclado', () => {
+  const reports = read('src/pages/admin/AdminReportsPage.tsx')
+
+  assert.match(reports, /aria-label="Mes anterior"/)
+  assert.match(reports, /aria-label="Mes siguiente"/)
+  assert.match(reports, /role="dialog"/)
+  assert.match(reports, /event\.key === 'Escape'/)
+  assert.match(reports, /aria-pressed=\{isSelected\}/)
+  assert.match(reports, /onClick=\{\(\) => selectDate\(dateKeyValue\)\}/)
 })
 
 test('historial de ingresos muestra datos, estados y planes especiales sin inventar datos', () => {
@@ -78,4 +102,5 @@ test('historial de ingresos agrega estilos responsive sin tabla horizontal', () 
   assert.match(styles, /\.reception-visit-history-toolbar\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit, minmax\(220px, 1fr\)\)/)
   assert.match(styles, /\.input-with-icon\s*\{[\s\S]*min-height:\s*44px/)
   assert.match(styles, /\.reception-visit-history-row\s*\{[\s\S]*align-items:\s*start/)
+  assert.match(styles, /@media \(max-width: 680px\)[\s\S]*\.smart-date-calendar\s*\{[\s\S]*width:\s*min\(350px, calc\(100vw - 32px\)\)/)
 })

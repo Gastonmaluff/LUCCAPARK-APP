@@ -1,8 +1,11 @@
 import {
   BarChart3,
+  CalendarDays,
   CalendarHeart,
   Cake,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   MessageCircle,
   RefreshCw,
@@ -13,7 +16,7 @@ import {
 } from 'lucide-react'
 import { Timestamp, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import type React from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AdminModuleHeader } from '../../components/AdminModuleHeader'
 import { StatusPill } from '../../components/StatusPill'
 import { useClientsData, type ClientVisitHistoryItem } from '../../hooks/useClients'
@@ -40,6 +43,7 @@ const HOUR_BUCKETS = [
 
 const emptyGender = 'sin especificar'
 const RECEPTION_VISIT_HISTORY_LIMIT = 150
+const CALENDAR_DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 interface ReceptionVisitHistoryItem {
   id: string
@@ -220,6 +224,38 @@ function KpiCard({ icon, label, note, value }: { icon: React.ReactNode; label: s
 function EmptyReportState({ children }: { children: React.ReactNode }) {
   return <div className="empty-state report-empty">{children}</div>
 }
+
+const parseUtcDateKey = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(Date.UTC(year, (month || 1) - 1, day || 1, 12))
+}
+
+const shiftMonthKey = (dateKey: string, months: number) => {
+  const date = parseUtcDateKey(dateKey)
+  date.setUTCDate(1)
+  date.setUTCMonth(date.getUTCMonth() + months)
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`
+}
+
+const getCalendarDays = (monthKey: string) => {
+  const monthStart = parseUtcDateKey(monthKey)
+  const mondayOffset = (monthStart.getUTCDay() + 6) % 7
+  const gridStart = addDaysToDateKey(monthKey, -mondayOffset)
+  return Array.from({ length: 42 }, (_, index) => addDaysToDateKey(gridStart, index))
+}
+
+const calendarMonthFormatter = new Intl.DateTimeFormat('es-PY', {
+  month: 'long',
+  timeZone: 'UTC',
+  year: 'numeric',
+})
+
+const calendarDayFormatter = new Intl.DateTimeFormat('es-PY', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+  year: 'numeric',
+})
 
 function useReceptionVisitHistory(dateKey: string) {
   const [visits, setVisits] = useState<ReceptionVisitHistoryItem[]>([])
@@ -534,7 +570,141 @@ const receptionVisitAmountLabel = (visit: ReceptionVisitHistoryItem) => {
   return 'Sin monto'
 }
 
+function ReceptionVisitDatePicker({
+  onChange,
+  value,
+  visits,
+}: {
+  onChange: (value: string) => void
+  value: string
+  visits: ClientVisitHistoryItem[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [visibleMonth, setVisibleMonth] = useState(() => `${value.slice(0, 7)}-01`)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const selectedDayRef = useRef<HTMLButtonElement>(null)
+  const todayKey = getAsuncionDateKey(new Date())
+
+  const visitCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    visits.forEach((visit) => {
+      if (!visit.startedAt) return
+      const key = getAsuncionDateKey(visit.startedAt)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    })
+    return counts
+  }, [visits])
+
+  const calendarDays = useMemo(() => getCalendarDays(visibleMonth), [visibleMonth])
+  const monthLabel = calendarMonthFormatter.format(parseUtcDateKey(visibleMonth))
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    window.requestAnimationFrame(() => selectedDayRef.current?.focus())
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  const toggleCalendar = () => {
+    if (!open) setVisibleMonth(`${value.slice(0, 7)}-01`)
+    setOpen((current) => !current)
+  }
+
+  const selectDate = (dateKeyValue: string) => {
+    onChange(dateKeyValue)
+    setOpen(false)
+  }
+
+  return (
+    <div className="smart-date-picker" ref={containerRef}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className="smart-date-picker-trigger"
+        onClick={toggleCalendar}
+        type="button"
+      >
+        <CalendarDays size={18} />
+        <span>{formatAsuncionDateLabel(value)}</span>
+        <ChevronDown size={16} />
+      </button>
+
+      {open ? (
+        <div aria-label="Calendario de ingresos por Recepción" className="smart-date-calendar" role="dialog">
+          <div className="smart-date-calendar-header">
+            <button aria-label="Mes anterior" onClick={() => setVisibleMonth((current) => shiftMonthKey(current, -1))} type="button">
+              <ChevronLeft size={18} />
+            </button>
+            <strong>{monthLabel}</strong>
+            <button aria-label="Mes siguiente" onClick={() => setVisibleMonth((current) => shiftMonthKey(current, 1))} type="button">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          <div aria-hidden="true" className="smart-date-calendar-weekdays">
+            {CALENDAR_DAY_LABELS.map((label) => <span key={label}>{label}</span>)}
+          </div>
+
+          <div className="smart-date-calendar-grid">
+            {calendarDays.map((dateKeyValue) => {
+              const count = visitCounts.get(dateKeyValue) ?? 0
+              const isCurrentMonth = dateKeyValue.slice(0, 7) === visibleMonth.slice(0, 7)
+              const isSelected = dateKeyValue === value
+              const isToday = dateKeyValue === todayKey
+              const classes = [
+                'smart-date-calendar-day',
+                count > 0 ? 'has-visits' : 'without-visits',
+                isCurrentMonth ? '' : 'outside-month',
+                isSelected ? 'selected' : '',
+                isToday ? 'today' : '',
+              ].filter(Boolean).join(' ')
+              const readableDate = calendarDayFormatter.format(parseUtcDateKey(dateKeyValue))
+              const activityLabel = count > 0
+                ? `${count} ${count === 1 ? 'ingreso registrado' : 'ingresos registrados'}`
+                : 'sin ingresos registrados'
+
+              return (
+                <button
+                  aria-label={`${readableDate}, ${activityLabel}`}
+                  aria-pressed={isSelected}
+                  className={classes}
+                  key={dateKeyValue}
+                  onClick={() => selectDate(dateKeyValue)}
+                  ref={isSelected ? selectedDayRef : undefined}
+                  type="button"
+                >
+                  <span>{Number(dateKeyValue.slice(-2))}</span>
+                  {count > 0 ? <i aria-hidden="true">{count}</i> : null}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="smart-date-calendar-legend">
+            <span><i className="has-visits" /> Con ingresos</span>
+            <span><i className="without-visits" /> Sin ingresos</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function ReceptionVisitHistorySection({
+  calendarVisits,
   dateKeyValue,
   filter,
   onDateChange,
@@ -542,6 +712,7 @@ function ReceptionVisitHistorySection({
   onToggle,
   open,
 }: {
+  calendarVisits: ClientVisitHistoryItem[]
   dateKeyValue: string
   filter: ReceptionVisitDateFilter
   onDateChange: (value: string) => void
@@ -606,10 +777,10 @@ function ReceptionVisitHistorySection({
               ))}
             </div>
             {filter === 'custom' ? (
-              <label className="field reception-visit-date-field">
+              <div className="field reception-visit-date-field">
                 <span>Fecha</span>
-                <input type="date" value={dateKeyValue} onChange={(event) => handleDateChange(event.target.value)} />
-              </label>
+                <ReceptionVisitDatePicker onChange={handleDateChange} value={dateKeyValue} visits={calendarVisits} />
+              </div>
             ) : null}
             <label className="field reception-visit-search-field">
               <span>Buscar</span>
@@ -1130,6 +1301,7 @@ export function AdminReportsPage() {
         </article>
 
         <ReceptionVisitHistorySection
+          calendarVisits={visits}
           dateKeyValue={receptionVisitDate}
           filter={receptionVisitFilter}
           onDateChange={(value) => {
