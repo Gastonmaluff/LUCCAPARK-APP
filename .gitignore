@@ -16,6 +16,9 @@ functions/lib
 output/
 .finance-test-build/
 
+# Firebase deploy cache
+.firebase/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
