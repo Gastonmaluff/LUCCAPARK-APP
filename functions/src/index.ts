@@ -24,6 +24,7 @@ import {
 } from './visits'
 import { resetOperationalTestDataSecure as resetOperationalData } from './adminReset'
 import { getNativeBackupStatusSecure as getNativeBackupStatus } from './backups'
+import { healthCheckEndpoint } from './health'
 
 type SecureHandler = (uid: string | null | undefined, data: unknown) => Promise<unknown>
 
@@ -61,3 +62,4 @@ export const finishVisitSecure = callable('finishVisitSecure', finishVisit)
 export const registerEventPaymentSecure = callable('registerEventPaymentSecure', registerEventPayment)
 export const resetOperationalTestData = callable('resetOperationalTestData', resetOperationalData)
 export const getNativeBackupStatusSecure = callable('getNativeBackupStatusSecure', getNativeBackupStatus)
+export const healthCheck = healthCheckEndpoint
